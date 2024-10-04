@@ -1,13 +1,25 @@
 # FundTracker
 
 
-FundTracker is application written using Django and React.js that helps you track your financial investments. Program allows you to keep track of various financial investments, such as stocks, mutual funds, and bonds. It provides features to add new investments, update their values, and generate reports on your portfolio performance.
+FundTracker is application written using Django and React.js that helps track my financial investments. Program allows to keep track of various financial investments, such as stocks, mutual funds, and bonds. 
+
+App provides access to all data and functionalities via a RESTful API, enabling seamless integration with fronted. This API allows users to retrieve and manage information about their investments, with all analytical operations, such as calculating financial indicators and metrics, handled efficiently on the backend
+
 
 Features:
-- Add new investments: You can add new investments to the program by providing details such as the investment type, name, and initial value.![alt text](pict/history_view.JPG)
-- Automaticly update investment values: Program automaticly update the current value of your investments to keep track of their performance over time.
-![alt text](pict/portfolio_view.JPG)
+- Important operations: You can buy, sell investments, make withdraw and add funds.
+
+    ![alt text](images/menu.JPG)
+
+    ![alt text](images/buy.JPG)
+- Automaticly updates investment values: Program automaticly calculate the most important indicators of your investments to be able to checking the results in real time. All tables are interactive, which allows you to adapt them to your needs.
+![alt text](images/pocket_composition.JPG)![alt text](images/pocket_composition_table_menu.JPG)
+
+- Charts - allows see values and indicators in the time. You can see the specifics of your investments in graphical form.
+![alt text](images/image.png)
 - Generate reports: FundTracker can generate reports that provide insights into your portfolio performance, including overall returns, individual investment performance, and asset allocation. - ToDo
+
+- Scoring app - This feature allows you find and select, based on calculated ratings, the best companies to you portfolio - ToDo
 
 
 
