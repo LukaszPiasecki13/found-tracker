@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { styled, createTheme, ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import Box from "@mui/material/Box";
@@ -9,14 +9,13 @@ import Title from "../components/Title";
 
 import Chart from "../components/Chart";
 import RecentScore from "../components/RecentScore";
-import SideBar from "../components/bars/SideBar";
-import AppBar from "../components/bars/AppBar";
+import SideBar from "../components/Bars/SideBar";
+import AppBar from "../components/Bars/AppBar";
 import PageContainer from "../components/PageContainer";
 import Pockets from "../components/Pockets";
 import api from "../api";
 
 const defaultTheme = createTheme();
-
 
 export default function Dashboard() {
   const [open, setOpen] = React.useState(true);
@@ -36,10 +35,10 @@ export default function Dashboard() {
         },
       })
       .then((response) => {
-        const chartDataa = ({
+        const chartDataa = {
           date: response.data.Date,
           value: response.data.Close,
-        });
+        };
         setData(chartDataa);
       })
       .catch((error) => {
@@ -50,7 +49,7 @@ export default function Dashboard() {
   React.useEffect(() => {
     getProfitOverTime();
   }, []);
-  
+
   const [loading, setLoading] = React.useState(true);
   const [recentScoreValue, setRecentScoreValue] = React.useState(true);
 
@@ -61,7 +60,7 @@ export default function Dashboard() {
       setRecentScoreValue(chartData.value[chartData.value.length - 1]);
     } else {
       setLoading(true);
-      setRecentScoreValue(0)
+      setRecentScoreValue(0);
     }
   }, [chartData]);
 
@@ -83,7 +82,7 @@ export default function Dashboard() {
               }}
             >
               <Title>Portfolio Score</Title>
-              <Chart x={chartData.date} y={chartData.value} loading={loading}/>
+              <Chart x={chartData.date} y={chartData.value} loading={loading} />
             </Paper>
           </Grid>
           {/* Recent Deposits */}
@@ -96,18 +95,12 @@ export default function Dashboard() {
                 height: 240,
               }}
             >
-
               <RecentScore value={recentScoreValue} />
             </Paper>
           </Grid>
           <Grid item xs={4}>
-            <Paper
-              sx={{ p: 2, display: "flex", flexDirection: "column" }}
-            >
+            <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
               <Pockets />
-
-
-
             </Paper>
           </Grid>
         </PageContainer>

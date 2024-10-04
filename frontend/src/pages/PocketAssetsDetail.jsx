@@ -16,6 +16,7 @@ import {
   TableRow,
   TableFooter,
 } from "@mui/material";
+import { Button } from "@mui/material";
 
 import Toolbar from "@mui/material/Toolbar";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -27,7 +28,8 @@ import PageContainer from "../components/PageContainer";
 import Title from "../components/Title";
 import AddMenus from "../components/AddMenus";
 import DataTable from "../components/DataTable";
-import { Button } from "@mui/material";
+import { cellStyle } from "../components/utils";
+
 
 export default function PocketAssetsDetail() {
   const navigate = useNavigate();
@@ -119,17 +121,7 @@ export default function PocketAssetsDetail() {
     fetchData();
   }, []);
 
-  const cellStyle = (value, isCollored = false) => {
-    if (isCollored) {
-      if (value < 0) {
-        return <div style={{ color: "red" }}>{value}</div>;
-      } else if (value > 0) {
-        return <div style={{ color: "green" }}>{value}</div>;
-      }
-    } else {
-      return <div style={{ color: "black" }}>{value}</div>;
-    }
-  };
+
 
   const columns = [
     {
@@ -193,6 +185,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
+          value.toFixed(2);
           return cellStyle(value);
         },
       },
@@ -205,7 +198,7 @@ export default function PocketAssetsDetail() {
         sort: true,
         customBodyRender: (value) => {
           value.toFixed(2);
-          return cellStyle(value, true);
+          return cellStyle(value);
         },
       },
     },

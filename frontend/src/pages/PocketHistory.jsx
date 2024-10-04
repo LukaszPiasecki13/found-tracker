@@ -22,11 +22,9 @@ import PageContainer from "../components/PageContainer";
 import Title from "../components/Title";
 import AddMenus from "../components/AddMenus";
 import DataTable from "../components/DataTable";
-import MUIDataTable from "mui-datatables";
+import { cellStyle } from "../components/utils";
 
-function preventDefault(event) {
-  event.preventDefault();
-}
+
 
 export default function PocketHistory() {
   const navigate = useNavigate();
@@ -65,6 +63,8 @@ export default function PocketHistory() {
     };
     fetchData();
   }, []);
+
+
 
   const columns = [
     {
@@ -124,6 +124,7 @@ export default function PocketHistory() {
         sort: true,
         customBodyRender: (value) => {
           value.toFixed(2);
+          return cellStyle(value);
         },
       },
     },
@@ -134,7 +135,8 @@ export default function PocketHistory() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(2);
+          value?.toFixed(2);
+          return cellStyle(value);
         },
       },
     },
@@ -146,6 +148,7 @@ export default function PocketHistory() {
         sort: true,
         customBodyRender: (value) => {
           value.toFixed(1);
+          return cellStyle(value);
         },
       },
     },

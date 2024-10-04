@@ -11,8 +11,8 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Toolbar from "@mui/material/Toolbar";
-import SideBar from "../components/bars/SideBar";
-import AppBar from "../components/bars/AppBar";
+import SideBar from "../components/Bars/SideBar";
+import AppBar from "../components/Bars/AppBar";
 import api from "../api";
 import PageContainer from "../components/PageContainer";
 

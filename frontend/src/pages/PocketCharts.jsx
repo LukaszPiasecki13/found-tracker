@@ -15,8 +15,8 @@ import Toolbar from "@mui/material/Toolbar";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import api from "../api";
-import SideBar from "../components/bars/SideBar";
-import AppBar from "../components/bars/AppBar";
+import SideBar from "../components/Bars/SideBar";
+import AppBar from "../components/Bars/AppBar";
 import PageContainer from "../components/PageContainer";
 import Title from "../components/Title";
 import { Button } from "@mui/material";

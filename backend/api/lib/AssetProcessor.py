@@ -8,22 +8,25 @@ from authentication.models import UserProfile
 
 from decimal import Decimal
 import yfinance as yf
+from collections import namedtuple
 
 from .AssetCalculator import AssetCalculator
 
 
 class AssetProcessor:
-    def __init__(self, owner: UserProfile,  data: dict = {} ):
+    def __init__(self, owner: UserProfile,  data: dict = {}):
         self.owner = owner
         if data:
             self.data = data
         else:
             ...
 
+        self.TransactionTuple = namedtuple(
+            'TransactionTuple', ['id', 'price', 'quantity', 'fee'])
+
     def buy_operation(self):
         asset_name = self._get_asset_name(ticker=self.data['ticker'])
 
-                
         try:
             # Check pocket free cash
             pocket = Pocket.objects.get(
@@ -31,18 +34,17 @@ class AssetProcessor:
             if pocket.free_cash < Decimal(self.data['price'] * self.data['quantity']):
                 raise ValueError('Not enough free cash to buy the asset')
             else:
-                pocket.free_cash -= Decimal(self.data['price'] * self.data['quantity'] + self.data['fee'])
+                pocket.free_cash -= Decimal(self.data['price']
+                                            * self.data['quantity'] + self.data['fee'])
                 if self.data['fee'] != 0:
                     if self.data['currency'] == pocket.currency.name:
                         pocket.fees += Decimal(self.data['fee'])
                     else:
                         pocket.fees += Decimal(self.data['fee']
-                                            * self.data['purchase_currency_price'])
+                                               * self.data['purchase_currency_price'])
 
-        
         except Exception as e:
             raise e
-
 
         try:
             # ASSET
@@ -50,11 +52,7 @@ class AssetProcessor:
             yf_info = yf.Ticker(self.data['ticker']).info
             ticker_currency = yf_info['currency']
 
-            asset_query = Asset.objects.filter(
-                ticker=self.data['ticker'],
-                name=asset_name,
-                asset_class=self.data['asset_class'],
-                currency=Currency.objects.get(name=ticker_currency))
+            asset_query = Asset.objects.filter(ticker=self.data['ticker'])
 
             if not asset_query.exists():
                 Asset.objects.create(
@@ -65,7 +63,6 @@ class AssetProcessor:
         except Exception as e:
             raise e
 
-
         try:
             # ASSET ALLOCATION
             # Check if asset allocation exists in the database
@@ -74,31 +71,22 @@ class AssetProcessor:
                 asset=Asset.objects.get(ticker=self.data['ticker']))
 
             if not asset_allocation_query.exists():
-                # Create new asset allocation
-                AssetAllocation.objects.create(
-                    pocket=pocket,
-                    asset=Asset.objects.get(ticker=self.data['ticker']),
-                    quantity=self.data['quantity'],
-                    average_purchase_price=self.data['price'] +
-                    self.data['fee']/self.data['quantity'],
-                    average_purchase_currency_price=self.data['purchase_currency_price'],
-                    fee=self.data['fee']
-                )
+                self._create_asset_allocation(self.data, pocket)
 
-            elif asset_allocation_query.exists():
+            else:
                 asset_allocation = asset_allocation_query.first()
 
                 # Read the asset operations from the database
                 buy_transactions, sell_transactions = self._get_asset_operations(
                     self.data['pocket_name'], self.owner, self.data['ticker'])
-                
+
                 # Add current transaction to the list of buy transactions
-                buy_transactions.append((self.data['price'], self.data['quantity'], self.data['fee']))
+                buy_transactions.append(
+                    self.TransactionTuple(id=None, price=self.data['price'], quantity=self.data['quantity'], fee=self.data['fee']))
 
                 # Calculate the average purchase price
                 average_purchase_price = self._calculate_average_purchase_price(
                     buy_transactions, sell_transactions)
-
                 asset_allocation.average_purchase_price = Decimal(
                     average_purchase_price)
 
@@ -110,7 +98,7 @@ class AssetProcessor:
 
                 asset_allocation.average_purchase_currency_price = Decimal(
                     average_purchase_currency_price)
-                
+
                 # Update the quantity and fee
                 asset_allocation.quantity += Decimal(self.data['quantity'])
                 asset_allocation.fee += Decimal(self.data['fee'])
@@ -119,7 +107,7 @@ class AssetProcessor:
 
         except Exception as e:
             raise e
-        
+
         pocket.save()
         return True
 
@@ -136,16 +124,17 @@ class AssetProcessor:
 
             if not asset_query.exists():
                 raise ValueError('Asset does not exist in the database')
-            
+
         except Exception as e:
             raise e
-        
+
         try:
             # Check pocket free cash
             pocket = Pocket.objects.get(
                 name=self.data['pocket_name'], owner=self.owner)
 
-            pocket.free_cash += Decimal(self.data['price'] * self.data['quantity'] - self.data['fee'])
+            pocket.free_cash += Decimal(self.data['price']
+                                        * self.data['quantity'] - self.data['fee'])
 
             # POCKET FEE
             if self.data['fee'] != 0:
@@ -153,11 +142,11 @@ class AssetProcessor:
                     pocket.fees += Decimal(self.data['fee'])
                 else:
                     pocket.fees += Decimal(self.data['fee']
-                                        * self.data['purchase_currency_price'])
-        
+                                           * self.data['purchase_currency_price'])
+
         except Exception as e:
             raise e
-    
+
         try:
             # ASSET ALLOCATION
             # Check if asset allocation exists in the database
@@ -171,9 +160,10 @@ class AssetProcessor:
                 # Read the asset operations from the database
                 buy_transactions, sell_transactions = self._get_asset_operations(
                     self.data['pocket_name'], self.owner, self.data['ticker'])
-                
+
                 # Add current transaction to the list of buy transactions
-                sell_transactions.append((self.data['price'], self.data['quantity'], self.data['fee']))
+                sell_transactions.append(
+                    self.TransactionTuple(id=None, price=self.data['price'], quantity=self.data['quantity'], fee=self.data['fee']))
 
                 # Calculate the average purchase price
                 average_purchase_price = self._calculate_average_purchase_price(
@@ -181,12 +171,12 @@ class AssetProcessor:
 
                 asset_allocation.average_purchase_price = Decimal(
                     average_purchase_price)
-                
+
                 asset_allocation.fee += Decimal(self.data['fee'])
 
                 check_operation_indicator = asset_allocation.quantity - \
                     Decimal(self.data['quantity'])
-                
+
                 if check_operation_indicator == 0:
                     asset_allocation.delete()
 
@@ -202,23 +192,26 @@ class AssetProcessor:
                     raise ValueError('Not enough assets to sell')
 
             else:
-                raise ValueError('Asset allocation does not exist in the database')
+                raise ValueError(
+                    'Asset allocation does not exist in the database')
 
         except Exception as e:
             raise e
-        
+
         pocket.save()
         return True
 
     def add_funds(self):
-        pocket = Pocket.objects.get(name=self.data['pocket_name'], owner=self.owner)
+        pocket = Pocket.objects.get(
+            name=self.data['pocket_name'], owner=self.owner)
         pocket.free_cash += Decimal(self.data['quantity'])
         pocket.fees += Decimal(self.data['fee'])
         pocket.save()
         return True
-    
+
     def withdraw_funds(self):
-        pocket = Pocket.objects.get(name=self.data['pocket_name'], owner=self.owner)
+        pocket = Pocket.objects.get(
+            name=self.data['pocket_name'], owner=self.owner)
         if pocket.free_cash < Decimal(self.data['quantity']):
             raise ValueError('Not enough free cash to withdraw')
         else:
@@ -226,6 +219,104 @@ class AssetProcessor:
             pocket.fees += Decimal(self.data['fee'])
             pocket.save()
             return True
+
+    def destory_operation(self, operation):
+        try:
+            pocket = Pocket.objects.get(
+                name=operation.pocket_name, owner=self.owner)
+            if operation.operation_type == 'buy':
+                pocket.free_cash -= Decimal(operation.price *
+                                            operation.quantity + operation.fee)
+                pocket.fees -= Decimal(operation.fee)
+
+                try:
+                    asset_allocation_query = AssetAllocation.objects.filter(
+                        pocket=pocket,
+                        asset=Asset.objects.get(ticker=operation.ticker))
+                    if asset_allocation_query.exists():
+                        asset_allocation = asset_allocation_query.first()
+                        buy_transactions, sell_transactions = self._get_asset_operations(
+                            operation.pocket_name, self.owner, operation.ticker)
+
+                        # Remove the transaction from the list of buy transactions, but not from the database
+                        buy_transactions = [
+                            transaction for transaction in buy_transactions if transaction.id != operation.id]
+
+                        average_purchase_price = self._calculate_average_purchase_price(
+                            buy_transactions, sell_transactions)
+                        asset_allocation.average_purchase_price = Decimal(
+                            average_purchase_price)
+
+                        if operation.quantity == asset_allocation.quantity:
+                            asset_allocation.delete()
+                        elif operation.quantity < asset_allocation.quantity:
+                            asset_allocation.quantity -= Decimal(
+                                operation.quantity)
+                            asset_allocation.save()
+                        elif operation.quantity > asset_allocation.quantity:
+                            raise ValueError('Not enough assets to subtract')
+
+                except Exception as e:
+                    raise e
+
+            elif operation.operation_type == 'sell':
+                pocket.free_cash += Decimal(operation.price *
+                                            operation.quantity - operation.fee)
+                pocket.fees -= Decimal(operation.fee)
+
+                try:
+                    asset_allocation_query = AssetAllocation.objects.filter(
+                        pocket=pocket,
+                        asset=Asset.objects.get(ticker=operation.ticker))
+
+                    if not asset_allocation_query.exists():
+                        self._create_asset_allocation(self.data, pocket)
+
+                    else:
+                        asset_allocation = asset_allocation_query.first()
+                        buy_transactions, sell_transactions = self._get_asset_operations(
+                            operation.pocket_name, self.owner, operation.ticker)
+
+                        # Remove the transaction from the list of sell transactions, but not from the database
+                        sell_transactions = [
+                            transaction for transaction in sell_transactions if transaction.id != operation.id]
+
+                        average_purchase_price = self._calculate_average_purchase_price(
+                            buy_transactions, sell_transactions)
+                        asset_allocation.average_purchase_price = Decimal(
+                            average_purchase_price)
+
+                        # Update the average purchase currency price
+                        average_purchase_currency_price = _weighted_average(
+                            values=[asset_allocation.average_purchase_currency_price,
+                                    Decimal(operation.purchase_currency_price)],
+                            weights=[asset_allocation.quantity, Decimal(operation.quantity)])
+
+                        asset_allocation.average_purchase_currency_price = Decimal(
+                            average_purchase_currency_price)
+
+                        asset_allocation.quantity += Decimal(
+                            operation.quantity)
+                        
+                        asset_allocation.save()
+
+                except Exception as e:
+                    raise e
+
+            elif operation.operation_type == 'add_funds':
+                pocket.free_cash -= Decimal(operation.quantity)
+                pocket.fees -= Decimal(operation.fee)
+
+            elif operation.operation_type == 'withdraw_funds':
+                pocket.free_cash += Decimal(operation.quantity)
+                pocket.fees -= Decimal(operation.fee)
+
+        except Exception as e:
+            raise e
+
+        pocket.save()
+        operation.delete()
+        return True
 
     def update_assets(self, pocket_name: str):
         pocket = Pocket.objects.get(name=pocket_name, owner=self.owner)
@@ -268,6 +359,24 @@ class AssetProcessor:
     ...
 
     @staticmethod
+    def _create_asset_allocation(data: dict, pocket: Pocket) -> bool:
+        # Create new asset allocation
+        try:
+            AssetAllocation.objects.create(
+                pocket=pocket,
+                asset=Asset.objects.get(ticker=data['ticker']),
+                quantity=data['quantity'],
+                average_purchase_price=data['price'] +
+                data['fee']/data['quantity'],
+                average_purchase_currency_price=data['purchase_currency_price'],
+                fee=data['fee']
+            )
+        except Exception as e:
+            raise e
+
+        return True
+
+    @staticmethod
     def _get_asset_name(ticker: str):
         try:
             asset_info = yf.Ticker(ticker).info
@@ -277,24 +386,27 @@ class AssetProcessor:
             raise e
 
         return asset_name
-    
+
     @staticmethod
-    def _get_asset_operations(pocket_name: str, owner: UserProfile, ticker: str):
+    def _get_asset_operations(pocket_name: str, owner: UserProfile, ticker: str) -> tuple[list, list]:
         operations = Operation.objects.filter(
             owner=owner,
             pocket_name=pocket_name,
             ticker=ticker)
-        ...
+
         sell_transactions = []
         buy_transactions = []
+
+        TransactionTuple = namedtuple(
+            'TransactionTuple', ['id', 'price', 'quantity', 'fee'])
 
         for operation in operations:
             if operation.operation_type == 'buy':
                 buy_transactions.append(
-                    (operation.price, operation.quantity, operation.fee))
+                    TransactionTuple(id=operation.id, price=operation.price, quantity=operation.quantity,  fee=operation.fee))
             elif operation.operation_type == 'sell':
                 sell_transactions.append(
-                    (operation.price, operation.quantity, operation.fee))
+                    TransactionTuple(id=operation.id, price=operation.price, quantity=operation.quantity,  fee=operation.fee))
 
         return buy_transactions, sell_transactions
 
@@ -303,39 +415,41 @@ class AssetProcessor:
         '''
         Calculate the average stock price after considering purchase and sale transactions, including transaction fees.
 
-        :param buy_transactions: List of tuples (price_per_share, number_of_shares, fee) for each purchase transaction.
-        :param sell_transactions: Optional list of tuples (price_per_share, number_of_shares, fee) for each sale transaction.
+        :param buy_transactions: List of named tuples ('TransactionTuple', ['id', 'price', 'quantity', 'fee']) for each purchase transaction.
+        :param sell_transactions: Optional list of named tuples ('TransactionTuple', ['id', 'price', 'quantity', 'fee']) for each sale transaction.
         :return: The average stock price after all transactions including fees.
         '''
         # Calculate the total value and number of shares based on purchase transactions
-        total_purchase_value = sum((price * quantity + fee)
-                                for price, quantity, fee in buy_transactions)
-        total_shares = sum(quantity for _, quantity, _ in buy_transactions)
+        total_purchase_value = sum((transaction.price * transaction.quantity + transaction.fee)
+                                   for transaction in buy_transactions)
+        total_shares = sum(
+            transaction.quantity for transaction in buy_transactions)
 
         if sell_transactions:
             # Update the number of shares and average price after sale transactions
-            for sale_price, sell_quantity, sell_fee in sell_transactions:
+            for sell_transaction in sell_transactions:
+                sell_quantity = sell_transaction.quantity
                 # Assume that shares are sold in the order they were purchased (FIFO)
                 while sell_quantity > 0 and total_shares > 0:
                     # Get the oldest purchase transaction
-                    purchase_price, purchased_quantity, _ = buy_transactions[0]
+                    buy_transaction = buy_transactions[0]
 
-                    if purchased_quantity <= sell_quantity:
-                        total_purchase_value -= purchased_quantity * purchase_price
-                        total_purchase_value += sell_fee
-                        total_shares -= purchased_quantity
-                        sell_quantity -= purchased_quantity
+                    if buy_transaction.quantity <= sell_quantity:
+                        total_purchase_value -= buy_transaction.quantity * buy_transaction.price
+                        total_purchase_value += sell_transaction.fee
+                        total_shares -= buy_transaction.quantity
+                        sell_quantity -= buy_transaction.quantity
                         buy_transactions.pop(0)
-                    elif purchased_quantity == sell_quantity:
-                        total_purchase_value -= sell_quantity * purchase_price
-                        total_purchase_value += sell_fee
+                    elif buy_transaction.quantity == sell_quantity:
+                        total_purchase_value -= sell_quantity * buy_transaction.price
+                        total_purchase_value += sell_transaction.fee
                         total_shares -= sell_quantity
                         buy_transactions[0] = (
-                            purchase_price, purchased_quantity - sell_quantity)
+                            buy_transaction.price, buy_transaction.quantity - sell_quantity)
                         sell_quantity = 0
-                    elif purchased_quantity > sell_quantity:
-                        total_purchase_value -= sell_quantity * purchase_price
-                        total_purchase_value += sell_fee
+                    elif buy_transaction.quantity > sell_quantity:
+                        total_purchase_value -= sell_quantity * buy_transaction.price
+                        total_purchase_value += sell_transaction.fee
                         total_shares -= sell_quantity
                         sell_quantity = 0
 
@@ -348,11 +462,6 @@ class AssetProcessor:
             # Gdy byłoby mnóstwo tranzakcji
 
         return average_price
-
-
-
-
-
 
 
 def _weighted_average(values: list, weights: list):
@@ -371,6 +480,3 @@ def currencies_prices_update(referece_currency: str = 'PLN'):
         else:
             currency.exchange_rate = 1.0
             currency.save()
-
-
-   
