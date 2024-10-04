@@ -16,7 +16,7 @@ Features:
 ![alt text](images/pocket_composition.JPG)![alt text](images/pocket_composition_table_menu.JPG)
 
 - Charts - allows see values and indicators in the time. You can see the specifics of your investments in graphical form.
-![alt text](images/image.png)
+![alt text](images/portfolio_division.png)
 - Generate reports: FundTracker can generate reports that provide insights into your portfolio performance, including overall returns, individual investment performance, and asset allocation. - ToDo
 
 - Scoring app - This feature allows you find and select, based on calculated ratings, the best companies to you portfolio - ToDo
