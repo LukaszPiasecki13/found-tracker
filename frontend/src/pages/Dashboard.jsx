@@ -7,7 +7,7 @@ import Paper from "@mui/material/Paper";
 import Toolbar from "@mui/material/Toolbar";
 import Title from "../components/Title";
 
-import Chart from "../components/Chart";
+import GraphBlock from "../components/GraphBlock";
 import RecentScore from "../components/RecentScore";
 import SideBar from "../components/Bars/SideBar";
 import AppBar from "../components/Bars/AppBar";
@@ -82,7 +82,7 @@ export default function Dashboard() {
               }}
             >
               <Title>Portfolio Score</Title>
-              <Chart x={chartData.date} y={chartData.value} loading={loading} />
+              {/* <GraphBlock x={chartData.date} y={chartData.value} loading={loading} /> */}
             </Paper>
           </Grid>
           {/* Recent Deposits */}

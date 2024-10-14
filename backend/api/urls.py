@@ -15,6 +15,6 @@ urlpatterns = [
     path('users/', views.UsersView.as_view(), name='user-list'),
     path('users/<int:pk>/', views.UserRetrieveDestroyView.as_view(), name='user-detail'),
     path('', include(router.urls)),
-    path('profit-data/', views.ProfitDataView.as_view(), name='profit-data')
+    path('pocket-vectors/', views.PocketVectorsView.as_view(), name='pocket-vectors')
 
 ]

@@ -30,7 +30,6 @@ import AddMenus from "../components/AddMenus";
 import DataTable from "../components/DataTable";
 import { cellStyle } from "../components/utils";
 
-
 export default function PocketAssetsDetail() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,8 +119,6 @@ export default function PocketAssetsDetail() {
     };
     fetchData();
   }, []);
-
-
 
   const columns = [
     {
@@ -466,30 +463,35 @@ export default function PocketAssetsDetail() {
         <AppBar open={open} toggleDrawer={toggleDrawer} />
         <SideBar open={open} toggleDrawer={toggleDrawer} />
         <PageContainer>
-          <Grid item xs={2}>
-            <AddMenus
-              pocket={pocket}
-              pocketAssetAllocationDetail={pocketAssetAllocationDetail}
-            />
+          <Grid container>
+            <Grid item xs={12} sx={{ height: "20px" }}></Grid>
+            <Grid item xs={1}>
+              <AddMenus
+                pocket={pocket}
+                pocketAssetAllocationDetail={pocketAssetAllocationDetail}
+              />
+            </Grid>
+            <Grid item xs={1}>
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={() => navigate(`${location.pathname}/charts`)}
+              >
+                Charts
+              </Button>
+            </Grid>
+            <Grid item xs={1}>
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={() => navigate(`${location.pathname}/history`)}
+              >
+                History
+              </Button>
+            </Grid>
           </Grid>
-          <Grid item xs={1}>
-            <Button
-              variant="contained"
-              size="medium"
-              onClick={() => navigate(`${location.pathname}/charts`)}
-            >
-              Charts
-            </Button>
-          </Grid>
-          <Grid item xs={1}>
-            <Button
-              variant="contained"
-              size="medium"
-              onClick={() => navigate(`${location.pathname}/history`)}
-            >
-              History
-            </Button>
-          </Grid>
+          <Grid item xs={12} sx={{ height: "30px" }}></Grid>
+          <Grid container>
           <Grid item xs={12}>
             <DataTable
               title={"Pocket Composition"}
@@ -499,6 +501,7 @@ export default function PocketAssetsDetail() {
                 pocketAssetAllocationDetail ? pocketAssetAllocationDetail : []
               }
             />
+          </Grid>
           </Grid>
         </PageContainer>
       </Box>

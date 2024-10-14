@@ -16,7 +16,7 @@ from datetime import datetime
 from itertools import groupby
 
 from .lib.AssetProcessor import AssetProcessor
-from .lib.PortfolioMetrics import PortfolioMetrics
+from .lib.PocketMetrics import PocketMetrics
 
 
 class UsersView(generics.ListCreateAPIView):
@@ -102,8 +102,9 @@ class AssetAllocationViewSet(viewsets.ModelViewSet):
         processor = AssetProcessor(owner=self.request.user)
         processor.update_assets(pocket_name=pocket_name)
         pocket = Pocket.objects.get(name=pocket_name)
+        asset_allocations_querry = AssetAllocation.objects.filter(pocket=pocket)
 
-        return AssetAllocation.objects.filter(pocket=pocket)
+        return asset_allocations_querry.order_by('asset__ticker')
 
 
 class CurencyViewSet(viewsets.ModelViewSet):
@@ -118,90 +119,50 @@ class AssetClassViewSet(viewsets.ModelViewSet):
     queryset = AssetClass.objects.all()
 
 
-class ProfitDataView(APIView):
+class PocketVectorsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         pocket_name = request.query_params.get('pocketName')
         start_time_str = request.query_params.get('startDate')
         end_time_str = request.query_params.get('endDate')
+        interval = request.query_params.get('interval')
 
         if pocket_name:
             operations = Operation.objects.filter(
                 owner=request.user, pocket_name=pocket_name)
         else:
             operations = Operation.objects.filter(owner=request.user)
+        if operations :
+            operations = [operation for operation in operations] # make a list
+            operations.sort(key=lambda x: x.date)
 
-        operations = [operation for operation in operations] # make a list
-        operations.sort(key=lambda x: x.date)
+            if operations[0].date < datetime.strptime(start_time_str, '%Y-%m-%d').date():
+                start_time_str = operations[0].date.strftime('%Y-%m-%d')
 
-        try:
-            start_time = datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M:%S')
-            end_time = datetime.strptime(end_time_str, '%Y-%m-%dT%H:%M:%S')
+            try:
+                start_time = datetime.strptime(start_time_str, '%Y-%m-%d')
+                end_time = datetime.strptime(end_time_str, '%Y-%m-%d')
 
-            # TODO: Do usunięcia
-            # start_time = operations[0].date
-            # end_time = datetime.now().date()
-            interval = "1d"
-
-        except ValueError:
-            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+            except ValueError:
+                return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
 
 
+            pocket_vectors = {}
+
+            metrics = PocketMetrics(interval=interval, start_time = start_time, end_time = end_time, operations = operations)
+
+            pocket_vectors["date"] = metrics.get_date_vector()
+            pocket_vectors["assets"] = metrics.get_assets_vectors()
+            pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
+            pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
+            pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector()
+            pocket_vectors["profit_vector"] = metrics.get_profit_vector()
+            pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
+            pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector()
+
+        else:
+            pocket_vectors = {}
 
 
-        portfolio_vectors = {}
-
-        metrics = PortfolioMetrics(interval=interval, start_time = start_time, end_time = end_time, operations = operations)
-
-        portfolio_vectors["start_time"] = metrics.start_time
-        portfolio_vectors["end_time"] = metrics.end_time
-        portfolio_vectors["assets"] = metrics.get_assets_vectors()
-        portfolio_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
-        portfolio_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
-        portfolio_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector()
-        portfolio_vectors["profit_vector"] = metrics.get_profit_vector()
-        portfolio_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
-        portfolio_vectors["portfolio_value_vector"] = metrics.get_portfolio_value_vector()
-        ...
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-
-        portfolio_profit = pd.Series()
-
-        for operation in operations:
-            ticker = operation.ticker
-            currrent_date = datetime.now()
-
-            ticker_data = yf.Ticker(ticker).history(
-                start=operation.date, end=currrent_date)[['Close']]
-            ticker_value = pd.Series(
-                ticker_data['Close'].values, index=ticker_data.index)
-
-            # We calculate the profit for a given ticker
-            ticker_value = (ticker_value*operation.quantity-operation.fee -
-                            operation.price*operation.quantity).round(2)
-            portfolio_profit = portfolio_profit.add(ticker_value, fill_value=0)
-
-        portfolio_profit = portfolio_profit.round(2)
-        portfolio_profit_reset = portfolio_profit.reset_index()
-        portfolio_profit_reset.columns = ['Date', 'Close']
-        # print(portfolio_profit_reset)
-
-        if interval == "day":
-            portfolio_profit_reset['Date'] = portfolio_profit_reset['Date'].dt.strftime(
-                '%Y-%m-%d')
-
-        return Response(portfolio_profit_reset, status=status.HTTP_200_OK)
+        return Response(pocket_vectors, status=status.HTTP_200_OK)

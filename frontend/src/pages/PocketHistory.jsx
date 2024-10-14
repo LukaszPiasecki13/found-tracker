@@ -24,8 +24,6 @@ import AddMenus from "../components/AddMenus";
 import DataTable from "../components/DataTable";
 import { cellStyle } from "../components/utils";
 
-
-
 export default function PocketHistory() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,7 +53,7 @@ export default function PocketHistory() {
 
   const handleClickDelete = (id) => {
     console.log(id);
-  }
+  };
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -63,8 +61,6 @@ export default function PocketHistory() {
     };
     fetchData();
   }, []);
-
-
 
   const columns = [
     {
@@ -165,14 +161,15 @@ export default function PocketHistory() {
                 onClick={() => {
                   handleClickDelete(tableMeta.rowData[0]);
                 }}
-              > Delete
+              >
+                {" "}
+                Delete
               </Button>
-              
             </div>
           );
-        }
-      }
-    }
+        },
+      },
+    },
   ];
 
   const options = {
@@ -212,7 +209,6 @@ export default function PocketHistory() {
     },
   };
 
-
   return (
     <ThemeProvider theme={defaultTheme}>
       <Box sx={{ display: "flex" }}>
@@ -220,42 +216,50 @@ export default function PocketHistory() {
         <AppBar open={open} toggleDrawer={toggleDrawer} />
         <SideBar open={open} toggleDrawer={toggleDrawer} />
         <PageContainer>
-          <Grid item xs={2}>
-            <Button
-              variant="contained"
-              size="medium"
-              onClick={() =>
-                navigate(`${location.pathname.replace(/\/charts$/, "")}`)
-              }
-            >
-              Outcomes
-            </Button>
+          <Grid container>
+            <Grid item xs={12} sx={{ height: "20px" }}></Grid>
+            <Grid item xs={1}>
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={() =>
+                  navigate(`${location.pathname.replace(/\/history$/, "")}`)
+                }
+              >
+                Outcomes
+              </Button>
+            </Grid>
+            <Grid item xs={1}>
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={() =>
+                  navigate(
+                    `${location.pathname.replace(/\/history$/, "")}` + "/charts"
+                  )
+                }
+              >
+                Charts
+              </Button>
+            </Grid>
+            <Grid item xs={1}>
+              <Button variant="contained" size="medium" disabled>
+                History
+              </Button>
+            </Grid>
           </Grid>
-          <Grid item xs={1}>
-            <Button
-              variant="contained"
-              size="medium"
-              onClick={() =>
-                navigate(
-                  `${location.pathname.replace(/\/history$/, "")}` + "/charts"
-                )
-              }
-            >
-              Charts
-            </Button>
-          </Grid>
-          <Grid item xs={1}>
-            <Button variant="contained" size="medium" disabled>
-              History
-            </Button>
-          </Grid>
-          <Grid item xs={12}>
-            <DataTable
-              title={"History"}
-              options={options}
-              columns={columns}
-              data={operations ? operations : []}
-            />
+
+          <Grid item xs={12} sx={{ height: "30px" }}></Grid>
+
+          <Grid container>
+            <Grid item xs={12}>
+              <DataTable
+                title={"History"}
+                options={options}
+                columns={columns}
+                data={operations ? operations : []}
+              />
+            </Grid>
           </Grid>
         </PageContainer>
       </Box>

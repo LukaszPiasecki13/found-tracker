@@ -9,12 +9,4 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='refresh_token'),
     path('api-auth/', include('rest_framework.urls')),
 
-
-    #OLD
-    # path('register/', views.RegistrationView.as_view(), name='register'),
-    # path('login/', views.LoginView.as_view(), name='login'),
-    # path('logout/', views.LogoutView.as_view(), name='logout'),
-    # path('validate-username/', csrf_exempt(views.UserNameValidationView.as_view()), name='validate-username'),
-    # path('validate-email/', csrf_exempt(views.EmailValidationView.as_view()), name='validate-email')
-
 ]

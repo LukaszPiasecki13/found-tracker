@@ -20,12 +20,8 @@ import AppBar from "../components/Bars/AppBar";
 import PageContainer from "../components/PageContainer";
 import Title from "../components/Title";
 import { Button } from "@mui/material";
-import { PieChart } from "@mui/x-charts/PieChart";
-import Chart from "../components/Chart";
 
-function preventDefault(event) {
-  event.preventDefault();
-}
+import GraphBlock from "../components/GraphBlock";
 
 export default function PocketCharts() {
   const navigate = useNavigate();
@@ -33,70 +29,111 @@ export default function PocketCharts() {
   const pocketName = useParams().slug;
   const defaultTheme = createTheme();
   const [open, setOpen] = React.useState(true);
+  const [participationSeries, setParticipationSeries] = React.useState([]);
+  const [pocketVectors, setPocketVectors] = React.useState([]);
+  const [assetVectors, setAssetVectors] = React.useState([]);
+  const [assetClassVectors, setAssetClassVectors] = React.useState([]);
 
-  const [pocketDetail, setPocketDetail] = React.useState([]);
-  const [pocketProfitOverTime, setPocketProfitOverTime] = React.useState([]);
-
-  const getPocketDetail = () => {
-    api
-      .get("api/asset-allocations", {
-      params: {
-        pocket_name: pocketName
+  const getPocketDetail = async () => {
+    try {
+      const res = await api.get("api/asset-allocations", {
+        params: {
+          pocket_name: pocketName,
+        },
+      });
+      if (res.data.length !== 0) {
+        const mergedData = merge(res.data);
+        setParticipationSeries(mergedData);
+      } else {
+        setParticipationSeries([]);
       }
-    })
-      .then((res) => res.data)
-      .then((data) => {
-        setPocketDetail(data);
-      })
-      .catch((err) => alert(err));
+    } catch (err) {
+      alert(err.response.data.error);
+    }
   };
 
-  const getProfitOverTime = () => {
-    api
-      .get("/api/profit-data", {
+  const getPocketVectors = async () => {
+    try {
+      const res = await api.get("/api/pocket-vectors", {
         params: {
           pocketName: pocketName,
-          startDate: "2023-07-22",
-          endDate: "2024-07-22",
+          startDate: "2024-07-22",
+          endDate: "2024-10-06",
+          interval: "1d",
         },
-      })
-      .then((response) => {
-        const _chartData = ({
-          date: response.data.Date,
-          value: response.data.Close,
-        });
-        setPocketProfitOverTime(_chartData);
-      })
-      .catch((error) => {
-        console.error("Error fetching data:", error);
       });
+      if (Object.keys(res.data).length !== 0) {
+        const date = res.data.date.map((date) =>
+          new Date(date).toISOString().slice(0, 10)
+        );
+        const mergedAssetVectors = mergeWithObject(date, res.data.assets);
+        const mergedAssetClassVectors = mergeWithObject(
+          date,
+          res.data.asset_classes
+        );
+
+        delete res.data.date;
+        delete res.data.assets;
+        delete res.data.asset_classes;
+
+        const mergedtPocketVectors = mergeWithObject(date, res.data);
+
+        setPocketVectors(mergedtPocketVectors);
+        setAssetVectors(mergedAssetVectors);
+        setAssetClassVectors(mergedAssetClassVectors);
+      } else {
+        setPocketVectors({});
+        setAssetVectors({});
+        setAssetClassVectors({});
+      }
+    } catch (err) {
+      alert(err.response.data.error);
+    }
   };
 
-  const [loading, setLoading] = React.useState(true);
+  const mergeWithObject = (date, object) => {
+    const dataArray = [];
+    for (let i = 0; i < date.length; i++) {
+      const dataPoint = {
+        date: date[i],
+      };
 
-  // Effect for setting the charging state
-  React.useEffect(() => {
-    if (pocketProfitOverTime.value) {
-      setLoading(false);
-    } else {
-      setLoading(true);
+      for (const element in object) {
+        if (object.hasOwnProperty(element)) {
+          dataPoint[element] = object[element][i].toFixed(1);
+        }
+      }
+
+      dataArray.push(dataPoint);
     }
-  }, [pocketProfitOverTime]);
+    return dataArray;
+  };
+
+  const merge = (data) => {
+    return data.map((item) => ({
+      name: item.asset.ticker,
+      value: parseFloat(parseFloat(item.participation).toFixed(1)),
+    }));
+  };
+
+  const assetDataKeys = assetVectors[0]
+    ? Object.keys(assetVectors[0]).filter((key) => key !== "date")
+    : [];
+
+  const assetClassDataKeys = assetClassVectors[0]
+    ? Object.keys(assetClassVectors[0]).filter((key) => key !== "date")
+    : [];
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      await Promise.all([getPocketDetail(), getPocketVectors()]);
+    };
+    fetchData();
+  }, []);
 
   const toggleDrawer = () => {
     setOpen(!open);
   };
-
-  React.useEffect(() => {
-    getPocketDetail();
-    getProfitOverTime();
-  }, []);
-
-  const participationSeries = pocketDetail.map((row) => ({
-    label: row.asset.name,
-    value: row.participation,
-  }));
-
 
   return (
     <ThemeProvider theme={defaultTheme}>
@@ -105,85 +142,149 @@ export default function PocketCharts() {
         <AppBar open={open} toggleDrawer={toggleDrawer} />
         <SideBar open={open} toggleDrawer={toggleDrawer} />
         <PageContainer>
-          <Grid item xs={2}>
-            <Button
-              variant="contained"
-              size="medium"
-              onClick={() =>
-                navigate(`${location.pathname.replace(/\/charts$/, "")}`)
-              }
-            >
-              Outcomes
-            </Button>
+          <Grid container>
+            <Grid item xs={12} sx={{ height: "20px" }}></Grid>
+            <Grid item xs={1}>
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={() =>
+                  navigate(`${location.pathname.replace(/\/charts$/, "")}`)
+                }
+              >
+                Outcomes
+              </Button>
+            </Grid>
+            <Grid item xs={1}>
+              <Button variant="contained" size="medium" disabled>
+                Charts
+              </Button>
+            </Grid>
+            <Grid item xs={1}>
+              <Button
+                variant="contained"
+                size="medium"
+                onClick={() =>
+                  navigate(
+                    `${location.pathname.replace(/\/charts$/, "")}` + "/history"
+                  )
+                }
+              >
+                History
+              </Button>
+            </Grid>
           </Grid>
-          <Grid item xs={1}>
-            <Button variant="contained" size="medium" disabled>
-              Charts
-            </Button>
-          </Grid>
-          <Grid item xs={1}>
-            <Button
-              variant="contained"
-              size="medium"
-              onClick={() =>
-                navigate(
-                  `${location.pathname.replace(/\/charts$/, "")}` + "/history"
-                )
-              }
-            >
-              History
-            </Button>
-          </Grid>
-          <Grid item xs={12}>
-            <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
-              <React.Fragment>
-                <Title>Portfolio division</Title>
-                <PieChart
-                  series={[
-                    {
-                      data: participationSeries,
-                      outerRadius: 150,
-                      innerRadius: 60,
-                      paddingAngle: 1,
-                      cornerRadius: 5,
-                    },
-                  ]}
-                  height={350}
-                />
-              </React.Fragment>
-            </Paper>
-            <div style={{ height: 10 }}></div>
-            <Paper sx={{ p: 2, display: "flex", flexDirection: "column", height:400 }} >
-              <React.Fragment>
-                <Title>Rate of return</Title>
-                <Chart x={pocketProfitOverTime.date} y={pocketProfitOverTime.value} loading={loading} />
-                                
-              </React.Fragment>
-            </Paper>
-            <div style={{ height: 10 }}></div>
 
-            <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
-              <React.Fragment>
-                <Title>Heatmap</Title>
-                
-              </React.Fragment>
-            </Paper>
-            <div style={{ height: 10 }}></div>
+          <Grid item xs={12} sx={{ height: "30px" }}></Grid>
 
-            <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
-              <React.Fragment>
-                <Title>Chart</Title>
-                
-              </React.Fragment>
-            </Paper>
-            <div style={{ height: 10 }}></div>
+          <Grid container spacing={2} rowSpacing={1}>
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Portfolio division</Title>
+                  <GraphBlock type="pie" data={participationSeries} />
+                </React.Fragment>
+              </Paper>
+            </Grid>
 
-            <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
-              <React.Fragment>
-                <Title>Chart</Title>
-                
-              </React.Fragment>
-            </Paper>
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Portfolio stack over time</Title>
+                  <GraphBlock
+                    type="area"
+                    data={assetVectors}
+                    dataKey={assetDataKeys}
+                  />
+                </React.Fragment>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Portfolio asset class over time</Title>
+                  <GraphBlock
+                    type="area"
+                    data={assetClassVectors}
+                    dataKey={assetClassDataKeys}
+                  />
+                </React.Fragment>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Portfolio net deposit value</Title>
+                  <GraphBlock
+                    type="line"
+                    data={pocketVectors}
+                    dataKey={"net_deposits_vector"}
+                  />
+                </React.Fragment>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Portfolio transaction cost</Title>
+                  <GraphBlock
+                    type="line"
+                    data={pocketVectors}
+                    dataKey={"transaction_cost_vector"}
+                  />
+                </React.Fragment>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Portfolio profit</Title>
+                  <GraphBlock
+                    type="line"
+                    data={pocketVectors}
+                    dataKey={"profit_vector"}
+                  />
+                </React.Fragment>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Free cash</Title>
+                  <GraphBlock
+                    type="line"
+                    data={pocketVectors}
+                    dataKey={"free_cash_vector"}
+                  />
+                </React.Fragment>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Portfolio value</Title>
+                  <GraphBlock
+                    type="line"
+                    data={pocketVectors}
+                    dataKey={"pocket_value_vector"}
+                  />
+                </React.Fragment>
+              </Paper>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
+                <React.Fragment>
+                  <Title>Heatmap</Title>
+                </React.Fragment>
+              </Paper>
+            </Grid>
           </Grid>
         </PageContainer>
       </Box>

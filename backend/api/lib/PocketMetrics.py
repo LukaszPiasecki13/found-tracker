@@ -5,8 +5,8 @@ import pandas as pd
 import yfinance as yf
 
 
-class PortfolioMetrics:
-    def __init__(self, operations: list, interval: str, start_time: datetime, end_time: datetime ):
+class PocketMetrics:
+    def __init__(self, operations: list, interval: str, start_time: datetime, end_time: datetime):
         '''
 
         Valid intervals: now only [1d]
@@ -46,11 +46,16 @@ class PortfolioMetrics:
         total_seconds = (end_time - start_time).total_seconds()
         self.time_diff = int(total_seconds // self.interval_seconds)+1
 
-        self._saved_data ={"sum_value_vector": None,
-                           "transaction_cost_vector": None,
-                           "net_deposits_vector": None,
-                           "free_cash_vector": None,
-                           }
+        self._saved_data = {"sum_value_vector": None,
+                            "transaction_cost_vector": None,
+                            "net_deposits_vector": None,
+                            "free_cash_vector": None,
+                            }
+
+    def get_date_vector(self) -> np.array:
+        date_vector = np.array(
+            [self.start_time + pd.Timedelta(seconds=i*self.interval_seconds) for i in range(self.time_diff)])
+        return date_vector
 
     def get_assets_vectors(self) -> dict:
         assets = {}
@@ -65,15 +70,13 @@ class PortfolioMetrics:
             value_vector = self._value_vector(
                 ticker=ticker, quantity_vector=quantity_vector)
 
-            assets[ticker] = {
-                "quantity": quantity_vector,
-                "value": value_vector}
+            assets[ticker] = value_vector
 
         sum_value_vector = np.zeros(self.time_diff, dtype=float)
         for asset in assets.values():
-            sum_value_vector += asset["value"]
+            sum_value_vector += asset
 
-        assets["sum_value_vector"] = sum_value_vector
+        # assets["sum_value_vector"] = sum_value_vector
         self._saved_data["sum_value_vector"] = sum_value_vector
 
         return assets
@@ -103,8 +106,7 @@ class PortfolioMetrics:
             if np.any(value_vector < 0):
                 raise ValueError("Negative value of assets in time.")
 
-            asset_classes[asset_class] = {
-                "value": sum_vector}
+            asset_classes[asset_class] = sum_vector
 
         return asset_classes
 
@@ -117,7 +119,7 @@ class PortfolioMetrics:
         current_saldo = 0
 
         for operation in fund_operations:
-            index = int(((operation.date.replace(tzinfo=None) - self.start_time).total_seconds()) / self.interval_seconds)
+            index = int(((self.start_time.date() - operation.date).total_seconds()) / self.interval_seconds)
             if operation.operation_type == 'add_funds':
                 current_saldo += operation.quantity
             elif operation.operation_type == 'withdraw_funds':
@@ -140,7 +142,8 @@ class PortfolioMetrics:
 
         # Iteration over operations
         for op in operations:
-            index = int(((op.date.replace(tzinfo=None) - self.start_time).total_seconds()) / self.interval_seconds)
+            index = int(((self.start_time.date() - op.date).total_seconds()) / self.interval_seconds)
+        
             if op.operation_type == 'buy':
                 current_cost += op.quantity * op.price + op.fee
             elif op.operation_type == 'sell':
@@ -158,7 +161,7 @@ class PortfolioMetrics:
             return transaction_cost_vector
 
     def get_profit_vector(self) -> np.array:
-        if self._saved_data["sum_value_vector"] and self._saved_data["transaction_cost_vector"]:
+        if np.any(self._saved_data["sum_value_vector"]) and np.any(self._saved_data["transaction_cost_vector"]):
             return self._saved_data["sum_value_vector"] - self._saved_data["transaction_cost_vector"]
         else:
             sum_value_vector = self.get_assets_vectors()["sum_value_vector"]
@@ -166,8 +169,9 @@ class PortfolioMetrics:
             return sum_value_vector - transaction_cost_vector
 
     def get_free_cash_vector(self) -> np.array:
-        if self._saved_data["net_deposits_vector"] and self._saved_data["transaction_cost_vector"]:
-            free_cash_vector = self._saved_data["net_deposits_vector"] - self._saved_data["transaction_cost_vector"]
+        if np.any(self._saved_data["net_deposits_vector"]) and np.any(self._saved_data["transaction_cost_vector"]):
+            free_cash_vector = self._saved_data["net_deposits_vector"] - \
+                self._saved_data["transaction_cost_vector"]
             self._saved_data["free_cash_vector"] = free_cash_vector
             return free_cash_vector
         else:
@@ -177,15 +181,13 @@ class PortfolioMetrics:
             self._saved_data["free_cash_vector"] = free_cash_vector
             return free_cash_vector
 
-    def get_portfolio_value_vector(self) -> np.array:
-        if self._saved_data["free_cash_vector"] and self._saved_data["sum_value_vector"]:
+    def get_pocket_value_vector(self) -> np.array:
+        if np.any(self._saved_data["free_cash_vector"]) and np.any(self._saved_data["sum_value_vector"]):
             return self._saved_data["free_cash_vector"] + self._saved_data["sum_value_vector"]
         else:
             free_cash_vector = self.get_free_cash_vector()
             sum_value_vector = self.get_assets_vectors()["sum_value_vector"]
             return free_cash_vector + sum_value_vector
-            
-
 
     def _qunatity_vector(self, operations: list) -> np.array:
         operations.sort(key=lambda x: x.date)
@@ -195,7 +197,8 @@ class PortfolioMetrics:
 
         # Iteration over operations
         for op in operations:
-            index = int(((op.date.replace(tzinfo=None) - self.start_time).total_seconds()) / self.interval_seconds)
+            index = int(
+                ((self.start_time.date() - op.date).total_seconds()) / self.interval_seconds)
             if op.operation_type == 'buy':
                 current_quantity += op.quantity
             elif op.operation_type == 'sell':
@@ -224,30 +227,25 @@ class PortfolioMetrics:
         start_date_str = self.start_time.date().strftime('%Y-%m-%d')
         end_date_str = self.end_time.date().strftime('%Y-%m-%d')
         ticker_df = yf.Ticker(ticker).history(
-            start=self.start_time, end=self.end_time, interval= self.interval)[['Close']]
-        
-        ticker_df.index = ticker_df.index.tz_localize(None).date # Delete timezone info and hours
+            start=self.start_time, end=self.end_time, interval=self.interval)[['Close']]
+
+        ticker_df.index = ticker_df.index.tz_localize(
+            None).date  # Delete timezone info and hours
 
         # We need to fill the data with missing dates, because there are no weekend days
         full_data_range = pd.date_range(
-            start= start_date_str, end=end_date_str)
+            start=start_date_str, end=end_date_str)
         ticker_df = ticker_df.reindex(full_data_range)
 
         # If is work day
         if self.end_time.weekday() < 5:
             # If last cell is NaN
             if pd.isna(ticker_df['Close'].iloc[-1]):
-                ticker_df.loc[ticker_df.index[-1], 'Close'] = yf.Ticker(ticker).info['currentPrice']
+                ticker_df.loc[ticker_df.index[-1],
+                              'Close'] = yf.Ticker(ticker).info['currentPrice']
 
         ticker_df['Close'] = ticker_df['Close'].ffill()
         if ticker_df['Close'].isna().any():
             ticker_df['Close'] = ticker_df['Close'].bfill()
 
         return ticker_df['Close'].values
-
-    
-
-
-
-
-
