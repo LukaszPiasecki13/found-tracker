@@ -11,12 +11,15 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Toolbar from "@mui/material/Toolbar";
+import { Button, IconButton } from "@mui/material";
+
 import SideBar from "../components/Bars/SideBar";
 import AppBar from "../components/Bars/AppBar";
 import api from "../api";
 import PageContainer from "../components/PageContainer";
-
+import DataTable from "../components/DataTable";
 import Title from "../components/Title";
+import { cellStyle } from "../components/utils";
 
 function preventDefault(event) {
   event.preventDefault();
@@ -25,22 +28,185 @@ function preventDefault(event) {
 export default function Operations() {
   const defaultTheme = createTheme();
   const [open, setOpen] = React.useState(true);
+  const [operations, setOperations] = React.useState([]);
   const toggleDrawer = () => {
     setOpen(!open);
   };
 
+  const getOperations = async () => {
+    try {
+      const res = await api.get("api/operations", {
+      });
+      setOperations(res.data);
+    } catch (err) {
+      alert(err.response.data.error);
+    }
+  };
+
+
+
   React.useEffect(() => {
-    getOperations();
+    const fetchData = async () => {
+      await Promise.all([getOperations()]);
+    };
+    fetchData();
   }, []);
 
-  const [operations, setOperations] = React.useState([]);
 
-  const getOperations = () => {
-    api
-      .get("api/operations")
-      .then((res) => res.data)
-      .then((data) => setOperations(data))
-      .catch((err) => alert(err));
+  const columns = [
+    {
+      name: "id",
+      label: "ID",
+      options: {
+        filter: true,
+        sort: true,
+        display: false,
+      },
+    },
+    {
+      name: "date",
+      label: "Date",
+      options: {
+        filter: true,
+        sort: true,
+      },
+    },
+    {
+      name: "pocket_name",
+      label: "Pocket",
+      options: {
+        filter: true,
+        sort: true,
+      },
+    },
+    {
+      name: "operation_type",
+      label: "Operation",
+      options: {
+        filter: true,
+        sort: true,
+      },
+    },
+    {
+      name: "asset_class",
+      label: "Asset Class",
+      options: {
+        filter: true,
+        sort: true,
+      },
+    },
+    {
+      name: "ticker",
+      label: "Ticker",
+      options: {
+        filter: true,
+        sort: true,
+      },
+    },
+    {
+      name: "currency",
+      label: "Currency",
+      options: {
+        filter: true,
+        sort: true,
+      },
+    },
+    {
+      name: "quantity",
+      label: "Quantity",
+      options: {
+        filter: true,
+        sort: true,
+        customBodyRender: (value) => {
+          value.toFixed(2);
+          return cellStyle(value);
+        },
+      },
+    },
+    {
+      name: "price",
+      label: "Price",
+      options: {
+        filter: true,
+        sort: true,
+        customBodyRender: (value) => {
+          value?.toFixed(2);
+          return cellStyle(value);
+        },
+      },
+    },
+    {
+      name: "fee",
+      label: "Fee",
+      options: {
+        filter: true,
+        sort: true,
+        customBodyRender: (value) => {
+          value.toFixed(1);
+          return cellStyle(value);
+        },
+      },
+    },
+    {
+      name: "delete",
+      label: "Delete",
+      options: {
+        viewColumns: false,
+        filter: false,
+        customBodyRender: (value, tableMeta) => {
+          return (
+            <div>
+              <Button
+                onClick={() => {
+                  handleClickDelete(tableMeta.rowData[0]);
+                }}
+              >
+                {" "}
+                Delete
+              </Button>
+            </div>
+          );
+        },
+      },
+    },
+  ];
+
+  const options = {
+    filter: true,
+    selectableRows: "none",
+    expandableRows: true,
+    rowsPerPageOptions: [20, 50, 100],
+    rowsPerPage: 20,
+
+    setTableProps: () => ({
+      // size: 'small',
+      stickyHeader: true,
+      padding: "none",
+    }),
+
+    renderExpandableRow: (rowData, rowMeta) => {
+      return (
+        <tr>
+          <td colSpan={4}>
+            <TableContainer>
+              <Table style={{ margin: "0 auto" }}>
+                <TableHead>
+                  <TableCell align="right">Name</TableCell>
+                  <TableCell align="right">Color</TableCell>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell component="th" scope="row" align="right">
+                      ABXD
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </td>
+        </tr>
+      );
+    },
   };
 
   return (
@@ -49,54 +215,17 @@ export default function Operations() {
         <CssBaseline />
         <AppBar open={open} toggleDrawer={toggleDrawer} />
         <SideBar open={open} toggleDrawer={toggleDrawer} />
-
         <PageContainer>
-          <Grid item xs={12}>
-            <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
-              <React.Fragment>
-                <Title>Operation History</Title>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Pocket</TableCell>
-                      <TableCell>Operation</TableCell>
-                      <TableCell>Asset Class</TableCell>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Ticker</TableCell>
-                      <TableCell>Currency</TableCell>
-                      <TableCell>Quantity</TableCell>
-                      <TableCell>Price</TableCell>
-                      <TableCell align="right">Fee</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {operations.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.date}</TableCell>
-                        <TableCell>{row.pocket_name}</TableCell>
-                        <TableCell>{row.operation_type}</TableCell>
-                        <TableCell>{row.asset_class}</TableCell>
-                        <TableCell>name</TableCell>
-                        <TableCell>{row.ticker}</TableCell>
-                        <TableCell>{row.currency}</TableCell>
-                        <TableCell>{row.quantity}</TableCell>
-                        <TableCell>{row.price}</TableCell>
-                        <TableCell align="right">{`$${row.fee}`}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <Link
-                  color="primary"
-                  href="#"
-                  onClick={preventDefault}
-                  sx={{ mt: 3 }}
-                >
-                  See more
-                </Link>
-              </React.Fragment>
-            </Paper>
+          <Grid container>
+          <Grid item xs={12} sx={{ height: "30px" }}></Grid>
+            <Grid item xs={12}>
+              <DataTable
+                title={"Operation History"}
+                options={options}
+                columns={columns}
+                data={operations ? operations : []}
+              />
+            </Grid>
           </Grid>
         </PageContainer>
       </Box>
