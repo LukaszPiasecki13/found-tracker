@@ -60,6 +60,7 @@ class AssetProcessor:
                     name=asset_name,
                     asset_class=self.data['asset_class'],
                     currency=Currency.objects.get(name=ticker_currency))
+
         except Exception as e:
             raise e
 
@@ -186,8 +187,7 @@ class AssetProcessor:
                 elif check_operation_indicator > 0:
                     asset_allocation.quantity -= Decimal(self.data['quantity'])
                     asset_allocation.save()
-                    ...
-                    # TODO: Dodawanie pieniędzy do portfela ze sprzedaży
+                    
                 elif check_operation_indicator < 0:
                     raise ValueError('Not enough assets to sell')
 
@@ -221,11 +221,28 @@ class AssetProcessor:
             return True
 
     def destory_operation(self, operation):
+
+        def _possibly_to_delete(operation, buy_transactions, sell_transactions) -> bool:
+            if operation.operation_type == 'buy':
+                quantity_buy_sum = sum(
+                    transaction.quantity for transaction in buy_transactions)
+                quantity_sell_sum = sum(
+                    transaction.quantity for transaction in sell_transactions)
+
+                if (quantity_buy_sum - operation.quantity) < quantity_sell_sum:
+                    raise ValueError(
+                        'You cannot delete the buy transaction. Try to delete the sell transaction first.')
+
+            elif operation.operation_type == 'sell':
+                return True
+
+            return True
+
         try:
             pocket = Pocket.objects.get(
                 name=operation.pocket_name, owner=self.owner)
             if operation.operation_type == 'buy':
-                pocket.free_cash -= Decimal(operation.price *
+                pocket.free_cash += Decimal(operation.price *
                                             operation.quantity + operation.fee)
                 pocket.fees -= Decimal(operation.fee)
 
@@ -238,29 +255,34 @@ class AssetProcessor:
                         buy_transactions, sell_transactions = self._get_asset_operations(
                             operation.pocket_name, self.owner, operation.ticker)
 
-                        # Remove the transaction from the list of buy transactions, but not from the database
-                        buy_transactions = [
-                            transaction for transaction in buy_transactions if transaction.id != operation.id]
 
-                        average_purchase_price = self._calculate_average_purchase_price(
-                            buy_transactions, sell_transactions)
-                        asset_allocation.average_purchase_price = Decimal(
-                            average_purchase_price)
 
-                        if operation.quantity == asset_allocation.quantity:
-                            asset_allocation.delete()
-                        elif operation.quantity < asset_allocation.quantity:
-                            asset_allocation.quantity -= Decimal(
-                                operation.quantity)
-                            asset_allocation.save()
-                        elif operation.quantity > asset_allocation.quantity:
-                            raise ValueError('Not enough assets to subtract')
+                        if _possibly_to_delete(operation, buy_transactions, sell_transactions):
+                            # Remove the transaction from the list of buy transactions, but not from the database
+                            buy_transactions = [
+                                transaction for transaction in buy_transactions if transaction.id != operation.id]
+                        
+                            average_purchase_price = self._calculate_average_purchase_price(
+                                buy_transactions, sell_transactions)
+                            asset_allocation.average_purchase_price = Decimal(
+                                average_purchase_price)
+
+                            if operation.quantity == asset_allocation.quantity:
+                                asset_allocation.delete()
+                            elif operation.quantity < asset_allocation.quantity:
+                                asset_allocation.quantity -= Decimal(
+                                    operation.quantity)
+                                asset_allocation.save()
+                            elif operation.quantity > asset_allocation.quantity:
+                                asset_allocation.quantity -= Decimal(
+                                    operation.quantity)
+                                asset_allocation.save()
 
                 except Exception as e:
                     raise e
 
             elif operation.operation_type == 'sell':
-                pocket.free_cash += Decimal(operation.price *
+                pocket.free_cash -= Decimal(operation.price *
                                             operation.quantity - operation.fee)
                 pocket.fees -= Decimal(operation.fee)
 
@@ -297,7 +319,7 @@ class AssetProcessor:
 
                         asset_allocation.quantity += Decimal(
                             operation.quantity)
-                        
+
                         asset_allocation.save()
 
                 except Exception as e:

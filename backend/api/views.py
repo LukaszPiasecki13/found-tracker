@@ -1,12 +1,8 @@
 from django.shortcuts import render
 from rest_framework import generics, viewsets
 from rest_framework.views import APIView
-
-from authentication.models import UserProfile
-from .serializers import UserSerializer, OperationSerializer, AssetAllocationSerializer, PocketSerializer, CurencySerializer, AssetClassSerializer
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
-from .models import Operation, AssetAllocation, Pocket, Currency, AssetClass
 from rest_framework import status
 from rest_framework.response import Response
 import yfinance as yf
@@ -14,9 +10,14 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from itertools import groupby
+import plotly.graph_objects as go
 
+from authentication.models import UserProfile
+from .serializers import UserSerializer, OperationSerializer, AssetAllocationSerializer, PocketSerializer, CurencySerializer, AssetClassSerializer
+from .models import Operation, AssetAllocation, Pocket, Currency, AssetClass
 from .lib.AssetProcessor import AssetProcessor
 from .lib.PocketMetrics import PocketMetrics
+
 
 
 class UsersView(generics.ListCreateAPIView):
@@ -37,12 +38,13 @@ class OperationsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         pocket_name = self.request.query_params.get('pocket_name', None)
+
         if pocket_name:
             queryset = Operation.objects.filter(
                 owner=self.request.user, pocket_name=pocket_name)
         else:
             queryset = Operation.objects.filter(owner=self.request.user)
-        return queryset
+        return queryset.order_by('-date', '-created_at')
 
     def perform_create(self, serializer):
         # TODO: Walidacja danych
@@ -102,7 +104,8 @@ class AssetAllocationViewSet(viewsets.ModelViewSet):
         processor = AssetProcessor(owner=self.request.user)
         processor.update_assets(pocket_name=pocket_name)
         pocket = Pocket.objects.get(name=pocket_name)
-        asset_allocations_querry = AssetAllocation.objects.filter(pocket=pocket)
+        asset_allocations_querry = AssetAllocation.objects.filter(
+            pocket=pocket)
 
         return asset_allocations_querry.order_by('asset__ticker')
 
@@ -133,12 +136,12 @@ class PocketVectorsView(APIView):
                 owner=request.user, pocket_name=pocket_name)
         else:
             operations = Operation.objects.filter(owner=request.user)
-        if operations :
-            operations = [operation for operation in operations] # make a list
+        if operations:
+            operations = [operation for operation in operations]  # make a list
             operations.sort(key=lambda x: x.date)
 
-            if operations[0].date < datetime.strptime(start_time_str, '%Y-%m-%d').date():
-                start_time_str = operations[0].date.strftime('%Y-%m-%d')
+            # if operations[0].date > datetime.strptime(start_time_str, '%Y-%m-%d').date():
+            #     start_time_str = operations[0].date.strftime('%Y-%m-%d')
 
             try:
                 start_time = datetime.strptime(start_time_str, '%Y-%m-%d')
@@ -147,22 +150,50 @@ class PocketVectorsView(APIView):
             except ValueError:
                 return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
 
-
             pocket_vectors = {}
 
-            metrics = PocketMetrics(interval=interval, start_time = start_time, end_time = end_time, operations = operations)
+            metrics = PocketMetrics(
+                interval=interval, start_time=start_time, end_time=end_time, operations=operations)
 
             pocket_vectors["date"] = metrics.get_date_vector()
             pocket_vectors["assets"] = metrics.get_assets_vectors()
             pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
             pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
-            pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector()
+            pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector(
+            )
             pocket_vectors["profit_vector"] = metrics.get_profit_vector()
             pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
             pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector()
 
+            # self.chart_working_function(
+            #     x=pocket_vectors["date"], y=pocket_vectors["net_deposits_vector"], title="net_deposits_vector")
+            # self.chart_working_function(
+            #     x=pocket_vectors["date"], y=pocket_vectors["transaction_cost_vector"], title="transaction_cost_vector")
+            # self.chart_working_function(
+            #     x=pocket_vectors["date"], y=pocket_vectors["profit_vector"], title="profit_vector")
+            # self.chart_working_function(
+            #     x=pocket_vectors["date"], y=pocket_vectors["free_cash_vector"], title="free_cash_vector")
+            # self.chart_working_function(
+            #     x=pocket_vectors["date"], y=pocket_vectors["pocket_value_vector"], title="pocket_value_vector")
+
         else:
             pocket_vectors = {}
 
-
         return Response(pocket_vectors, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def chart_working_function(x, y, title):
+        # Create traces
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode='lines+markers',
+            name='lines+markers')
+        )
+
+        fig.update_layout(
+            title=title
+        )
+
+        fig.show()

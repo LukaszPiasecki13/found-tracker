@@ -47,12 +47,23 @@ export default function PocketHistory() {
       });
       setOperations(res.data);
     } catch (err) {
-      alert(err.response.data.error);
+      alert(err.response.data.message);
     }
   };
 
-  const handleClickDelete = (id) => {
-    console.log(id);
+  const handleClickDelete = async (id) => {
+    try{
+      const res = await api.delete(`api/operations/${id}`);
+      if (res.status === 204){ 
+        await getOperations();
+        } 
+      else {
+        alert("Unexpected error: " + res.status);
+      }
+    } catch (err) {
+      alert(err.response.data.message);
+    }
+
   };
 
   React.useEffect(() => {

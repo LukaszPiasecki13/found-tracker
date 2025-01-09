@@ -58,13 +58,9 @@ const StyledMenu = styled((props) => (
 }));
 
 export default function AddMenus(props) {
+  const { menuDialogStates, toggleDialogStates } = props;
   const pocket = props.pocket;
   const [anchorEl, setAnchorEl] = React.useState(null);
-  const [buyDialogOpen, setBuyDialogOpen] = React.useState(false);
-  const [sellDialogOpen, setSellDialogOpen] = React.useState(false);
-  const [addFundsDialogOpen, setAddFundsDialogOpen] = React.useState(false);
-  const [withdrawFundsDialogOpen, setWithdrawFundsDialogOpen] =
-    React.useState(false);
 
   const open = Boolean(anchorEl);
   const handleClick = (event) => {
@@ -73,28 +69,7 @@ export default function AddMenus(props) {
   const handleClose = () => {
     setAnchorEl(null);
   };
-  const handleBuyDialogOpen = () => {
-    setBuyDialogOpen(true);
-  };
 
-  const handleSellDialogOpen = () => {
-    setSellDialogOpen(true);
-  };
-
-  const handleAddFundsDialogOpen = () => {
-    setAddFundsDialogOpen(true);
-  };
-
-  const handleWithdrawFundsDialogOpen = () => {
-    setWithdrawFundsDialogOpen(true);
-  };
-
-  const handleDialogClose = () => {
-    setBuyDialogOpen(false);
-    setSellDialogOpen(false);
-    setAddFundsDialogOpen(false);
-    setWithdrawFundsDialogOpen(false);
-  };
   return (
     <div>
       <Button
@@ -121,7 +96,7 @@ export default function AddMenus(props) {
         <MenuItem
           onClick={() => {
             handleClose();
-            handleBuyDialogOpen();
+            toggleDialogStates("buyDialogOpen", true);
           }}
           disableRipple
         >
@@ -130,7 +105,7 @@ export default function AddMenus(props) {
         <MenuItem
           onClick={() => {
             handleClose();
-            handleSellDialogOpen();
+            toggleDialogStates("sellDialogOpen", true);
           }}
           disableRipple
         >
@@ -140,7 +115,7 @@ export default function AddMenus(props) {
         <MenuItem
           onClick={() => {
             handleClose();
-            handleAddFundsDialogOpen();
+            toggleDialogStates("addFundsDialogOpen", true);
           }}
           disableRipple
         >
@@ -149,7 +124,7 @@ export default function AddMenus(props) {
         <MenuItem
           onClick={() => {
             handleClose();
-            handleWithdrawFundsDialogOpen();
+            toggleDialogStates("withdrawFundsDialogOpen", true);
           }}
           disableRipple
         >
@@ -157,22 +132,32 @@ export default function AddMenus(props) {
         </MenuItem>
       </StyledMenu>
       <BuyDialog
-        open={buyDialogOpen}
-        onClose={handleDialogClose}
+        open={menuDialogStates.buyDialogOpen}
+        onClose={() => {
+          toggleDialogStates("buyDialogOpen", false);
+        }}
         pocket={pocket}
       />
       <SellDialog
-        open={sellDialogOpen}
-        onClose={handleDialogClose}
+        open={menuDialogStates.sellDialogOpen}
+        onClose={() => {
+          toggleDialogStates("sellDialogOpen", false);
+        }}
         pocket={pocket}
         pocketAssetAllocationDetail={props.pocketAssetAllocationDetail}
       />
       <AddWithdrawFundsDialog
-        open={addFundsDialogOpen || withdrawFundsDialogOpen}
-        onClose={handleDialogClose}
+        open={
+          menuDialogStates.addFundsDialogOpen ||
+          menuDialogStates.withdrawFundsDialogOpen
+        }
+        onClose={() => {
+          toggleDialogStates("addFundsDialogOpen", false);
+          toggleDialogStates("withdrawFundsDialogOpen", false);
+        }}
         pocket={pocket}
-        addFunds={addFundsDialogOpen}
-        withdraw={withdrawFundsDialogOpen}
+        addFunds={menuDialogStates.addFundsDialogOpen}
+        withdraw={menuDialogStates.withdrawFundsDialogOpen}
       />
     </div>
   );

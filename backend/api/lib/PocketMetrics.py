@@ -118,12 +118,16 @@ class PocketMetrics:
         net_deposits_vector = np.zeros(self.time_diff, dtype=float)
         current_saldo = 0
 
-        for operation in fund_operations:
-            index = int(((self.start_time.date() - operation.date).total_seconds()) / self.interval_seconds)
-            if operation.operation_type == 'add_funds':
-                current_saldo += operation.quantity
-            elif operation.operation_type == 'withdraw_funds':
-                current_saldo -= operation.quantity
+        for op in fund_operations:
+            index = int(
+                ((op.date - self.start_time.date()).total_seconds()) / self.interval_seconds)
+            if index < 0:
+                index = 0
+
+            if op.operation_type == 'add_funds':
+                current_saldo += op.quantity
+            elif op.operation_type == 'withdraw_funds':
+                current_saldo -= op.quantity
 
             net_deposits_vector[index:] = current_saldo
 
@@ -142,8 +146,11 @@ class PocketMetrics:
 
         # Iteration over operations
         for op in operations:
-            index = int(((self.start_time.date() - op.date).total_seconds()) / self.interval_seconds)
-        
+            index = int(
+                ((op.date - self.start_time.date()).total_seconds()) / self.interval_seconds)
+            if index < 0:
+                index = 0
+
             if op.operation_type == 'buy':
                 current_cost += op.quantity * op.price + op.fee
             elif op.operation_type == 'sell':
@@ -198,7 +205,10 @@ class PocketMetrics:
         # Iteration over operations
         for op in operations:
             index = int(
-                ((self.start_time.date() - op.date).total_seconds()) / self.interval_seconds)
+                ((op.date - self.start_time.date()).total_seconds()) / self.interval_seconds)
+            if index < 0:
+                index = 0
+            
             if op.operation_type == 'buy':
                 current_quantity += op.quantity
             elif op.operation_type == 'sell':

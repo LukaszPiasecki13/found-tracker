@@ -25,6 +25,24 @@ const generateColors = (numColors) => {
   return Array.from({ length: numColors }, (_, i) => scale(i));
 };
 
+const calculateDomain = (data, key) => {
+  if (data) {
+    return [0, 0];
+  } else {
+    const values = data.map((item) => item[key]);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+
+    // set min and max to 0 if they are negative or positive
+    const adjustedMin = min < 0 ? Math.floor(min / 100) * 100 : 0;
+
+    // round up to the nearest 100
+    const adjustedMax = max > 0 ? Math.ceil(max / 100) * 100 : 0;
+
+    return [adjustedMin, adjustedMax];
+  }
+};
+
 export default function GraphBlock({
   type,
   data,
@@ -32,7 +50,6 @@ export default function GraphBlock({
   width = 600,
   height = 300,
 }) {
-
   const numberOfColors = () => {
     if (type === "pie") {
       return data.length;
@@ -98,12 +115,15 @@ export default function GraphBlock({
                 dataKey="date"
                 tick={{ angle: -60, dy: 20, fontSize: 12 }}
               />
-              <YAxis dataKey={dataKey} />
+              <YAxis
+                dataKey={dataKey}
+                domain={calculateDomain(data, dataKey)}
+              />
               <Tooltip isAnimationActive={false} />
               <Legend verticalAlign="top" />
               <Line
                 dataKey={dataKey}
-                stroke="#82ca9d"
+                stroke="green"
                 dot={false}
                 isAnimationActive={false}
               />

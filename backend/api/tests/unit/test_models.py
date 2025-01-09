@@ -47,7 +47,8 @@ class TestAssetModel:
 class TestPocketModel:
     def setup_method(self):
         self.user = UserProfile.objects.create_user(username='testuser', password = 'password')
-        self.pocket = Pocket.objects.create(owner=self.user, name='Pocket', fees=0)
+        self.currency = Currency.objects.create(name='USD', reference_currency_name='USD', exchange_rate=1)
+        self.pocket = Pocket.objects.create(owner=self.user, name='Pocket', fees=0, currency=self.currency)
 
     def test_create_model(self):
         assert isinstance(self.pocket, Pocket)
@@ -59,7 +60,8 @@ class TestPocketModel:
 class TestAssetAllocationModel:
     def setup_method(self):
         self.user = UserProfile.objects.create_user(username='testuser', password = 'password')
-        self.pocket = Pocket.objects.create(owner=self.user, name='Pocket', fees=0)
+        self.currency = Currency.objects.create(name='USD', reference_currency_name='USD', exchange_rate=1)
+        self.pocket = Pocket.objects.create(owner=self.user, name='Pocket', fees=0, currency=self.currency)
         self.asset = Asset.objects.create(ticker='AAPL', name='Apple', asset_class='shares', currency=Currency.objects.create(name='USD') )
         self.asset_allocation = AssetAllocation.objects.create(pocket=self.pocket, asset=self.asset, quantity=10, average_purchase_price=100)
 

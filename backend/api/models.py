@@ -17,6 +17,7 @@ class Operation(models.Model):
     comment = models.TextField(blank=True)
     owner = models.ForeignKey(to=UserProfile, on_delete=models.CASCADE)
     pocket_name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
     
 
     def __str__(self):

@@ -6,6 +6,8 @@ import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
 import Link from "@mui/material/Link";
+import CircularProgress from "@mui/material/CircularProgress";
+import Typography from "@mui/material/Typography";
 
 import {
   Table,
@@ -35,11 +37,24 @@ export default function PocketAssetsDetail() {
   const location = useLocation();
   const pocketName = useParams().slug;
   const defaultTheme = createTheme();
+  const [loading, setLoading] = React.useState(true);
   const [open, setOpen] = React.useState(true);
+  const [menuDialogStates, setMenuDialogStates] = React.useState({
+    buyDialogOpen: false,
+    sellDialogOpen: false,
+    addFundsDialogOpen: false,
+    withdrawFundsDialogOpen: false,
+  });
   const [pocketAssetAllocationDetail, setPocketAssetAllocationDetail] =
     React.useState([]);
   const [pocket, setPocket] = React.useState([]);
 
+  const toggleDialogStates = (dialogName, open) => {
+    setMenuDialogStates((prevState) => ({
+      ...prevState,
+      [dialogName]: open,
+    }));
+  };
   const getAssetAllocations = async () => {
     try {
       const res = await api.get("api/asset-allocations", {
@@ -51,7 +66,7 @@ export default function PocketAssetsDetail() {
       const transformedData = transformData(res.data);
       setPocketAssetAllocationDetail(transformedData);
     } catch (err) {
-      alert(err.response.data.error);
+      alert(err.response.data.message);
     }
   };
 
@@ -62,8 +77,14 @@ export default function PocketAssetsDetail() {
       });
       setPocket(res.data[0]);
     } catch (err) {
-      alert(err.response.data.error);
+      alert(err.response.data.message);
     }
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    await Promise.all([getAssetAllocations(), getPocketDetail()]);
+    setLoading(false);
   };
 
   const transformData = (data) => {
@@ -112,13 +133,6 @@ export default function PocketAssetsDetail() {
   const toggleDrawer = () => {
     setOpen(!open);
   };
-
-  React.useEffect(() => {
-    const fetchData = async () => {
-      await Promise.all([getAssetAllocations(), getPocketDetail()]);
-    };
-    fetchData();
-  }, []);
 
   const columns = [
     {
@@ -170,7 +184,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(2);
+          value = Number(value.toFixed(2));
           return cellStyle(value);
         },
       },
@@ -182,7 +196,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(2);
+          value = Number(value.toFixed(2));
           return cellStyle(value);
         },
       },
@@ -194,7 +208,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(2);
+          value = Number(value.toFixed(2));
           return cellStyle(value);
         },
       },
@@ -206,7 +220,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(2);
+          value = Number(value.toFixed(2));
           return cellStyle(value);
         },
       },
@@ -218,7 +232,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(2);
+          value = Number(value.toFixed(2));
           return cellStyle(value, true);
         },
       },
@@ -230,7 +244,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(1);
+          value = Number(value.toFixed(2));
           return cellStyle(value, true);
         },
       },
@@ -253,7 +267,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(1);
+          value = Number(value.toFixed(1));
           return cellStyle(value);
         },
       },
@@ -265,7 +279,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(1);
+          value = Number(value.toFixed(1));
           return cellStyle(value, true);
         },
       },
@@ -277,7 +291,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(1);
+          value = Number(value.toFixed(1));
           return cellStyle(value, true);
         },
       },
@@ -289,7 +303,7 @@ export default function PocketAssetsDetail() {
         filter: true,
         sort: true,
         customBodyRender: (value) => {
-          value.toFixed(1);
+          value = Number(value.toFixed(2));
           return cellStyle(value, true);
         },
       },
@@ -456,6 +470,48 @@ export default function PocketAssetsDetail() {
     },
   };
 
+  React.useEffect(() => {
+    fetchData();
+  }, []);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      if (!menuDialogStates.buyDialogOpen) {
+        await getAssetAllocations();
+        await getPocketDetail();
+      }
+    };
+    fetchData();
+  }, [menuDialogStates.buyDialogOpen]);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      if (!menuDialogStates.sellDialogOpen) {
+        await getAssetAllocations();
+        await getPocketDetail();
+      }
+    };
+    fetchData();
+  }, [menuDialogStates.sellDialogOpen]);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      if (!menuDialogStates.addFundsDialogOpen) {
+        await getPocketDetail();
+      }
+    };
+    fetchData();
+  }, [menuDialogStates.addFundsDialogOpen]);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      if (!menuDialogStates.withdrawFundsDialogOpen) {
+        await getPocketDetail();
+      }
+    };
+    fetchData();
+  }, [menuDialogStates.withdrawFundsDialogOpen]);
+
   return (
     <ThemeProvider theme={defaultTheme}>
       <Box sx={{ display: "flex" }}>
@@ -469,6 +525,8 @@ export default function PocketAssetsDetail() {
               <AddMenus
                 pocket={pocket}
                 pocketAssetAllocationDetail={pocketAssetAllocationDetail}
+                menuDialogStates={menuDialogStates}
+                toggleDialogStates={toggleDialogStates}
               />
             </Grid>
             <Grid item xs={1}>
@@ -490,19 +548,70 @@ export default function PocketAssetsDetail() {
               </Button>
             </Grid>
           </Grid>
+
           <Grid item xs={12} sx={{ height: "30px" }}></Grid>
-          <Grid container>
-          <Grid item xs={12}>
-            <DataTable
-              title={"Pocket Composition"}
-              options={options}
-              columns={columns}
-              data={
-                pocketAssetAllocationDetail ? pocketAssetAllocationDetail : []
-              }
-            />
-          </Grid>
-          </Grid>
+          <Box sx={{ position: "relative", width: "100%" }}>
+            <Grid container>
+              <Grid item xs={12}>
+                {loading ? ( // Sprawdzamy, czy dane są ładowane
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      height: "200px",
+                    }}
+                  >
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <DataTable
+                    title={"Pocket Composition"}
+                    options={options}
+                    columns={columns}
+                    data={
+                      pocketAssetAllocationDetail
+                        ? pocketAssetAllocationDetail
+                        : []
+                    }
+                  />
+                )}
+              </Grid>
+            </Grid>
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: "0px",
+                left: "0",
+                zIndex: 1,
+              }}
+            >
+              {!loading ? (
+                pocket.currency && (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 1.78,
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Typography>Free Cash:</Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{ fontWeight: 500, color: "#1976d2", ml: 2 }}
+                    >
+                      {`${Number(pocket.free_cash).toFixed(2)} ${
+                        pocket.currency.name
+                      }`}
+                    </Typography>
+                  </Paper>
+                )
+              ) : (
+                <></>
+              )}
+            </Box>
+          </Box>
         </PageContainer>
       </Box>
     </ThemeProvider>

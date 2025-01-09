@@ -3,14 +3,14 @@ import pytest
 from authentication.models import UserProfile
 from api.models import AssetClass, Currency, Operation, Pocket, Asset, AssetAllocation
 from django.urls import reverse
-from api.tests.TransactionFactory import TransactionFactory
+from api.tests.integration.TransactionFactory import TransactionFactory
 from django.db.models import Sum
 from decimal import Decimal
 from api.serializers import UserSerializer, OperationSerializer, AssetAllocationSerializer
 from collections import namedtuple
 
 
-from ..lib.AssetProcessor import AssetProcessor
+from api.lib.AssetProcessor import AssetProcessor
 
 LOOP_COUNT = 50
 
@@ -656,6 +656,7 @@ class TestAssetAllocationViews:
 
         test_participation_dic = {}
         for asset_allocation in response.json():
+
             ticker = asset_allocation['asset']['ticker']
             test_participation_dic[float(asset_allocation['participation'])] = float(
                 asset_allocation['total_value_XXX'])

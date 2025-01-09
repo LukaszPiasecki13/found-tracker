@@ -12,6 +12,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Toolbar from "@mui/material/Toolbar";
 import { Button, IconButton } from "@mui/material";
+import CircularProgress from "@mui/material/CircularProgress";
 
 import SideBar from "../components/Bars/SideBar";
 import AppBar from "../components/Bars/AppBar";
@@ -29,6 +30,7 @@ export default function Operations() {
   const defaultTheme = createTheme();
   const [open, setOpen] = React.useState(true);
   const [operations, setOperations] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
   const toggleDrawer = () => {
     setOpen(!open);
   };
@@ -39,18 +41,30 @@ export default function Operations() {
       });
       setOperations(res.data);
     } catch (err) {
-      alert(err.response.data.error);
+      alert(err.response.data.message);
     }
   };
 
+  const fetchData = async () => {
+    setLoading(true);
+    await Promise.all([getOperations()]);
+    setLoading(false);
+  };
 
 
-  React.useEffect(() => {
-    const fetchData = async () => {
-      await Promise.all([getOperations()]);
-    };
-    fetchData();
-  }, []);
+  const handleClickDelete = async (id) => {
+    try{
+      const res = await api.delete(`api/operations/${id}`);
+      if (res.status === 204){ 
+        await getOperations();
+        } 
+      else {
+        alert("Unexpected error: " + res.status);
+      }
+    } catch (err) {
+      alert(err.response.data.message);
+    }
+  }
 
 
   const columns = [
@@ -209,6 +223,12 @@ export default function Operations() {
     },
   };
 
+
+  
+  React.useEffect(() => {
+    fetchData();
+  }, []);
+
   return (
     <ThemeProvider theme={defaultTheme}>
       <Box sx={{ display: "flex" }}>
@@ -219,12 +239,25 @@ export default function Operations() {
           <Grid container>
           <Grid item xs={12} sx={{ height: "30px" }}></Grid>
             <Grid item xs={12}>
+            {loading ? ( // Sprawdzamy, czy dane są ładowane
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "200px",
+                  }}
+                >
+                  <CircularProgress /> 
+                </Box>
+              ) : (
               <DataTable
                 title={"Operation History"}
                 options={options}
                 columns={columns}
                 data={operations ? operations : []}
               />
+              )}
             </Grid>
           </Grid>
         </PageContainer>

@@ -66,7 +66,7 @@ export default function SellDialog(props) {
 
   const handleSubmit = (event) => {
     formValues["pocket_name"] = pocket.name;
-    // formValues["currency"] = pocket.currency.name;
+    formValues["currency"] = pocket.currency.name;
     event.preventDefault();
     process();
     onClose();

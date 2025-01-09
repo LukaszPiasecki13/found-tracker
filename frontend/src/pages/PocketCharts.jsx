@@ -5,14 +5,12 @@ import CssBaseline from "@mui/material/CssBaseline";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
 import Paper from "@mui/material/Paper";
-import Link from "@mui/material/Link";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Toolbar from "@mui/material/Toolbar";
+import CircularProgress from "@mui/material/CircularProgress";
 import { useNavigate, useLocation } from "react-router-dom";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
 import api from "../api";
 import SideBar from "../components/Bars/SideBar";
@@ -33,6 +31,10 @@ export default function PocketCharts() {
   const [pocketVectors, setPocketVectors] = React.useState([]);
   const [assetVectors, setAssetVectors] = React.useState([]);
   const [assetClassVectors, setAssetClassVectors] = React.useState([]);
+  const [isDataLoading, setIsDataLoading] = React.useState(true);
+
+  const [startDate, setStartDate] = React.useState(dayjs().subtract(1, 'year'));
+  const [endDate, setEndDate] = React.useState(dayjs());
 
   const getPocketDetail = async () => {
     try {
@@ -48,24 +50,23 @@ export default function PocketCharts() {
         setParticipationSeries([]);
       }
     } catch (err) {
-      alert(err.response.data.error);
+      alert(err.response.data.message);
     }
   };
 
-  const getPocketVectors = async () => {
+  const getPocketVectors = async (start, end) => {
+    setIsDataLoading(true);
     try {
       const res = await api.get("/api/pocket-vectors", {
         params: {
           pocketName: pocketName,
-          startDate: "2024-07-22",
-          endDate: "2024-10-06",
+          startDate: start.format('YYYY-MM-DD'),
+          endDate: end.format('YYYY-MM-DD'),
           interval: "1d",
         },
       });
       if (Object.keys(res.data).length !== 0) {
-        const date = res.data.date.map((date) =>
-          new Date(date).toISOString().slice(0, 10)
-        );
+        const date = res.data.date.map((date) => date.slice(0, 10));
         const mergedAssetVectors = mergeWithObject(date, res.data.assets);
         const mergedAssetClassVectors = mergeWithObject(
           date,
@@ -76,9 +77,9 @@ export default function PocketCharts() {
         delete res.data.assets;
         delete res.data.asset_classes;
 
-        const mergedtPocketVectors = mergeWithObject(date, res.data);
+        const mergedPocketVectors = mergeWithObject(date, res.data);
 
-        setPocketVectors(mergedtPocketVectors);
+        setPocketVectors(mergedPocketVectors);
         setAssetVectors(mergedAssetVectors);
         setAssetClassVectors(mergedAssetClassVectors);
       } else {
@@ -87,7 +88,9 @@ export default function PocketCharts() {
         setAssetClassVectors({});
       }
     } catch (err) {
-      alert(err.response.data.error);
+      alert(err.response.data.message);
+    } finally {
+      setIsDataLoading(false);
     }
   };
 
@@ -126,7 +129,7 @@ export default function PocketCharts() {
 
   React.useEffect(() => {
     const fetchData = async () => {
-      await Promise.all([getPocketDetail(), getPocketVectors()]);
+      await Promise.all([getPocketDetail(), getPocketVectors(startDate, endDate)]);
     };
     fetchData();
   }, []);
@@ -174,9 +177,34 @@ export default function PocketCharts() {
               </Button>
             </Grid>
           </Grid>
-
           <Grid item xs={12} sx={{ height: "30px" }}></Grid>
 
+          <Grid container justifyContent="flex-end">
+            <Grid item xs={3} sm={2}>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+                  label="START DATE"
+                  defaultValue={startDate}
+                  format="DD/MM/YYYY" 
+                  onChange={(newValue) => {setStartDate(newValue); getPocketVectors(newValue, endDate);}}
+                />
+              </LocalizationProvider>
+            </Grid>
+            <Grid item xs={3} sm={2}>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+                  label="STOP DATE"
+                  defaultValue={endDate}
+                  format="DD/MM/YYYY" 
+                  onChange={(newValue) => setEndDate(newValue)}
+                />
+              </LocalizationProvider>
+            </Grid>
+          </Grid>
+
+          {isDataLoading ? (
+            <CircularProgress />
+          ):(
           <Grid container spacing={2} rowSpacing={1}>
             <Grid item xs={12} sm={6}>
               <Paper sx={{ p: 2, display: "flex", flexDirection: "column" }}>
@@ -286,6 +314,7 @@ export default function PocketCharts() {
               </Paper>
             </Grid>
           </Grid>
+          )}
         </PageContainer>
       </Box>
     </ThemeProvider>
