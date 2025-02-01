@@ -11,6 +11,7 @@ import numpy as np
 from datetime import datetime
 from itertools import groupby
 import plotly.graph_objects as go
+import json
 
 from authentication.models import UserProfile
 from .serializers import UserSerializer, OperationSerializer, AssetAllocationSerializer, PocketSerializer, CurencySerializer, AssetClassSerializer
@@ -31,10 +32,17 @@ class UserRetrieveDestroyView(generics.RetrieveDestroyAPIView):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
 
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
 
 class OperationsViewSet(viewsets.ModelViewSet):
     serializer_class = OperationSerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         pocket_name = self.request.query_params.get('pocket_name', None)
@@ -78,7 +86,7 @@ class OperationsViewSet(viewsets.ModelViewSet):
 
 class PocketsViewSet(viewsets.ModelViewSet):
     serializer_class = PocketSerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
 
@@ -112,7 +120,7 @@ class AssetAllocationViewSet(viewsets.ModelViewSet):
 
 class CurencyViewSet(viewsets.ModelViewSet):
     serializer_class = CurencySerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
     queryset = Currency.objects.all()
 
 
@@ -130,6 +138,7 @@ class PocketVectorsView(APIView):
         start_time_str = request.query_params.get('startDate')
         end_time_str = request.query_params.get('endDate')
         interval = request.query_params.get('interval')
+        vectors = json.loads(request.query_params.get('vectors', '[]'))
 
         if pocket_name:
             operations = Operation.objects.filter(
@@ -154,16 +163,35 @@ class PocketVectorsView(APIView):
 
             metrics = PocketMetrics(
                 interval=interval, start_time=start_time, end_time=end_time, operations=operations)
-
+            
             pocket_vectors["date"] = metrics.get_date_vector()
-            pocket_vectors["assets"] = metrics.get_assets_vectors()
-            pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
-            pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
-            pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector(
-            )
-            pocket_vectors["profit_vector"] = metrics.get_profit_vector()
-            pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
-            pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector()
+
+            if not vectors:                
+                pocket_vectors["assets"] = metrics.get_assets_vectors()
+                pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
+                pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
+                pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector(
+                )
+                pocket_vectors["profit_vector"] = metrics.get_profit_vector()
+                pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
+                pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector()
+            else:
+                for vector in vectors:
+                    if vector == "assets":
+                        pocket_vectors["assets"] = metrics.get_assets_vectors()
+                    if vector == "asset_classes":
+                        pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
+                    if vector == "net_deposits_vector":
+                        pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
+                    if vector == "transaction_cost_vector":
+                        pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector(
+                        )
+                    if vector == "profit_vector":
+                        pocket_vectors["profit_vector"] = metrics.get_profit_vector()
+                    if vector == "free_cash_vector":
+                        pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
+                    if vector == "pocket_value_vector":
+                        pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector
 
             # self.chart_working_function(
             #     x=pocket_vectors["date"], y=pocket_vectors["net_deposits_vector"], title="net_deposits_vector")

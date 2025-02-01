@@ -60,8 +60,8 @@ class Asset(models.Model):
 class Pocket(models.Model):
     owner = models.ForeignKey(UserProfile, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
-    assets = models.ManyToManyField('Asset', through='AssetAllocation')
-    fees = models.DecimalField(max_digits=8, decimal_places=3, default=0.0)
+    assets = models.ManyToManyField('Asset', through='AssetAllocation', blank=True)
+    fees = models.DecimalField(max_digits=8, decimal_places=3, default=0.0, )
     currency = models.ForeignKey(Currency, on_delete=models.CASCADE)
     net_deposit_value= models.DecimalField(max_digits=12, decimal_places=3, default=0.0)
     free_cash = models.DecimalField(max_digits=12, decimal_places=3, default=0.0)

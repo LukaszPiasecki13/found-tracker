@@ -61,11 +61,19 @@ class CurrencySerializer(serializers.ModelSerializer):
 
 
 class PocketSerializer(serializers.ModelSerializer):
-    currency = CurrencySerializer()  
+    currency = serializers.PrimaryKeyRelatedField(queryset=models.Currency.objects.all())
+    owner = serializers.PrimaryKeyRelatedField(
+        read_only=True, default=serializers.CurrentUserDefault())
 
     class Meta:
         model = models.Pocket
         fields = "__all__"
+
+    def validate_name(self, name):
+        if models.Pocket.objects.filter(name=name, owner=self.context['request'].user).exists():
+            raise serializers.ValidationError(
+                "Pocket with this name already exists.")
+        return name
 
 
 class CurencySerializer(serializers.ModelSerializer):

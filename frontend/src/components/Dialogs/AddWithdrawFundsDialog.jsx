@@ -19,17 +19,6 @@ import api from "../../api";
 export default function AddWithdrawFundsDialog(props) {
   const { open, onClose, pocket, addFunds, withdraw } = props;
   const [title, setTitle] = React.useState("");
-
-  const process = (e) => {
-    api
-      .post("api/operations/", formValues)
-      .then((res) => {
-        if (res.status === 201) alert(title + " funds successfully");
-        else alert("Error " + title + " funds");
-      })
-      .catch((err) => alert(err.response.data.error));
-  };
-
   const [formValues, setFormValues] = React.useState({
     operation_type: title + "_funds",
     asset_class: null,
@@ -43,6 +32,18 @@ export default function AddWithdrawFundsDialog(props) {
     comment: "",
     pocket_name: pocket ? pocket.name : "",
   });
+  
+  const process = (e) => {
+    api
+      .post("api/operations/", formValues)
+      .then((res) => {
+        if (res.status === 201) alert(title + " funds successfully");
+        else alert("Error " + title + " funds");
+      })
+      .catch((err) => alert(err.response.data.error));
+  };
+
+
 
   const handleChange = (event) => {
     const { name, value } = event.target;

@@ -72,14 +72,17 @@ class PocketMetrics:
 
             assets[ticker] = value_vector
 
+        self._saved_data["sum_value_vector"] = self._get_asset_value_sum(assets)
+        return assets
+
+    def _get_asset_value_sum(self, assets:dict) -> np.array:
         sum_value_vector = np.zeros(self.time_diff, dtype=float)
         for asset in assets.values():
             sum_value_vector += asset
 
-        # assets["sum_value_vector"] = sum_value_vector
-        self._saved_data["sum_value_vector"] = sum_value_vector
+        return sum_value_vector
 
-        return assets
+       
 
     def get_asset_classes_vectors(self) -> dict:
         asset_classes = {}
@@ -171,7 +174,8 @@ class PocketMetrics:
         if np.any(self._saved_data["sum_value_vector"]) and np.any(self._saved_data["transaction_cost_vector"]):
             return self._saved_data["sum_value_vector"] - self._saved_data["transaction_cost_vector"]
         else:
-            sum_value_vector = self.get_assets_vectors()["sum_value_vector"]
+            assets = self.get_assets_vectors()
+            sum_value_vector = self._get_asset_value_sum(assets)
             transaction_cost_vector = self.get_transaction_cost_vector()
             return sum_value_vector - transaction_cost_vector
 
@@ -193,7 +197,8 @@ class PocketMetrics:
             return self._saved_data["free_cash_vector"] + self._saved_data["sum_value_vector"]
         else:
             free_cash_vector = self.get_free_cash_vector()
-            sum_value_vector = self.get_assets_vectors()["sum_value_vector"]
+            assets = self.get_assets_vectors()
+            sum_value_vector = self._get_asset_value_sum(assets)
             return free_cash_vector + sum_value_vector
 
     def _qunatity_vector(self, operations: list) -> np.array:

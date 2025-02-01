@@ -66,7 +66,7 @@ export default function PocketAssetsDetail() {
       const transformedData = transformData(res.data);
       setPocketAssetAllocationDetail(transformedData);
     } catch (err) {
-      alert(err.response.data.message);
+      alert(err.response.data.error.message);
     }
   };
 
@@ -77,7 +77,7 @@ export default function PocketAssetsDetail() {
       });
       setPocket(res.data[0]);
     } catch (err) {
-      alert(err.response.data.message);
+      alert(err.response.data.error.message);
     }
   };
 

@@ -2,6 +2,7 @@ import * as React from 'react';
 import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import Title from './Title';
+import dayjs from "dayjs";
 
 function preventDefault(event) {
   event.preventDefault();
@@ -16,7 +17,7 @@ export default function RecentScore({value}) {
         ${value}
       </Typography>
       <Typography color="text.secondary" sx={{ flex: 1 }}>
-        on 24 July, 2024
+        {dayjs().format("D MMMM, YYYY")}
       </Typography>
       <div>
         <Link color="primary" href="#" onClick={preventDefault}>

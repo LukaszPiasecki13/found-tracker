@@ -47,7 +47,7 @@ export default function PocketHistory() {
       });
       setOperations(res.data);
     } catch (err) {
-      alert(err.response.data.message);
+      alert(err.response.data.error.message);
     }
   };
 
@@ -61,7 +61,7 @@ export default function PocketHistory() {
         alert("Unexpected error: " + res.status);
       }
     } catch (err) {
-      alert(err.response.data.message);
+      alert(err.response.data.error.message);
     }
 
   };
