@@ -17,5 +17,4 @@ urlpatterns = [
     path('users/me/', views.CurrentUserView.as_view(), name='current-user'),
     path('', include(router.urls)),
     path('pocket-vectors/', views.PocketVectorsView.as_view(), name='pocket-vectors')
-
 ]

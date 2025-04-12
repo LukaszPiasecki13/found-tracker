@@ -1,4 +1,10 @@
 /.idea/
 /venv/
-/frontend/.env/
+.vscode/
 /frontend/node_modules/
+*.pyc
+backend/api/migrations/
+frontend/.env
+backend/api/test.ipynb
+
+

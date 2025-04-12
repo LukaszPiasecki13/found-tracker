@@ -61,7 +61,7 @@ class CurrencySerializer(serializers.ModelSerializer):
 
 
 class PocketSerializer(serializers.ModelSerializer):
-    currency = serializers.PrimaryKeyRelatedField(queryset=models.Currency.objects.all())
+    currency = CurrencySerializer() 
     owner = serializers.PrimaryKeyRelatedField(
         read_only=True, default=serializers.CurrentUserDefault())
 
