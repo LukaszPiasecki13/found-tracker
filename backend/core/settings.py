@@ -178,6 +178,7 @@ LOGGING = {
     'disable_existing_loggers': False,
     'handlers': {
         'console': {
+            'level': 'DEBUG',
             'class': 'logging.StreamHandler',
             'formatter': 'colored',
         },
@@ -199,11 +200,11 @@ LOGGING = {
     'loggers': {
         '': {
             'handlers': ['console'],
-            'level': 'INFO',
+            'level': 'DEBUG',
         },
         'root': {  # Konfiguracja globalna - przeniesiona do sekcji 'loggers'
             'handlers': ['console'],
-            'level': 'INFO',
+            'level': 'DEBUG',
             'propagate': True,
             'exc_info': True,  # Włącza obsługę exc_info globalnie
         },

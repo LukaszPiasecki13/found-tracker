@@ -5,44 +5,40 @@ from rest_framework import serializers
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework import status
 from rest_framework.response import Response
-import yfinance as yf
-import pandas as pd
-import numpy as np
 from datetime import datetime
-from itertools import groupby
 import plotly.graph_objects as go
 import json
+from drf_yasg.utils import swagger_auto_schema
 
 from authentication.models import UserProfile
-from .serializers import UserSerializer, OperationSerializer, AssetAllocationSerializer, PocketSerializer, CurencySerializer, AssetClassSerializer
+from .serializers import UserProfileSerializer, OperationSerializer, AssetAllocationSerializer, PocketSerializer, CurrencySerializer, AssetClassSerializer
 from .models import Operation, AssetAllocation, Pocket, Currency, AssetClass
 from .lib.AssetProcessor import AssetProcessor
 from .lib.PocketMetrics import PocketMetrics
 
 
-
 class UsersView(generics.ListCreateAPIView):
     queryset = UserProfile.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class UserRetrieveDestroyView(generics.RetrieveDestroyAPIView):
     queryset = UserProfile.objects.all()
-    serializer_class = UserSerializer
+    serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]
 
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
+        serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
 
 
 class OperationsViewSet(viewsets.ModelViewSet):
     serializer_class = OperationSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         pocket_name = self.request.query_params.get('pocket_name', None)
@@ -86,7 +82,7 @@ class OperationsViewSet(viewsets.ModelViewSet):
 
 class PocketsViewSet(viewsets.ModelViewSet):
     serializer_class = PocketSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
 
@@ -119,8 +115,8 @@ class AssetAllocationViewSet(viewsets.ModelViewSet):
 
 
 class CurencyViewSet(viewsets.ModelViewSet):
-    serializer_class = CurencySerializer
-    # permission_classes = [IsAuthenticated]
+    serializer_class = CurrencySerializer
+    permission_classes = [IsAuthenticated]
     queryset = Currency.objects.all()
 
 

@@ -1,8 +1,6 @@
 from django.db import models
 from authentication.models import UserProfile
 
-# Create your models here.
-
 
 class Operation(models.Model):
     operation_type = models.CharField(max_length=20) # buy, sell

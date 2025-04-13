@@ -3,7 +3,7 @@ from authentication.models import UserProfile
 from . import models
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = "__all__"
@@ -61,7 +61,7 @@ class CurrencySerializer(serializers.ModelSerializer):
 
 
 class PocketSerializer(serializers.ModelSerializer):
-    currency = CurrencySerializer() 
+    currency = CurrencySerializer()
     owner = serializers.PrimaryKeyRelatedField(
         read_only=True, default=serializers.CurrentUserDefault())
 
@@ -76,16 +76,11 @@ class PocketSerializer(serializers.ModelSerializer):
         return name
 
 
-class CurencySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Currency
-        fields = "__all__"
-
-
 class AssetClassSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.AssetClass
         fields = "__all__"
+
 
 class AssetSerializer(serializers.ModelSerializer):
     currency = CurrencySerializer()

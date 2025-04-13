@@ -42,13 +42,14 @@ def my_exception_handler(exc: Exception, context: dict[str, Any]) -> Response:
 
     return response
 
+
 schema_view = get_schema_view(
     openapi.Info(
         title="Found Tracker - Sweeger",
         default_version='v1',),
     public=True,
     permission_classes=(permissions.AllowAny,),
-    generator_class=None, 
+
 )
 
 urlpatterns = [
@@ -56,5 +57,6 @@ urlpatterns = [
     path('authentication/', include('authentication.urls')),
     path('api/', include('api.urls')),
 
-    path('docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui')
+    path('docs/', schema_view.with_ui('swagger',
+         cache_timeout=0), name='schema-swagger-ui')
 ]
