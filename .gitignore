@@ -8,3 +8,5 @@ frontend/.env
 backend/api/test.ipynb
 
 
+.vscode/launch.json
+

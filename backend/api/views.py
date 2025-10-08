@@ -28,6 +28,7 @@ class UserRetrieveDestroyView(generics.RetrieveDestroyAPIView):
     serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]
 
+
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -159,33 +160,39 @@ class PocketVectorsView(APIView):
 
             metrics = PocketMetrics(
                 interval=interval, start_time=start_time, end_time=end_time, operations=operations)
-            
+
             pocket_vectors["date"] = metrics.get_date_vector()
 
-            if not vectors:                
+            if not vectors:
                 pocket_vectors["assets"] = metrics.get_assets_vectors()
                 pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
-                pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
+                pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector(
+                )
                 pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector(
                 )
                 pocket_vectors["profit_vector"] = metrics.get_profit_vector()
                 pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
-                pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector()
+                pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector(
+                )
             else:
                 for vector in vectors:
                     if vector == "assets":
                         pocket_vectors["assets"] = metrics.get_assets_vectors()
                     if vector == "asset_classes":
-                        pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors()
+                        pocket_vectors["asset_classes"] = metrics.get_asset_classes_vectors(
+                        )
                     if vector == "net_deposits_vector":
-                        pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector()
+                        pocket_vectors["net_deposits_vector"] = metrics.get_net_deposits_vector(
+                        )
                     if vector == "transaction_cost_vector":
                         pocket_vectors["transaction_cost_vector"] = metrics.get_transaction_cost_vector(
                         )
                     if vector == "profit_vector":
-                        pocket_vectors["profit_vector"] = metrics.get_profit_vector()
+                        pocket_vectors["profit_vector"] = metrics.get_profit_vector(
+                        )
                     if vector == "free_cash_vector":
-                        pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector()
+                        pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector(
+                        )
                     if vector == "pocket_value_vector":
                         pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector
 

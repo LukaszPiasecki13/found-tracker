@@ -200,11 +200,11 @@ LOGGING = {
     'loggers': {
         '': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
         },
         'root': {  # Konfiguracja globalna - przeniesiona do sekcji 'loggers'
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': True,
             'exc_info': True,  # Włącza obsługę exc_info globalnie
         },

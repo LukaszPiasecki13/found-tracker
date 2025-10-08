@@ -6,8 +6,9 @@ from django.urls import reverse
 from api.tests.integration.TransactionFactory import TransactionFactory
 from django.db.models import Sum
 from decimal import Decimal
-from api.serializers import UserSerializer, OperationSerializer, AssetAllocationSerializer
+from api.serializers import UserProfileSerializer, OperationSerializer, AssetAllocationSerializer
 from collections import namedtuple
+import json
 
 
 from api.lib.AssetProcessor import AssetProcessor
@@ -41,12 +42,14 @@ class TestUserViews:
         user1 = create_user('user1', 'password', 'email@email.com')
         user2 = create_user('user2', 'password', 'email1@email.com')
 
+        api_client.force_authenticate(user=user1)
         url = reverse('user-list')
         response = api_client.get(url)
 
         assert response.status_code == 200
 
-        expected_response = UserSerializer([user1, user2], many=True).data
+        expected_response = UserProfileSerializer(
+            [user1, user2], many=True).data
         assert response.json() == expected_response
 
     def test_user_detail(self, api_client, create_user):
@@ -57,7 +60,7 @@ class TestUserViews:
         response = api_client.get(url)
 
         assert response.status_code == 200
-        expected_response = UserSerializer(user).data
+        expected_response = UserProfileSerializer(user).data
         assert response.json() == expected_response
 
     def test_user_destroy(self, api_client, create_user):
@@ -133,7 +136,9 @@ class TestOperationViews:
 
                 if buy_quantity < sell_quantity:
                     assert response.status_code == 400
-                    assert response.content == b'{"error":"Not enough assets to sell"}'
+                    error = json.loads(response.content.decode('utf-8'))
+                    assert error["error"]["details"] == {
+                        "error": "Not enough assets to sell"}
                 elif buy_quantity == sell_quantity:
                     assert response.status_code == 201
                     assert not AssetAllocation.objects.filter(
@@ -164,14 +169,14 @@ class TestOperationViews:
                             Decimal(average_purchase_price), abs=0.01)
                     except:
                         ...
-                    
+
                     success_operations.append(draw_data)
 
             else:
                 break
 
         return backup_data_sell, success_operations
-    
+
     def _add_funds(self, api_client, count):
         url = reverse('operation-list')
         pocket = Pocket.objects.get(name=self.pocket_name)
@@ -189,9 +194,8 @@ class TestOperationViews:
             response = api_client.post(url, draw_data, format='json')
             assert response.status_code == 201
 
-
         return backup_data
-    
+
     def _withdraw_funds(self, api_client, count, free_cash):
         url = reverse('operation-list')
         pocket = Pocket.objects.get(name=self.pocket_name)
@@ -206,18 +210,16 @@ class TestOperationViews:
             draw_data = transactionFactory.draw_withdraw_founds()
             backup_data.append(draw_data)
 
-            response = api_client.post(url, draw_data, format = 'json')
+            response = api_client.post(url, draw_data, format='json')
             assert response.status_code == 201
 
         return backup_data
-    
-
 
     def test_operations_list(self, api_client):
         api_client.force_authenticate(user=self.user)
 
         operation1 = Operation.objects.create(owner=self.user, ticker='AAPL', operation_type='buy',
-                                              quantity=10, price=100,  fee=5,  currency='USD', date='2022-01-01', comment='Test comment')
+                                              quantity=10, price=100,  fee=5,  currency='USD', date='2022-01-02', comment='Test comment')
         operation2 = Operation.objects.create(
             owner=self.user, ticker='TSLA', operation_type='buy', quantity=5, price=245, fee=1, currency='PLN', date='2022-01-01', comment='Test comment')
 
@@ -282,9 +284,13 @@ class TestOperationViews:
             response = api_client.post(url, data)
             assert response.status_code == 400
             if price == 0:
-                assert response.content == b'{"non_field_errors":["Missing required fields."]}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {
+                    "non_field_errors": ["Missing required fields."]}
             else:
-                assert response.content == b'{"non_field_errors":["Price must be greater than 0."]}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {
+                    "non_field_errors": ["Price must be greater than 0."]}
 
         for quantity in (-10, -1, 0):
             data = set_default_data()
@@ -292,16 +298,22 @@ class TestOperationViews:
             response = api_client.post(url, data)
             assert response.status_code == 400
             if quantity == 0:
-                assert response.content == b'{"non_field_errors":["Missing required fields."]}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {
+                    "non_field_errors": ["Missing required fields."]}
             else:
-                assert response.content == b'{"non_field_errors":["Quantity must be greater than 0."]}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {
+                    "non_field_errors": ["Quantity must be greater than 0."]}
 
         for fee in (-10, -1):
             data = set_default_data()
             data['fee'] = fee
             response = api_client.post(url, data)
             assert response.status_code == 400
-            assert response.content == b'{"non_field_errors":["Fee must be greater or equal to 0."]}'
+            error = json.loads(response.content.decode('utf-8'))
+            assert error["error"]["details"] == {
+                "non_field_errors": ["Fee must be greater or equal to 0."]}
 
         for purchase_currency_price in (-10, -1, 0):
             data = set_default_data()
@@ -309,9 +321,13 @@ class TestOperationViews:
             response = api_client.post(url, data)
             assert response.status_code == 400
             if purchase_currency_price == 0:
-                assert response.content == b'{"non_field_errors":["Missing required fields."]}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {
+                    "non_field_errors": ["Missing required fields."]}
             else:
-                assert response.content == b'{"non_field_errors":["Purchase currency price must be greater than 0."]}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {"non_field_errors": [
+                    "Purchase currency price must be greater than 0."]}
 
     def test_buy_random_assets_with_replacement(self, api_client):
         api_client.force_authenticate(user=self.user)
@@ -396,7 +412,9 @@ class TestOperationViews:
 
                 if quantity <= 0 or fee < 0:
                     assert response.status_code == 400
-                    assert response.content == b'{"non_field_errors":["Quantity must be greater than 0."]}' if quantity <= 0 else b'{"non_field_errors":["Fee must be greater or equal to 0."]}'
+                    error = json.loads(response.content.decode('utf-8'))
+                    assert error["error"]["details"] == {"non_field_errors": ["Quantity must be greater than 0."]} if quantity <= 0 else {
+                        "non_field_errors": ["Fee must be greater or equal to 0."]}
 
                 else:
                     assert response.status_code == 201
@@ -437,10 +455,14 @@ class TestOperationViews:
 
             if quantity <= 0:
                 assert response.status_code == 400
-                assert response.content == b'{"non_field_errors":["Quantity must be greater than 0."]}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {
+                    "non_field_errors": ["Quantity must be greater than 0."]}
             elif pocket.free_cash - quantity < 0:
                 assert response.status_code == 400
-                assert response.content == b'{"error":"Not enough cash to withdraw"}'
+                error = json.loads(response.content.decode('utf-8'))
+                assert error["error"]["details"] == {
+                    "error": "Not enough cash to withdraw"}
             else:
                 assert response.status_code == 201
                 assert Pocket.objects.get(name=self.pocket_name).fees == 0
@@ -470,11 +492,12 @@ class TestOperationViews:
             assert response.status_code == 204
 
             if len(transaction_with_same_tickers) >= 2:
-                assert Operation.objects.filter(id=operation.id).exists() == False
+                assert Operation.objects.filter(
+                    id=operation.id).exists() == False
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
                 assert AssetAllocation.objects.filter(
-                        asset__ticker=transaction['ticker'], pocket=pocket).exists() 
+                    asset__ticker=transaction['ticker'], pocket=pocket).exists()
 
                 assert pocket.fees == pocket_fee-transaction['fee']
 
@@ -483,9 +506,9 @@ class TestOperationViews:
                     id=operation.id).exists() == False
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
-                
+
                 assert AssetAllocation.objects.filter(
-                        asset__ticker=transaction['ticker'], pocket=pocket).exists() == False
+                    asset__ticker=transaction['ticker'], pocket=pocket).exists() == False
                 assert pocket.fees == pocket_fee-transaction['fee']
 
             w_backup_data_buy.remove(transaction)
@@ -494,9 +517,10 @@ class TestOperationViews:
         api_client.force_authenticate(user=self.user)
 
         # Buy random assets
-        backup_data_buy, success_operations_buy = self._buy_assets(api_client, LOOP_COUNT)
+        backup_data_buy, success_operations_buy = self._buy_assets(
+            api_client, LOOP_COUNT)
         tickers = list(set([operation["ticker"]
-            for operation in backup_data_buy]))
+                            for operation in backup_data_buy]))
 
         # Sell assets
         backup_data_sell, success_operations_sell = self._sell_assets(
@@ -509,7 +533,7 @@ class TestOperationViews:
         for transaction in w_success_operations_sell[:]:
             operation = Operation.objects.get(
                 owner=self.user, ticker=transaction['ticker'], quantity=transaction['quantity'], fee=transaction['fee'], price=transaction['price'])
-      
+
             pocket_fee = Pocket.objects.get(name=self.pocket_name).fees
             try:
                 asset_allocation_quantity = AssetAllocation.objects.get(
@@ -526,10 +550,11 @@ class TestOperationViews:
                 item for item in w_success_operations_sell if item['ticker'] == transaction['ticker']]
 
             if len(transaction_with_same_tickers) >= 2:
-                assert Operation.objects.filter(id=operation.id).exists() == False
+                assert Operation.objects.filter(
+                    id=operation.id).exists() == False
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
-                
+
                 assert AssetAllocation.objects.filter(
                     asset__ticker=transaction['ticker'], pocket=pocket).exists()
 
@@ -540,26 +565,27 @@ class TestOperationViews:
                     id=operation.id).exists() == False
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
-                
+
                 asset_allocation_query = AssetAllocation.objects.filter(
-                        asset__ticker=transaction['ticker'], pocket=pocket)
+                    asset__ticker=transaction['ticker'], pocket=pocket)
                 assert asset_allocation_query.exists()
                 asset_allocation = asset_allocation_query.first()
 
+                assert asset_allocation.quantity == asset_allocation_quantity + \
+                    transaction['quantity']
 
-                assert asset_allocation.quantity == asset_allocation_quantity + transaction['quantity']
-                
                 assert pocket.fees == pocket_fee-transaction['fee']
 
             w_success_operations_sell.remove(transaction)
 
     def test_add_funds_destroy(self, api_client):
         api_client.force_authenticate(user=self.user)
-        
+
         # Add funds
         backup_data = self._add_funds(api_client, LOOP_COUNT)
         pocket = Pocket.objects.get(name=self.pocket_name)
-        assert pocket.free_cash == sum(item['quantity'] for item in backup_data)
+        assert pocket.free_cash == sum(
+            item['quantity'] for item in backup_data)
         assert pocket.fees == sum(item['fee'] for item in backup_data)
 
         w_beckup_data = backup_data.copy()
@@ -585,13 +611,15 @@ class TestOperationViews:
 
     def test_withdraw_funds_destroy(self, api_client):
         api_client.force_authenticate(user=self.user)
-        
+
         # Withdraw funds
-        backup_data_withdraw = self._withdraw_funds(api_client, LOOP_COUNT, free_cash=self.START_CASH)
-        w_backup_data_withdraw = backup_data_withdraw.copy()    
+        backup_data_withdraw = self._withdraw_funds(
+            api_client, LOOP_COUNT, free_cash=self.START_CASH)
+        w_backup_data_withdraw = backup_data_withdraw.copy()
 
         pocket = Pocket.objects.get(name=self.pocket_name)
-        assert pocket.free_cash == self.START_CASH - sum(item['quantity'] for item in backup_data_withdraw)
+        assert pocket.free_cash == self.START_CASH - \
+            sum(item['quantity'] for item in backup_data_withdraw)
         assert pocket.fees == sum(item['fee'] for item in backup_data_withdraw)
 
         for transaction in w_backup_data_withdraw[:]:
@@ -612,9 +640,6 @@ class TestOperationViews:
             assert pocket.free_cash == pocket_free_cash+transaction['quantity']
 
             w_backup_data_withdraw.remove(transaction)
-
-
-
 
 
 @pytest.mark.django_db

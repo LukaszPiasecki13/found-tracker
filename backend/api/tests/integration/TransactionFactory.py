@@ -50,11 +50,9 @@ class TransactionFactory():
 
     def generate_fee(self):
         return random.randint(0, 10)
-    
 
     def generate_currency_price(self):
         return random.randint(5, 50)/10
-        
 
     def draw_buy(self, allow_duplicates: bool = False) -> dict:
         '''Draw a random transaction data and the corresponding verification data.'''
@@ -74,13 +72,13 @@ class TransactionFactory():
         }
 
         return transaction_data
-    
-    def draw_sell(self, tickers:list, allow_duplicates: bool = False) -> dict:
+
+    def draw_sell(self, tickers: list, allow_duplicates: bool = False) -> dict:
         '''Draw a random transaction data and the corresponding verification data.'''
 
         transaction_data = {
             'operation_type': "sell",
-            'ticker': self.generate_ticker(allow_duplicates = allow_duplicates, tickers = tickers),
+            'ticker': self.generate_ticker(allow_duplicates=allow_duplicates, tickers=tickers),
             'date': '2022-01-01',
             'currency': 'USD',
             'purchase_currency_price': self.generate_currency_price(),
@@ -93,45 +91,41 @@ class TransactionFactory():
         }
 
         return transaction_data
-    
 
     def draw_add_founds(self) -> dict:
         '''Draw a random transaction data and the corresponding verification data.'''
 
         transaction_data = {
-                "operation_type": "add_funds",
-                "asset_class": None,
-                "ticker": None,
-                "date": "2024-09-13",
-                "currency": None,
-                "purchase_currency_price": None,
-                "quantity": self.generate_quantity(),
-                "price": None,
-                "fee": self.generate_fee(),
-                "comment": "",
-                "pocket_name": self.pocket_name
-            }
+            "operation_type": "add_funds",
+            "asset_class": None,
+            "ticker": None,
+            "date": "2024-09-13",
+            "currency": None,
+            "purchase_currency_price": None,
+            "quantity": self.generate_quantity(),
+            "price": None,
+            "fee": self.generate_fee(),
+            "comment": "",
+            "pocket_name": self.pocket_name
+        }
 
         return transaction_data
-    
 
     def draw_withdraw_founds(self) -> dict:
         '''Draw a random transaction data and the corresponding verification data.'''
 
         transaction_data = {
-                "operation_type": "withdraw_funds",
-                "asset_class": None,
-                "ticker": None,
-                "date": "2024-09-13",
-                "currency": None,
-                "purchase_currency_price": None,
-                "quantity": self.generate_quantity(),
-                "price": None,
-                "fee": self.generate_fee(),
-                "comment": "",
-                "pocket_name": self.pocket_name
-            }
+            "operation_type": "withdraw_funds",
+            "asset_class": None,
+            "ticker": None,
+            "date": "2024-09-13",
+            "currency": None,
+            "purchase_currency_price": None,
+            "quantity": self.generate_quantity(),
+            "price": None,
+            "fee": self.generate_fee(),
+            "comment": "",
+            "pocket_name": self.pocket_name
+        }
 
         return transaction_data
-    
-
