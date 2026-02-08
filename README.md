@@ -62,7 +62,6 @@ Django_React_FoundTracker/
 │   │   ├── pages/            # Page components
 │   │   └── ...
 │   └── ...
-│
 └── images/                    # Screenshots
 ```
 
