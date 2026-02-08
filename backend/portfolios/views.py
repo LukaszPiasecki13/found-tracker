@@ -123,12 +123,12 @@ class PocketVectorsView(APIView):
 
         if pocket_name:
             operations = Operation.objects.filter(
-                owner=request.user, pocket_name=pocket_name)
+                pocket__owner=request.user, pocket__name=pocket_name)
         else:
-            operations = Operation.objects.filter(owner=request.user)
+            operations = Operation.objects.filter(pocket__owner=request.user)
         if operations:
             operations = [operation for operation in operations]  # make a list
-            operations.sort(key=lambda x: x.date)
+            operations.sort(key=lambda x: x.operation_date)
 
             # if operations[0].date > datetime.strptime(start_time_str, '%Y-%m-%d').date():
             #     start_time_str = operations[0].date.strftime('%Y-%m-%d')
@@ -178,7 +178,7 @@ class PocketVectorsView(APIView):
                         pocket_vectors["free_cash_vector"] = metrics.get_free_cash_vector(
                         )
                     if vector == "pocket_value_vector":
-                        pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector
+                        pocket_vectors["pocket_value_vector"] = metrics.get_pocket_value_vector()
 
             # self.chart_working_function(
             #     x=pocket_vectors["date"], y=pocket_vectors["net_deposits_vector"], title="net_deposits_vector")

@@ -34,19 +34,17 @@ class PositionSerializer(serializers.ModelSerializer):
 class PocketSerializer(serializers.ModelSerializer):
     owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
     owner_username = serializers.CharField(source='owner.username', read_only=True)
-    base_currency = CurrencySerializer(read_only=True)
-    base_currency_code = serializers.SlugRelatedField(
-        source='base_currency',
-        slug_field='code',
+    base_currency = serializers.PrimaryKeyRelatedField(
         queryset=Currency.objects.all(),
         write_only=True
     )
+    base_currency_detail = CurrencySerializer(source='base_currency', read_only=True)
 
 
     class Meta:
         model = models.Pocket
-        fields = ['id', 'owner', 'owner_username', 'name', 'base_currency', 'base_currency_code', 'cash_balance', 'total_deposited', 'is_active', 'created_at']
-        read_only_fields = ['owner_username', 'created_at', 'base_currency']
+        fields = ['id', 'owner', 'owner_username', 'name', 'base_currency', 'base_currency_detail', 'cash_balance', 'total_deposited', 'is_active', 'created_at']
+        read_only_fields = ['owner_username', 'created_at', 'base_currency_detail']
 
     def validate_name(self, name):
         if models.Pocket.objects.filter(name=name, owner=self.context['request'].user).exists():
@@ -139,7 +137,7 @@ class OperationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Operation type '{operation_type}' should not have an asset associated.")
 
             if operation_type in ['buy', 'sell']:
-                if 'price' not in data or 'fx_rate' not in data or 'quantity' not in data:
+                if 'price' not in data or 'quantity' not in data:
                     raise serializers.ValidationError("Missing required fields.")
                 elif data['quantity'] <= 0:
                     raise serializers.ValidationError(
@@ -147,9 +145,13 @@ class OperationSerializer(serializers.ModelSerializer):
                 elif data['price'] <= 0:
                     raise serializers.ValidationError(
                         "Price must be greater than 0.")
-                elif data['fee'] < 0:
+                elif data.get('fee', 0) < 0:
                     raise serializers.ValidationError(
                         "Fee must be greater or equal to 0.")
+                
+                # Set default fx_rate if not provided
+                if 'fx_rate' not in data:
+                    data['fx_rate'] = 1.0
                 elif data['fx_rate'] <= 0:
                     raise serializers.ValidationError(
                         "Foreign exchange rate must be greater than 0.")
@@ -160,7 +162,7 @@ class OperationSerializer(serializers.ModelSerializer):
                 if data['amount'] <= 0:
                     raise serializers.ValidationError(
                         "Amount must be greater than 0.")
-                elif data['fee'] < 0:
+                elif data.get('fee', 0) < 0:
                     raise serializers.ValidationError(
                         "Fee must be greater or equal to 0.")
 

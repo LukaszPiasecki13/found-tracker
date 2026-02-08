@@ -4,7 +4,7 @@ Encapsulates all external data provider interactions (yfinance).
 """
 import yfinance as yf
 from decimal import Decimal
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from ..models import Asset, Currency
 
 
@@ -140,3 +140,84 @@ class MarketDataService:
                 results[asset.id] = False
                 
         return results
+    
+    @staticmethod
+    def search_yahoo_finance(query: str) -> List[Dict[str, Any]]:
+        """
+        Search for assets on Yahoo Finance.
+        
+        Args:
+            query: Search query (ticker or name)
+            
+        Returns:
+            List of dictionaries with search results containing:
+            - symbol: ticker symbol
+            - name: asset name
+            - exchange: exchange name
+            - type: asset type (EQUITY, ETF, etc.)
+        """
+        try:
+            if not query or len(query) < 1:
+                return []
+            
+            # Clean query - extract ticker if format is "TICKER - Name"
+            clean_query = query.strip()
+            if ' - ' in clean_query:
+                clean_query = clean_query.split(' - ')[0].strip()
+            
+            # Use yfinance Ticker to search
+            # Note: yfinance doesn't have a built-in search function,
+            # so we try to fetch info for the ticker directly
+            results = []
+            
+            # Try exact ticker match first
+            try:
+                ticker_obj = yf.Ticker(clean_query.upper())
+                info = ticker_obj.info
+                
+                # Check if we got valid data (has symbol and some price data)
+                if info and info.get('symbol') and (info.get('regularMarketPrice') or info.get('previousClose')):
+                    results.append({
+                        'symbol': info.get('symbol', clean_query.upper()),
+                        'name': info.get('longName') or info.get('shortName', ''),
+                        'exchange': info.get('exchange', ''),
+                        'type': info.get('quoteType', 'EQUITY'),
+                        'currency': info.get('currency', 'USD'),
+                        'sector': info.get('sector', ''),
+                    })
+                    # Found valid result, return it
+                    return results
+            except Exception:
+                pass
+            
+            # Try common exchange suffixes for international stocks
+            # Only if we didn't find result with exact ticker
+            suffixes = ['.L', '.PA', '.DE', '.AS', '.SW', '.MI', '.MC', '.HK', '.TO', '.AX']
+            for suffix in suffixes:
+                try:
+                    test_ticker = f"{clean_query.upper()}{suffix}"
+                    ticker_obj = yf.Ticker(test_ticker)
+                    info = ticker_obj.info
+                    
+                    # Check if we got valid data (has symbol and some price data)
+                    if info and info.get('symbol') and (info.get('regularMarketPrice') or info.get('previousClose')):
+                        results.append({
+                            'symbol': info.get('symbol', test_ticker),
+                            'name': info.get('longName') or info.get('shortName', ''),
+                            'exchange': info.get('exchange', ''),
+                            'type': info.get('quoteType', 'EQUITY'),
+                            'currency': info.get('currency', 'USD'),
+                            'sector': info.get('sector', ''),
+                        })
+                        
+                        # Limit results to 5 to avoid too many API calls
+                        if len(results) >= 5:
+                            break
+                except Exception:
+                    continue
+            
+            return results
+            
+        except Exception as e:
+            print(f"Search error: {str(e)}")
+            return []
