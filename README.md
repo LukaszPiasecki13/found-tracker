@@ -39,9 +39,37 @@ Features:
 
 ## Project Structure
 
-- `backend/` - Django backend (API, authentication, core logic)
-- `frontend/` - React frontend (UI, charts, tables)
-- `images/` - Screenshots and documentation images
+This project follows a domain-driven design with clear separation of concerns:
+
+```
+Django_React_FoundTracker/
+├── backend/                    # Django REST API
+│   ├── assets/                # Market data & reference data domain
+│   │   ├── models.py         # Currency, AssetClass, Asset
+│   │   ├── services/         # MarketDataService (Yahoo Finance)
+│   │   └── ...
+│   ├── portfolios/           # Portfolio management domain
+│   │   ├── models.py         # Pocket, Position, Operation
+│   │   ├── services/         # TransactionService, PortfolioService
+│   │   ├── analytics/        # PocketMetrics, AssetCalculator
+│   │   └── ...
+│   ├── authentication/       # User management
+│   └── core/                 # Django settings
+│
+├── frontend/                  # React.js UI
+│   ├── src/
+│   │   ├── components/       # Reusable UI components
+│   │   ├── pages/            # Page components
+│   │   └── ...
+│   └── ...
+│
+└── images/                    # Screenshots
+```
+
+**Key Architecture Decisions:**
+- **Modular Apps**: `assets` (market data) and `portfolios` (business logic) apps
+- **Service Layer**: Business logic extracted into focused services
+- **Analytics Package**: Time-series calculations separated from core logic
 
 ## Installation
 
