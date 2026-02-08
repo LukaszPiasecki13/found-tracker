@@ -47,7 +47,7 @@ const PocketDetailsPage: React.FC = () => {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
-      currency: pocket.base_currency.code,
+      currency: pocket.base_currency_detail.code,
     }).format(value);
   };
 
@@ -62,7 +62,7 @@ const PocketDetailsPage: React.FC = () => {
           <Typography variant="h4" component="h1" gutterBottom>
             {pocket.name}
           </Typography>
-          <Chip label={pocket.base_currency.code} />
+          <Chip label={pocket.base_currency_detail.code} />
         </Box>
 
         <ButtonGroup variant="outlined">
@@ -168,7 +168,7 @@ const PocketDetailsPage: React.FC = () => {
         <PositionsTable
           positions={positions || []}
           isLoading={positionsLoading}
-          currencyCode={pocket.base_currency.code}
+          currencyCode={pocket.base_currency_detail.code}
         />
       </Box>
 

@@ -1,4 +1,4 @@
-import { Card, CardContent, Typography, Box, Grid, CircularProgress, Skeleton } from "@mui/material"
+import { Card, CardContent, Typography, Box, Grid, Skeleton } from "@mui/material"
 import {
   TrendingUp as TrendingUpIcon,
   AttachMoney as AttachMoneyIcon,
@@ -35,7 +35,7 @@ export function PortfolioOverview({
   return (
     <Box sx={{ width: '100%', py: 3 }}>
       <Grid container spacing={3}>
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
@@ -63,7 +63,7 @@ export function PortfolioOverview({
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
@@ -96,7 +96,7 @@ export function PortfolioOverview({
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
@@ -121,7 +121,7 @@ export function PortfolioOverview({
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
