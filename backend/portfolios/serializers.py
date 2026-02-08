@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from assets.serializers import AssetDetailSerializer
-from assets.models import Currency, Asset
+from assets.models import Currency, Asset, AssetClass
 from assets.serializers import CurrencySerializer
 from . import models
 
@@ -107,23 +107,39 @@ class OperationSerializer(serializers.ModelSerializer):
             cash_operations = ['deposit', 'withdrawal']
 
             ticker = data.pop("ticker", "").strip()
+            asset_class_name = data.pop("asset_class", None)
 
             if not asset and ticker:
-                #TODO: obsługa tworzenia assetu jeśli nie istnieje
-                asset, _ = Asset.objects.get_or_create(
-                    ticker=ticker.upper()
-                )
+                # Try to get existing asset first
+                try:
+                    asset = Asset.objects.get(ticker=ticker.upper())
+                except Asset.DoesNotExist:
+                    # If asset_class is provided, create the asset
+                    if asset_class_name:
+                        asset_class, _ = AssetClass.objects.get_or_create(name=asset_class_name)
+                        # Get currency from pocket if available
+                        pocket = data.get('pocket')
+                        currency = pocket.base_currency if pocket else Currency.objects.first()
+                        
+                        asset = Asset.objects.create(
+                            ticker=ticker.upper(),
+                            name=ticker.upper(),
+                            asset_class=asset_class,
+                            currency=currency
+                        )
+                    else:
+                        raise serializers.ValidationError("Asset does not exist. Please provide asset_class to create it.")
 
                 data["asset"] = asset
 
-            if operation_type in asset_operations and not asset or not ticker:
+            if operation_type in asset_operations and not asset:
                 raise serializers.ValidationError(f"Operation type '{operation_type}' requires an associated asset or ticker.")
             
             if operation_type in cash_operations and asset:
                 raise serializers.ValidationError(f"Operation type '{operation_type}' should not have an asset associated.")
 
             if operation_type in ['buy', 'sell']:
-                if not data.get('price') or not data.get('fx_rate') or not data.get('quantity') :
+                if 'price' not in data or 'fx_rate' not in data or 'quantity' not in data:
                     raise serializers.ValidationError("Missing required fields.")
                 elif data['quantity'] <= 0:
                     raise serializers.ValidationError(
@@ -139,7 +155,7 @@ class OperationSerializer(serializers.ModelSerializer):
                         "Foreign exchange rate must be greater than 0.")
                 
             elif operation_type in ['deposit', 'withdrawal']:
-                if not data.get('amount') :
+                if 'amount' not in data:
                     raise serializers.ValidationError("Missing required fields.")
                 if data['amount'] <= 0:
                     raise serializers.ValidationError(

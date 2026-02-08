@@ -34,10 +34,10 @@ class Pocket(models.Model):
     
     @property
     def total_fees(self):
-        """Suma opłat ze wszystkich pozycji"""
+        """Suma opłat ze wszystkich operacji"""
         from django.db.models import Sum
-        return self.positions.aggregate(
-            total=Sum('total_fees')
+        return self.oerations.aggregate(
+            total=Sum('fee')
         )['total'] or 0
     
     # @property

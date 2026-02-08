@@ -63,7 +63,7 @@ class TransactionService:
             asset=asset,
             defaults={
                 'quantity': quantity,
-                'average_buy_price': price,
+                'average_buy_price': (quantity * price + fee) / quantity,
                 'average_fx_rate': fx_rate,
                 'total_fees': fee
             }
@@ -74,9 +74,9 @@ class TransactionService:
             old_quantity = position.quantity
             new_quantity = old_quantity + quantity
             
-            # Weighted average buy price
+            # Weighted average buy price (including fees)
             position.average_buy_price = (
-                (old_quantity * position.average_buy_price + quantity * price) / new_quantity
+                (old_quantity * position.average_buy_price + quantity * price + fee) / new_quantity
             )
             
             # Weighted average FX rate
