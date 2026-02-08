@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'debug_toolbar',
     'drf_yasg',
     # My apps
+    'core.apps.CoreConfig',
     'assets.apps.AssetsConfig',
     'portfolios.apps.PortfoliosConfig',
     'authentication',
