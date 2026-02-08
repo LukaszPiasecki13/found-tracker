@@ -33,7 +33,7 @@ export function PortfolioOverview({
   const profitPercent = investedCapital > 0 ? ((totalProfit / investedCapital) * 100) : 0;
 
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', py: 3 }}>
+    <Box sx={{ width: '100%', py: 3 }}>
       <Grid container spacing={3}>
         <Grid item xs={12} sm={6} lg={3}>
           <Card>
