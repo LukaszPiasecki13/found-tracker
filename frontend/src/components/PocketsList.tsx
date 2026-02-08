@@ -106,7 +106,7 @@ const PocketsList: React.FC = () => {
                         {pocket.name}
                       </Typography>
                       <Chip
-                        label={pocket.base_currency.code}
+                        label={pocket.base_currency_detail.code}
                         size="small"
                         sx={{ mt: 0.5 }}
                       />
@@ -125,14 +125,14 @@ const PocketsList: React.FC = () => {
                       Saldo gotówkowe
                     </Typography>
                     <Typography variant="h6" gutterBottom>
-                      {formatCurrency(pocket.cash_balance, pocket.base_currency.code)}
+                      {formatCurrency(pocket.cash_balance, pocket.base_currency_detail.code)}
                     </Typography>
 
                     <Typography variant="body2" color="text.secondary">
                       Całkowite wpłaty
                     </Typography>
                     <Typography variant="body1">
-                      {formatCurrency(pocket.total_deposited, pocket.base_currency.code)}
+                      {formatCurrency(pocket.total_deposited, pocket.base_currency_detail.code)}
                     </Typography>
 
                     {pocket.total_profit_loss !== undefined && (
@@ -149,7 +149,7 @@ const PocketsList: React.FC = () => {
                             variant="body1"
                             color={pocket.total_profit_loss >= 0 ? 'success.main' : 'error.main'}
                           >
-                            {formatCurrency(pocket.total_profit_loss, pocket.base_currency.code)}
+                            {formatCurrency(pocket.total_profit_loss, pocket.base_currency_detail.code)}
                             {pocket.total_return_pct !== undefined && (
                               <> ({pocket.total_return_pct.toFixed(2)}%)</>
                             )}

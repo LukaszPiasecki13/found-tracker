@@ -19,6 +19,7 @@ import {
   AccountBalance as PocketIcon,
   SwapHoriz as OperationsIcon,
   ShowChart as AnalyticsIcon,
+  CompareArrows as CompareIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -31,7 +32,7 @@ interface SidebarProps {
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { text: 'Operacje', icon: <OperationsIcon />, path: '/operations' },
-  { text: 'Analizy', icon: <AnalyticsIcon />, path: '/analytics' },
+  { text: 'Porównaj portfele', icon: <CompareIcon />, path: '/compare' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onDrawerToggle }) => {

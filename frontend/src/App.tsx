@@ -11,6 +11,8 @@ import RegisterPage from "./pages/RegisterPage"
 import DashboardPage from "./pages/DashboardPage"
 import PocketDetailsPage from "./pages/PocketDetailsPage"
 import PocketHistoryPage from "./pages/PocketHistoryPage"
+import PocketChartsPage from "./pages/PocketChartsPage"
+import PocketComparisonPage from "./pages/PocketComparisonPage"
 import OperationsPage from "./pages/OperationsPage"
 
 
@@ -54,6 +56,28 @@ function App() {
                 <ProtectedRoute>
                   <MainLayout>
                     <PocketHistoryPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/pockets/:slug/charts"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <PocketChartsPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/compare"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <PocketComparisonPage />
                   </MainLayout>
                 </ProtectedRoute>
               }

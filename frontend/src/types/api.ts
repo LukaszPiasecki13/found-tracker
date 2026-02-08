@@ -34,7 +34,7 @@ export interface Pocket {
   id: number;
   owner: number;
   name: string;
-  base_currency: Currency;
+  base_currency_detail: Currency;
   cash_balance: number;
   total_deposited: number;
   is_active: boolean;
@@ -84,9 +84,9 @@ export interface Operation {
 }
 
 export interface PocketVectorsResponse {
-  date_vector: string[];
-  asset_vectors: Record<string, number[]>;
-  asset_class_vectors: Record<string, number[]>;
+  date: string[];
+  assets: Record<string, number[]>;
+  asset_classes: Record<string, number[]>;
   net_deposits_vector: number[];
   transaction_cost_vector: number[];
   profit_vector: number[];
