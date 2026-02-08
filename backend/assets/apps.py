@@ -1,6 +1,7 @@
 from django.apps import AppConfig
 
 
-class ApiConfig(AppConfig):
+class AssetsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'api'
+    name = 'assets'
+    verbose_name = 'Asset Management'

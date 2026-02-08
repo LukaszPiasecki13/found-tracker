@@ -7,7 +7,6 @@ from typing import Any
 from rest_framework.views import exception_handler
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
-from rest_framework_swagger.views import get_swagger_view
 from rest_framework import permissions
 
 
@@ -54,8 +53,9 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('authentication/', include('authentication.urls')),
-    path('api/', include('api.urls')),
+    path('auth/', include('authentication.urls')),
+    path('assets/', include('assets.urls')),
+    path('portfolios/', include('portfolios.urls')),
 
     path('docs/', schema_view.with_ui('swagger',
          cache_timeout=0), name='schema-swagger-ui')

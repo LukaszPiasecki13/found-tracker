@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from rest_framework import generics, viewsets
 from rest_framework.views import APIView
 from rest_framework import serializers
@@ -8,33 +7,53 @@ from rest_framework.response import Response
 from datetime import datetime
 import plotly.graph_objects as go
 import json
-from drf_yasg.utils import swagger_auto_schema
+from django.core.exceptions import PermissionDenied
 
-from authentication.models import UserProfile
-from .serializers import UserProfileSerializer, OperationSerializer, AssetAllocationSerializer, PocketSerializer, CurrencySerializer, AssetClassSerializer
-from .models import Operation, AssetAllocation, Pocket, Currency, AssetClass
-from .lib.AssetProcessor import AssetProcessor
-from .lib.PocketMetrics import PocketMetrics
+from .serializers import OperationSerializer, PositionSerializer, PocketSerializer
+from .models import Operation, Position, Pocket
+from .services import TransactionService, PortfolioService
+from .analytics import PocketMetrics
 
 
-class UsersView(generics.ListCreateAPIView):
-    queryset = UserProfile.objects.all()
-    serializer_class = UserProfileSerializer
+
+class PocketsViewSet(viewsets.ModelViewSet):
+    serializer_class = PocketSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        return Pocket.objects.filter(owner=self.request.user)
 
-class UserRetrieveDestroyView(generics.RetrieveDestroyAPIView):
-    queryset = UserProfile.objects.all()
-    serializer_class = UserProfileSerializer
+    def get_object(self):
+        obj = super().get_object()
+        if obj.owner != self.request.user:
+            raise PermissionDenied("You do not have permission to access this pocket.")
+        return obj
+
+
+
+class PositionsViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = PositionSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
 
-class CurrentUserView(APIView):
-    permission_classes = [IsAuthenticated]
+        pocket_name = self.request.query_params.get('pocket_name', None)
+        if not pocket_name:
+            raise serializers.ValidationError("pocket_name query parameter is required.")
 
-    def get(self, request):
-        serializer = UserProfileSerializer(request.user)
-        return Response(serializer.data)
+        pocket = Pocket.objects.get(name=pocket_name, owner=self.request.user)
+        if not pocket:
+            raise serializers.ValidationError("Pocket not found.")
+
+
+        #TODO
+        # processor = AssetProcessor(owner=self.request.user)
+        # processor.update_assets(pocket_name=pocket_name)
+        
+        position_querry = Position.objects.filter(
+            pocket=pocket)
+
+        return position_querry.order_by('asset__ticker')
 
 
 class OperationsViewSet(viewsets.ModelViewSet):
@@ -45,86 +64,51 @@ class OperationsViewSet(viewsets.ModelViewSet):
         pocket_name = self.request.query_params.get('pocket_name', None)
 
         if pocket_name:
-            queryset = Operation.objects.filter(
-                owner=self.request.user, pocket_name=pocket_name)
+            queryset = Operation.objects.filter(pocket__owner=self.request.user,
+                                                pocket__name=pocket_name)
         else:
-            queryset = Operation.objects.filter(owner=self.request.user)
-        return queryset.order_by('-date', '-created_at')
+            queryset = Operation.objects.filter(pocket__owner=self.request.user)
+        return queryset.order_by('-operation_date', '-created_at')
+    
+    def get_object(self):
+        obj = super().get_object()
+        if obj.pocket.owner != self.request.user:
+            raise PermissionDenied("You do not have permission to access this operation.")
+        return obj
 
     def perform_create(self, serializer):
-        # TODO: Walidacja danych
-        processor = AssetProcessor(
-            data=serializer.validated_data, owner=self.request.user)
+        """Execute operation using appropriate service."""
+        operation_type = serializer.validated_data['operation_type']
+        transaction_service = TransactionService(owner=self.request.user)
+        portfolio_service = PortfolioService(owner=self.request.user)
+        
         try:
-            if serializer.validated_data['operation_type'] == 'buy':
-                result = processor.buy_operation()
-            elif serializer.validated_data['operation_type'] == 'sell':
-                result = processor.subtract_objects()
-            elif serializer.validated_data['operation_type'] == 'add_funds':
-                result = processor.add_funds()
-            elif serializer.validated_data['operation_type'] == 'withdraw_funds':
-                result = processor.withdraw_funds()
-
+            result = False
+            
+            if operation_type == 'buy':
+                result = transaction_service.execute_buy(serializer.validated_data)
+            elif operation_type == 'sell':
+                result = transaction_service.execute_sell(serializer.validated_data)
+            elif operation_type == 'deposit':
+                result = portfolio_service.deposit_cash(serializer.validated_data)
+            elif operation_type == 'withdrawal':
+                result = portfolio_service.withdraw_cash(serializer.validated_data)
+            
+            if result:
+                serializer.save()
+            else:
+                raise serializers.ValidationError({"error": "Operation processing failed"})
+                
         except Exception as e:
             raise serializers.ValidationError({"error": str(e)})
 
-        if result:
-            serializer.save(owner=self.request.user)
-        else:
-            return Response({"error": "Error with operation processing"}, status=status.HTTP_400_BAD_REQUEST)
-
     def perform_destroy(self, instance):
-        processor = AssetProcessor(owner=self.request.user)
+        """Delete operation and reverse its effects."""
+        portfolio_service = PortfolioService(owner=self.request.user)
         try:
-            processor.destory_operation(operation=instance)
+            portfolio_service.delete_operation(operation=instance)
         except Exception as e:
-            raise e
-
-
-class PocketsViewSet(viewsets.ModelViewSet):
-    serializer_class = PocketSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-
-        queryset = Pocket.objects.filter(owner=self.request.user)
-        name = self.request.query_params.get('name', None)
-
-        if name is not None:
-            # Filter by name
-            queryset = queryset.filter(name=name)
-
-        return queryset
-
-    def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
-
-
-class AssetAllocationViewSet(viewsets.ModelViewSet):
-    serializer_class = AssetAllocationSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        pocket_name = self.request.query_params.get('pocket_name', None)
-        processor = AssetProcessor(owner=self.request.user)
-        processor.update_assets(pocket_name=pocket_name)
-        pocket = Pocket.objects.get(name=pocket_name)
-        asset_allocations_querry = AssetAllocation.objects.filter(
-            pocket=pocket)
-
-        return asset_allocations_querry.order_by('asset__ticker')
-
-
-class CurencyViewSet(viewsets.ModelViewSet):
-    serializer_class = CurrencySerializer
-    permission_classes = [IsAuthenticated]
-    queryset = Currency.objects.all()
-
-
-class AssetClassViewSet(viewsets.ModelViewSet):
-    serializer_class = AssetClassSerializer
-    permission_classes = [IsAuthenticated]
-    queryset = AssetClass.objects.all()
+            raise serializers.ValidationError({"error": str(e)})
 
 
 class PocketVectorsView(APIView):
@@ -228,3 +212,5 @@ class PocketVectorsView(APIView):
         )
 
         fig.show()
+
+

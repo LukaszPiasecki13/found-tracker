@@ -42,7 +42,6 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "EXCEPTION_HANDLER": "core.urls.my_exception_handler",
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
 }
 
 
@@ -65,9 +64,9 @@ INSTALLED_APPS = [
     "corsheaders",
     'debug_toolbar',
     'drf_yasg',
-    'rest_framework_swagger',
     # My apps
-    'api.apps.ApiConfig',
+    'assets.apps.AssetsConfig',
+    'portfolios.apps.PortfoliosConfig',
     'authentication',
 ]
 

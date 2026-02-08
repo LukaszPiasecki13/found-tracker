@@ -1,17 +1,19 @@
 from rest_framework.test import APIClient
 import pytest
 from authentication.models import UserProfile
-from api.models import AssetClass, Currency, Operation, Pocket, Asset, AssetAllocation
+from assets.models import AssetClass, Currency, Asset
+from portfolios.models import Operation, Pocket, Position
 from django.urls import reverse
-from api.tests.integration.TransactionFactory import TransactionFactory
+from portfolios.tests.integration.TransactionFactory import TransactionFactory
 from django.db.models import Sum
 from decimal import Decimal
-from api.serializers import UserProfileSerializer, OperationSerializer, AssetAllocationSerializer
+from portfolios.serializers import OperationSerializer
+from authentication.serializers import UserProfileSerializer
 from collections import namedtuple
 import json
 
 
-from api.lib.AssetProcessor import AssetProcessor
+from portfolios.services import TransactionService, PortfolioService
 
 LOOP_COUNT = 50
 
@@ -141,12 +143,12 @@ class TestOperationViews:
                         "error": "Not enough assets to sell"}
                 elif buy_quantity == sell_quantity:
                     assert response.status_code == 201
-                    assert not AssetAllocation.objects.filter(
+                    assert not Position.objects.filter(
                         asset__ticker=draw_data['ticker'], pocket=pocket).exists()
                     success_operations.append(draw_data)
                 elif buy_quantity > sell_quantity:
                     assert response.status_code == 201
-                    asset_allocation = AssetAllocation.objects.get(
+                    asset_allocation = Position.objects.get(
                         asset__ticker=draw_data['ticker'], pocket=pocket)
 
                     assert asset_allocation.quantity == buy_quantity - sell_quantity
@@ -255,7 +257,7 @@ class TestOperationViews:
         assert Operation.objects.filter(ticker='AAPL').exists()
         assert Asset.objects.filter(ticker='AAPL').exists()
         pocket = Pocket.objects.get(name=self.pocket_name, owner=self.user)
-        assert AssetAllocation.objects.filter(
+        assert Position.objects.filter(
             asset__ticker='AAPL', pocket=pocket).exists()
         assert pocket.fees == 5
 
@@ -335,7 +337,7 @@ class TestOperationViews:
         # Buy random assets
         backup_data_buy, _ = self._buy_assets(api_client, LOOP_COUNT)
 
-        for asset_allocation in AssetAllocation.objects.all():
+        for asset_allocation in Position.objects.all():
             if asset_allocation == None:
                 break
 
@@ -496,7 +498,7 @@ class TestOperationViews:
                     id=operation.id).exists() == False
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
-                assert AssetAllocation.objects.filter(
+                assert Position.objects.filter(
                     asset__ticker=transaction['ticker'], pocket=pocket).exists()
 
                 assert pocket.fees == pocket_fee-transaction['fee']
@@ -507,7 +509,7 @@ class TestOperationViews:
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
 
-                assert AssetAllocation.objects.filter(
+                assert Position.objects.filter(
                     asset__ticker=transaction['ticker'], pocket=pocket).exists() == False
                 assert pocket.fees == pocket_fee-transaction['fee']
 
@@ -536,7 +538,7 @@ class TestOperationViews:
 
             pocket_fee = Pocket.objects.get(name=self.pocket_name).fees
             try:
-                asset_allocation_quantity = AssetAllocation.objects.get(
+                asset_allocation_quantity = Position.objects.get(
                     asset__ticker=transaction['ticker'], pocket__name=self.pocket_name).quantity
 
             except:
@@ -555,7 +557,7 @@ class TestOperationViews:
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
 
-                assert AssetAllocation.objects.filter(
+                assert Position.objects.filter(
                     asset__ticker=transaction['ticker'], pocket=pocket).exists()
 
                 assert pocket.fees == pocket_fee-transaction['fee']
@@ -566,7 +568,7 @@ class TestOperationViews:
                 pocket = Pocket.objects.get(
                     name=self.pocket_name, owner=self.user)
 
-                asset_allocation_query = AssetAllocation.objects.filter(
+                asset_allocation_query = Position.objects.filter(
                     asset__ticker=transaction['ticker'], pocket=pocket)
                 assert asset_allocation_query.exists()
                 asset_allocation = asset_allocation_query.first()

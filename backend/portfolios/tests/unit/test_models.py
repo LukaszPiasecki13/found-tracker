@@ -1,6 +1,7 @@
 import pytest
 from authentication.models import UserProfile
-from api.models import AssetClass, Currency, Operation, Pocket, Asset, AssetAllocation
+from assets.models import AssetClass, Currency, Asset
+from portfolios.models import Operation, Pocket, Position
 
 @pytest.mark.django_db
 class TestOperationModel:
@@ -63,10 +64,10 @@ class TestAssetAllocationModel:
         self.currency = Currency.objects.create(name='USD', reference_currency_name='USD', exchange_rate=1)
         self.pocket = Pocket.objects.create(owner=self.user, name='Pocket', fees=0, currency=self.currency)
         self.asset = Asset.objects.create(ticker='AAPL', name='Apple', asset_class='shares', currency=Currency.objects.create(name='USD') )
-        self.asset_allocation = AssetAllocation.objects.create(pocket=self.pocket, asset=self.asset, quantity=10, average_purchase_price=100)
+        self.asset_allocation = Position.objects.create(pocket=self.pocket, asset=self.asset, quantity=10, average_purchase_price=100)
 
     def test_create_model(self):
-        assert isinstance(self.asset_allocation, AssetAllocation)
+        assert isinstance(self.asset_allocation, Position)
         assert self.asset_allocation.pocket == self.pocket
         assert self.asset_allocation.asset == self.asset
         assert self.asset_allocation.quantity == 10

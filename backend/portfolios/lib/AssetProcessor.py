@@ -1,9 +1,5 @@
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
-from django.views import View
 from django.db.models import Sum
-from ..models import AssetClass, Currency, Operation, Pocket, Asset, AssetAllocation
+from ..models import AssetClass, Currency, Operation, Pocket, Asset, Position
 from authentication.models import UserProfile
 
 from decimal import Decimal
@@ -67,7 +63,7 @@ class AssetProcessor:
         try:
             # ASSET ALLOCATION
             # Check if asset allocation exists in the database
-            asset_allocation_query = AssetAllocation.objects.filter(
+            asset_allocation_query = Position.objects.filter(
                 pocket=pocket,
                 asset=Asset.objects.get(ticker=self.data['ticker']))
 
@@ -151,7 +147,7 @@ class AssetProcessor:
         try:
             # ASSET ALLOCATION
             # Check if asset allocation exists in the database
-            asset_allocation_query = AssetAllocation.objects.filter(
+            asset_allocation_query = Position.objects.filter(
                 pocket=pocket,
                 asset=Asset.objects.get(ticker=self.data['ticker']))
 
@@ -247,7 +243,7 @@ class AssetProcessor:
                 pocket.fees -= Decimal(operation.fee)
 
                 try:
-                    asset_allocation_query = AssetAllocation.objects.filter(
+                    asset_allocation_query = Position.objects.filter(
                         pocket=pocket,
                         asset=Asset.objects.get(ticker=operation.ticker))
                     if asset_allocation_query.exists():
@@ -287,7 +283,7 @@ class AssetProcessor:
                 pocket.fees -= Decimal(operation.fee)
 
                 try:
-                    asset_allocation_query = AssetAllocation.objects.filter(
+                    asset_allocation_query = Position.objects.filter(
                         pocket=pocket,
                         asset=Asset.objects.get(ticker=operation.ticker))
 
@@ -347,7 +343,7 @@ class AssetProcessor:
         currencies_prices_update(pocket.currency.name)
 
         # Update the current price of the assets
-        asset_allocation_query = AssetAllocation.objects.filter(
+        asset_allocation_query = Position.objects.filter(
             pocket=pocket)
 
         if asset_allocation_query.exists():
@@ -384,7 +380,7 @@ class AssetProcessor:
     def _create_asset_allocation(data: dict, pocket: Pocket) -> bool:
         # Create new asset allocation
         try:
-            AssetAllocation.objects.create(
+            Position.objects.create(
                 pocket=pocket,
                 asset=Asset.objects.get(ticker=data['ticker']),
                 quantity=data['quantity'],
