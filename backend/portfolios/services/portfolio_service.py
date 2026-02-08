@@ -94,16 +94,18 @@ class PortfolioService:
         pocket = operation.pocket
         
         if operation.operation_type == 'deposit':
-            # Reverse deposit
-            if pocket.cash_balance < operation.amount:
+            # Reverse deposit: originally cash_balance += amount - fee, so reverse: -= (amount - fee)
+            net_deposit = operation.amount - operation.fee
+            if pocket.cash_balance < net_deposit:
                 raise ValueError('Cannot delete deposit: would result in negative cash balance')
-            pocket.cash_balance -= operation.amount
+            pocket.cash_balance -= net_deposit
             pocket.total_deposited -= operation.amount
             pocket.save()
             
         elif operation.operation_type == 'withdrawal':
-            # Reverse withdrawal
-            pocket.cash_balance += operation.amount
+            # Reverse withdrawal: originally cash_balance -= (amount + fee), so reverse: += (amount + fee)
+            net_withdrawal = operation.amount + operation.fee
+            pocket.cash_balance += net_withdrawal
             pocket.total_deposited += operation.amount
             pocket.save()
             
@@ -174,3 +176,4 @@ class PortfolioService:
             summary['total_unrealized_pnl'] += position.unrealized_pnl
         
         return summary
+

@@ -1,5 +1,6 @@
 import random
 from authentication.models import UserProfile
+from portfolios.models import Pocket
 from django.test import Client
 
 
@@ -9,6 +10,7 @@ class TransactionFactory():
 
         self.user = user
         self.pocket_name = pocket_name
+        self.pocket = Pocket.objects.get(name=pocket_name, owner=user)
         self.tickers = [
             'AAPL', 'MSFT', 'NVDA', 'GOOG', 'GOOGL', 'AMZN', 'META', 'AVGO', 'TSLA',
             'COST', 'ASML', 'NFLX', 'AZN', 'AMD', 'ADBE', 'PEP', 'TMUS', 'LIN', 'CSCO',
@@ -60,15 +62,14 @@ class TransactionFactory():
         transaction_data = {
             'operation_type': "buy",
             'ticker': self.generate_ticker(allow_duplicates),
-            'date': '2022-01-01',
-            'currency': 'USD',
-            'purchase_currency_price': self.generate_currency_price(),
+            'operation_date': '2022-01-01T00:00:00Z',
+            'fx_rate': self.generate_currency_price(),
             'quantity': self.generate_quantity(),
             'price': self.generate_price(),
             'fee': self.generate_fee(),
-            'comment': 'Test comment',
+            'notes': 'Test comment',
             'asset_class': 'Equity',
-            'pocket_name': self.pocket_name
+            'pocket': self.pocket.id
         }
 
         return transaction_data
@@ -79,15 +80,14 @@ class TransactionFactory():
         transaction_data = {
             'operation_type': "sell",
             'ticker': self.generate_ticker(allow_duplicates=allow_duplicates, tickers=tickers),
-            'date': '2022-01-01',
-            'currency': 'USD',
-            'purchase_currency_price': self.generate_currency_price(),
+            'operation_date': '2022-01-01T00:00:00Z',
+            'fx_rate': self.generate_currency_price(),
             'quantity': self.generate_quantity(),
             'price': self.generate_price(),
             'fee': self.generate_fee(),
-            'comment': 'Test comment',
+            'notes': 'Test comment',
             'asset_class': 'Equity',
-            'pocket_name': self.pocket_name
+            'pocket': self.pocket.id
         }
 
         return transaction_data
@@ -96,17 +96,12 @@ class TransactionFactory():
         '''Draw a random transaction data and the corresponding verification data.'''
 
         transaction_data = {
-            "operation_type": "add_funds",
-            "asset_class": None,
-            "ticker": None,
-            "date": "2024-09-13",
-            "currency": None,
-            "purchase_currency_price": None,
-            "quantity": self.generate_quantity(),
-            "price": None,
+            "operation_type": "deposit",
+            "operation_date": "2024-09-13T00:00:00Z",
+            "amount": self.generate_quantity() * 100,
             "fee": self.generate_fee(),
-            "comment": "",
-            "pocket_name": self.pocket_name
+            "notes": "",
+            "pocket": self.pocket.id
         }
 
         return transaction_data
@@ -115,17 +110,12 @@ class TransactionFactory():
         '''Draw a random transaction data and the corresponding verification data.'''
 
         transaction_data = {
-            "operation_type": "withdraw_funds",
-            "asset_class": None,
-            "ticker": None,
-            "date": "2024-09-13",
-            "currency": None,
-            "purchase_currency_price": None,
-            "quantity": self.generate_quantity(),
-            "price": None,
+            "operation_type": "withdrawal",
+            "operation_date": "2024-09-13T00:00:00Z",
+            "amount": self.generate_quantity() * 100,
             "fee": self.generate_fee(),
-            "comment": "",
-            "pocket_name": self.pocket_name
+            "notes": "",
+            "pocket": self.pocket.id
         }
 
         return transaction_data
