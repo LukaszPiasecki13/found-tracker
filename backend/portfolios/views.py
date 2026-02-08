@@ -21,7 +21,14 @@ class PocketsViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Pocket.objects.filter(owner=self.request.user)
+        queryset = Pocket.objects.filter(owner=self.request.user)
+        
+        # Filter by name if provided
+        name = self.request.query_params.get('name', None)
+        if name:
+            queryset = queryset.filter(name=name)
+        
+        return queryset
 
     def get_object(self):
         obj = super().get_object()

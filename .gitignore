@@ -10,3 +10,5 @@ backend/api/test.ipynb
 
 .vscode/launch.json
 
+/frontend_old
+backend/test.ipynb

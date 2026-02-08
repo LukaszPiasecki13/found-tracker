@@ -29,17 +29,30 @@ const PocketDetailsPage: React.FC = () => {
   const navigate = useNavigate();
   const pocketName = decodeURIComponent(slug || '');
 
-  const { data: pocket, isLoading: pocketLoading } = usePocketByName(pocketName);
+  const { data: pocket, isLoading: pocketLoading, error: pocketError } = usePocketByName(pocketName);
   const { data: positions, isLoading: positionsLoading } = usePositions(pocketName);
 
   const [openBuyDialog, setOpenBuyDialog] = useState(false);
   const [openSellDialog, setOpenSellDialog] = useState(false);
   const [openCashDialog, setOpenCashDialog] = useState(false);
 
-  if (pocketLoading || !pocket) {
+  if (pocketLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (pocketError || !pocket) {
+    return (
+      <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="60vh" gap={2}>
+        <Typography variant="h5" color="error">
+          Nie znaleziono portfela "{pocketName}"
+        </Typography>
+        <Button variant="contained" onClick={() => navigate('/')}>
+          Powrót do listy portfeli
+        </Button>
       </Box>
     );
   }

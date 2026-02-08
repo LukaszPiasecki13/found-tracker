@@ -16,6 +16,11 @@ export const pocketService = {
     const response = await api.get<Pocket[]>(`/portfolios/pockets/`, {
       params: { name },
     });
+    
+    if (!response.data || response.data.length === 0) {
+      throw new Error(`Pocket with name "${name}" not found`);
+    }
+    
     return response.data[0];
   },
 
