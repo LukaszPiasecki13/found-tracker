@@ -64,8 +64,12 @@ const PocketDetailsPage: React.FC = () => {
     }).format(value);
   };
 
-  const totalPositionsValue = positions?.reduce((sum, pos) => sum + (pos.market_value || 0), 0) || 0;
-  const totalValue = pocket.cash_balance + totalPositionsValue;
+  const cashBalance = Number(pocket.cash_balance) || 0;
+  const totalPositionsValue = positions?.reduce((sum, pos) => sum + (Number(pos.market_value) || 0), 0) || 0;
+  const totalValue = cashBalance + totalPositionsValue;
+  const totalDeposited = Number(pocket.total_deposited) || 0;
+  const totalProfitLoss = Number(pocket.total_profit_loss) || (totalValue - totalDeposited);
+  const totalReturnPct = Number(pocket.total_return_pct);
 
   return (
     <Box>
@@ -102,7 +106,7 @@ const PocketDetailsPage: React.FC = () => {
               Saldo gotówkowe
             </Typography>
             <Typography variant="h5" fontWeight="bold">
-              {formatCurrency(pocket.cash_balance)}
+              {formatCurrency(cashBalance)}
             </Typography>
           </Paper>
         </Grid>
@@ -134,13 +138,13 @@ const PocketDetailsPage: React.FC = () => {
             <Typography
               variant="h5"
               fontWeight="bold"
-              color={(pocket.total_profit_loss || 0) >= 0 ? 'success.main' : 'error.main'}
+              color={totalProfitLoss >= 0 ? 'success.main' : 'error.main'}
             >
-              {formatCurrency(pocket.total_profit_loss || 0)}
+              {formatCurrency(totalProfitLoss)}
             </Typography>
-            {pocket.total_return_pct !== undefined && (
+            {!Number.isNaN(totalReturnPct) && (
               <Typography variant="caption" color="text.secondary">
-                ({pocket.total_return_pct.toFixed(2)}%)
+                ({totalReturnPct.toFixed(2)}%)
               </Typography>
             )}
           </Paper>

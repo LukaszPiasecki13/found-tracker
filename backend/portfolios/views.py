@@ -1,3 +1,4 @@
+import logging
 from rest_framework import generics, viewsets
 from rest_framework.views import APIView
 from rest_framework import serializers
@@ -13,6 +14,9 @@ from .serializers import OperationSerializer, PositionSerializer, PocketSerializ
 from .models import Operation, Position, Pocket
 from .services import TransactionService, PortfolioService
 from .analytics import PocketMetrics
+from assets.services.market_data_service import MarketDataService
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -52,15 +56,21 @@ class PositionsViewSet(viewsets.ReadOnlyModelViewSet):
         if not pocket:
             raise serializers.ValidationError("Pocket not found.")
 
+        # Refresh currency rates for pocket base currency
+        try:
+            MarketDataService.update_currency_rates(base_currency_code=pocket.base_currency.code)
+        except Exception:
+            logger.exception("Failed to update currency rates for pocket %s", pocket.id)
 
-        #TODO
-        # processor = AssetProcessor(owner=self.request.user)
-        # processor.update_assets(pocket_name=pocket_name)
-        
-        position_querry = Position.objects.filter(
-            pocket=pocket)
+        # Update current prices for all assets in this pocket
+        positions = Position.objects.filter(pocket=pocket).select_related('asset')
+        for position in positions:
+            try:
+                MarketDataService.update_asset_price(position.asset)
+            except Exception:
+                logger.exception("Failed to update asset price for %s", position.asset.ticker)
 
-        return position_querry.order_by('asset__ticker')
+        return positions.order_by('asset__ticker')
 
 
 class OperationsViewSet(viewsets.ModelViewSet):

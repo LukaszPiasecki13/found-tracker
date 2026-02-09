@@ -125,14 +125,14 @@ const PocketsList: React.FC = () => {
                       Saldo gotówkowe
                     </Typography>
                     <Typography variant="h6" gutterBottom>
-                      {formatCurrency(pocket.cash_balance, pocket.base_currency_detail.code)}
+                      {formatCurrency(Number(pocket.cash_balance) || 0, pocket.base_currency_detail.code)}
                     </Typography>
 
                     <Typography variant="body2" color="text.secondary">
                       Całkowite wpłaty
                     </Typography>
                     <Typography variant="body1">
-                      {formatCurrency(pocket.total_deposited, pocket.base_currency_detail.code)}
+                      {formatCurrency(Number(pocket.total_deposited) || 0, pocket.base_currency_detail.code)}
                     </Typography>
 
                     {pocket.total_profit_loss !== undefined && (
@@ -143,15 +143,15 @@ const PocketsList: React.FC = () => {
                         <Box display="flex" alignItems="center" gap={0.5}>
                           <TrendingUpIcon
                             fontSize="small"
-                            color={pocket.total_profit_loss >= 0 ? 'success' : 'error'}
+                            color={(Number(pocket.total_profit_loss) || 0) >= 0 ? 'success' : 'error'}
                           />
                           <Typography
                             variant="body1"
-                            color={pocket.total_profit_loss >= 0 ? 'success.main' : 'error.main'}
+                            color={(Number(pocket.total_profit_loss) || 0) >= 0 ? 'success.main' : 'error.main'}
                           >
-                            {formatCurrency(pocket.total_profit_loss, pocket.base_currency_detail.code)}
+                            {formatCurrency(Number(pocket.total_profit_loss) || 0, pocket.base_currency_detail.code)}
                             {pocket.total_return_pct !== undefined && (
-                              <> ({pocket.total_return_pct.toFixed(2)}%)</>
+                              <> ({Number(pocket.total_return_pct).toFixed(2)}%)</>
                             )}
                           </Typography>
                         </Box>

@@ -39,17 +39,20 @@ class Pocket(models.Model):
         return self.oerations.aggregate(
             total=Sum('fee')
         )['total'] or 0
-    
-    # @property
-    # def positions_value(self):
-    #     """Wartość pozycji (pobiera ceny z Yahoo)"""
-    #     from .services import PocketService
-    #     return PocketService.calculate_positions_value(self)
-    
-    # @property
-    # def total_value(self):
-    #     """Całkowita wartość portfela"""
-    #     return self.cash_balance + self.positions_value
+
+    @property
+    def positions_value(self):
+        """Wartość wszystkich pozycji w walucie portfela"""
+        from decimal import Decimal
+        total = Decimal('0')
+        for position in self.positions.all():
+            total += position.market_value
+        return total
+
+    @property
+    def total_value(self):
+        """Całkowita wartość portfela (gotówka + pozycje)"""
+        return self.cash_balance + self.positions_value
 
     @property
     def total_profit_loss(self):
@@ -112,9 +115,14 @@ class Position(models.Model):
         return self.cost_basis * self.average_fx_rate
 
     @property
+    def current_price(self):
+        """Aktualna cena z modelu Asset"""
+        return self.asset.current_price
+
+    @property
     def market_value_in_asset_currency(self):
         """Wartość rynkowa w walucie assetu"""
-        return self.quantity * self.current_price
+        return self.quantity * self.asset.current_price
 
     @property
     def market_value(self):
@@ -137,9 +145,9 @@ class Position(models.Model):
     @property
     def return_pct(self):
         """Stopa zwrotu w %"""
-        if self.cost_basis == 0:
+        if self.cost_basis_in_pocket_currency == 0:
             return 0
-        return (self.profit / self.cost_basis) * 100
+        return (self.profit / self.cost_basis_in_pocket_currency) * 100
 
     @property
     def pocket_weight_pct(self):

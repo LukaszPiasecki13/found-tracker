@@ -77,12 +77,30 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
       }),
       columnHelper.accessor('average_buy_price', {
         header: 'Śr. cena zakupu',
-        cell: (info) => formatCurrency(Number(info.getValue())),
+        cell: (info) => {
+          const row = info.row.original;
+          const quantity = Number(row.quantity) || 0;
+          const costBasis = Number(row.cost_basis_in_pocket_currency) || 0;
+          const avgPrice = quantity > 0 ? costBasis / quantity : Number(row.average_buy_price) || 0;
+          return formatCurrency(avgPrice);
+        },
       }),
       columnHelper.accessor((row) => row.asset.current_price, {
         id: 'current_price',
         header: 'Cena aktualna',
-        cell: (info) => formatCurrency(Number(info.getValue())),
+        cell: (info) => {
+          const row = info.row.original;
+          const quantity = Number(row.quantity) || 0;
+          if (quantity > 0 && row.market_value !== undefined) {
+            const mv = Number(row.market_value) || 0;
+            return formatCurrency(mv / quantity);
+          }
+          const assetPrice = Number(info.getValue()) || 0;
+          const exchangeRate = row.asset.currency.code === currencyCode
+            ? 1
+            : Number(row.asset.currency.exchange_rate) || 1;
+          return formatCurrency(assetPrice * exchangeRate);
+        },
       }),
       columnHelper.accessor('market_value', {
         header: 'Wartość rynkowa',
