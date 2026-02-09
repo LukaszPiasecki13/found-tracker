@@ -39,12 +39,16 @@ class PocketSerializer(serializers.ModelSerializer):
         write_only=True
     )
     base_currency_detail = CurrencySerializer(source='base_currency', read_only=True)
+    positions_value = serializers.DecimalField(max_digits=18, decimal_places=3, read_only=True)
+    total_value = serializers.DecimalField(max_digits=18, decimal_places=3, read_only=True)
+    total_profit_loss = serializers.DecimalField(max_digits=18, decimal_places=3, read_only=True)
+    total_return_pct = serializers.DecimalField(max_digits=18, decimal_places=4, read_only=True)
 
 
     class Meta:
         model = models.Pocket
-        fields = ['id', 'owner', 'owner_username', 'name', 'base_currency', 'base_currency_detail', 'cash_balance', 'total_deposited', 'is_active', 'created_at']
-        read_only_fields = ['owner_username', 'created_at', 'base_currency_detail']
+        fields = ['id', 'owner', 'owner_username', 'name', 'base_currency', 'base_currency_detail', 'cash_balance', 'total_deposited', 'is_active', 'created_at', 'positions_value', 'total_value', 'total_profit_loss', 'total_return_pct']
+        read_only_fields = ['owner_username', 'created_at', 'base_currency_detail', 'positions_value', 'total_value', 'total_profit_loss', 'total_return_pct']
 
     def validate_name(self, name):
         if models.Pocket.objects.filter(name=name, owner=self.context['request'].user).exists():

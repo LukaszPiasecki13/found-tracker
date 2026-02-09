@@ -112,7 +112,7 @@ class PortfolioService:
         elif operation.operation_type in ['buy', 'sell']:
             # For buy/sell operations, this requires more complex logic
             # involving position recalculation - for now, prevent deletion
-            raise ValueError(
+            raise NotImplementedError(
                 'Deleting buy/sell operations requires position recalculation. '
                 'This feature is not yet implemented. Please manually adjust positions.'
             )

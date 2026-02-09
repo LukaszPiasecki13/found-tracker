@@ -2,10 +2,13 @@
 Market Data Service for fetching and updating asset prices and currency exchange rates.
 Encapsulates all external data provider interactions (yfinance).
 """
+import logging
 import yfinance as yf
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
 from ..models import Asset, Currency
+
+logger = logging.getLogger(__name__)
 
 
 class MarketDataService:
@@ -109,10 +112,10 @@ class MarketDataService:
                         currency.exchange_rate = Decimal(str(rate))
                         currency.save()
                     else:
-                        print(f"Warning: Could not update rate for {currency.code}")
+                        logger.warning("Could not update rate for %s", currency.code)
                         
-                except Exception as e:
-                    print(f"Error updating {currency.code}: {str(e)}")
+                except Exception:
+                    logger.exception("Error updating %s", currency.code)
             else:
                 # Base currency always has rate of 1.0
                 currency.exchange_rate = Decimal('1.0')
@@ -188,7 +191,7 @@ class MarketDataService:
                     # Found valid result, return it
                     return results
             except Exception:
-                pass
+                logger.exception("Failed to fetch Yahoo data for %s", clean_query)
             
             # Try common exchange suffixes for international stocks
             # Only if we didn't find result with exact ticker
@@ -218,6 +221,6 @@ class MarketDataService:
             
             return results
             
-        except Exception as e:
-            print(f"Search error: {str(e)}")
+        except Exception:
+            logger.exception("Search error")
             return []

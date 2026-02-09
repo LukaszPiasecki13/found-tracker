@@ -11,9 +11,9 @@ export default function DashboardPage() {
   const totalMetrics = useMemo(() => {
     if (!pockets) return { totalValue: 0, totalDeposited: 0, totalProfit: 0, pocketCount: 0 };
 
-    const totalValue = pockets.reduce((sum, pocket) => sum + (pocket.cash_balance || 0), 0);
-    const totalDeposited = pockets.reduce((sum, pocket) => sum + (pocket.total_deposited || 0), 0);
-    const totalProfit = pockets.reduce((sum, pocket) => sum + (pocket.total_profit_loss || 0), 0);
+    const totalValue = pockets.reduce((sum, pocket) => sum + (Number(pocket.cash_balance) || 0), 0);
+    const totalDeposited = pockets.reduce((sum, pocket) => sum + (Number(pocket.total_deposited) || 0), 0);
+    const totalProfit = pockets.reduce((sum, pocket) => sum + (Number(pocket.total_profit_loss) || 0), 0);
 
     return {
       totalValue,
