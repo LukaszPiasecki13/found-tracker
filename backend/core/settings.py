@@ -110,15 +110,17 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
-    #  ToDo: Save the database credentials in environment variables
-
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'found_tracker_db',
-        'USER': 'postgres',
-        'PASSWORD': 'admin',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': 'postgres',
+        'USER': 'postgres.sdxrzcjnghpcwjzzgtva',
+        'PASSWORD': 'postgresadmin',
+        'HOST': 'aws-1-eu-central-1.pooler.supabase.com',
+        'PORT': '6543',
+
+        'OPTIONS': {
+            'sslmode': 'require',
+        },
     }
 }
 
