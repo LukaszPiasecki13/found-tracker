@@ -1,0 +1,84 @@
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+indent-width = 4
+exclude = [
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".git",
+    "/alembic",
+
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes (includes unused imports)
+    "W",    # pycodestyle warnings
+    "I",    # isort (import sorting)
+    "N",    # pep8-naming (naming conventions)
+    "UP",   # pyupgrade (f-strings and modern Python syntax)
+    "SIM",  # flake8-simplify (code simplification)
+    "RET",  # flake8-return (return statement improvements)
+    "RSE",  # flake8-raise (exception raising)
+    "RUF",  # Ruff-specific rules
+    "B",    # flake8-bugbear (common mistakes)
+    "ISC",  # flake8-implicit-str-concat (warns about implicit string concatenation)
+    "Q",    # flake8-quotes (quote consistency)
+]
+ignore = [
+    "B008",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+[tool.mypy]
+python_version = "3.14"
+
+# Cache for faster subsequent runs
+cache_dir = ".mypy_cache"
+incremental = true
+
+
+# Add path to app module for proper resolution
+mypy_path = "code/cloud_run/fastapi"
+
+# Exclude directories with standalone scripts
+exclude = [
+    "^alembic/.*",
+    "^tests/.*",
+    "^\\.venv/.*",
+    "^\\.git/.*"
+]
+
+# Explicit package bases for proper module resolution
+explicit_package_bases = true
+
+# Default: strict mode for ENTIRE project (automatic for new modules)
+strict = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+
+# Test files - relaxed type checking
+[[tool.mypy.overrides]]
+module = [
+    "*.tests.*",
+    "*.conftest"
+]
+ignore_errors = true
