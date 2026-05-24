@@ -50,17 +50,17 @@ class AssetClassRepository:
     def list_all(self) -> list[AssetClass]:
         return self.db.query(AssetClass).order_by(AssetClass.name).all()
 
-    def get_by_id(self, ac_id: int) -> AssetClass | None:
-        return self.db.query(AssetClass).filter(AssetClass.id == ac_id).first()
+    def get_by_id(self, asset_class_id: int) -> AssetClass | None:
+        return self.db.query(AssetClass).filter(AssetClass.id == asset_class_id).first()
 
     def get_or_create(self, name: str) -> AssetClass:
-        ac = self.db.query(AssetClass).filter(AssetClass.name == name).first()
-        if not ac:
-            ac = AssetClass(name=name)
-            self.db.add(ac)
+        asset_class = self.db.query(AssetClass).filter(AssetClass.name == name).first()
+        if not asset_class:
+            asset_class = AssetClass(name=name)
+            self.db.add(asset_class)
             self.db.commit()
-            self.db.refresh(ac)
-        return ac
+            self.db.refresh(asset_class)
+        return asset_class
 
     def create(self, asset_class: AssetClass) -> AssetClass:
         self.db.add(asset_class)

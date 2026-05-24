@@ -2,8 +2,8 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.modules.auth.dependencies import get_current_user
-from app.modules.auth.models import User
+from app.modules.core_data.dependencies import get_current_user
+from app.modules.core_data.models import User
 
 from .dependencies import get_asset_class_repo, get_asset_repo, get_currency_repo
 from .models import Asset, AssetClass, Currency
@@ -89,20 +89,20 @@ def create_asset_class(
     repo: AssetClassRepository = Depends(get_asset_class_repo),
     _: User = Depends(get_current_user),
 ):
-    ac = AssetClass(name=data.name)
-    return repo.create(ac)
+    asset_class = AssetClass(name=data.name)
+    return repo.create(asset_class)
 
 
 @router.delete("/asset-classes/{ac_id}", status_code=204)
 def delete_asset_class(
-    ac_id: int,
+    asset_class_id: int,
     repo: AssetClassRepository = Depends(get_asset_class_repo),
     _: User = Depends(get_current_user),
 ):
-    ac = repo.get_by_id(ac_id)
-    if not ac:
+    asset_class = repo.get_by_id(asset_class_id)
+    if not asset_class:
         raise HTTPException(status_code=404, detail="Asset class not found")
-    repo.delete(ac)
+    repo.delete(asset_class)
 
 
 # --- Assets ---
@@ -178,15 +178,15 @@ def create_from_yahoo(
             "CRYPTO": "Crypto",
             "MUTUALFUND": "Mutual Fund",
         }
-        ac_name = name_map.get(quote_type, "Stock")
-        ac = asset_class_repo.get_or_create(ac_name)
-        asset_class_id = ac.id
+        asset_class_name = name_map.get(quote_type, "Stock")
+        asset_class = asset_class_repo.get_or_create(asset_class_name)
+        asset_class_id = asset_class.id
 
     currency_id = data.currency_id
     if not currency_id:
         code = info.get("currency", "USD").upper()
-        cur = currency_repo.get_or_create(code)
-        currency_id = cur.id
+        currency = currency_repo.get_or_create(code)
+        currency_id = currency.id
 
     current_price = (
         info.get("currentPrice")

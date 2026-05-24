@@ -16,7 +16,8 @@ sql_factory = SQLConnectionFactory()
 
 def _create_sql_engine() -> Engine:
     """Create a new SQLAlchemy engine based on current settings."""
-    return sql_factory.get_or_create_engine(get_settings().database_url)
+    settings = get_settings()
+    return sql_factory.get_or_create_engine(settings.database_url, settings.database_schema)
 
 
 # Initialize SQL engine and session factory

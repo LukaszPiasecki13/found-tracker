@@ -9,7 +9,7 @@ from app.modules.assets.schemas import AssetDetailRead, CurrencyRead
 
 class PositionRead(BaseModel):
     id: int
-    pocket_id: int
+    portfolio_id: int
     asset_id: int
     asset: AssetDetailRead
     quantity: float
@@ -22,24 +22,24 @@ class PositionRead(BaseModel):
 
     # Computed fields
     cost_basis: float = 0
-    cost_basis_in_pocket_currency: float = 0
+    cost_basis_in_portfolio_currency: float = 0
     market_value: float = 0
     unrealized_pnl: float = 0
     return_pct: float = 0
-    pocket_weight_pct: float = 0
+    portfolio_weight_pct: float = 0
 
     model_config = {"from_attributes": True}
 
 
-# --- Pocket ---
+# --- Portfolio ---
 
 
-class PocketCreate(BaseModel):
+class PortfolioCreate(BaseModel):
     name: str
     base_currency_id: int
 
 
-class PocketRead(BaseModel):
+class PortfolioRead(BaseModel):
     id: int
     owner_id: int
     name: str
@@ -58,7 +58,7 @@ class PocketRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PocketDetailRead(PocketRead):
+class PortfolioDetailRead(PortfolioRead):
     positions: list[PositionRead] = []
     total_fees: float = 0
     updated_at: datetime | None = None
@@ -70,7 +70,7 @@ class PocketDetailRead(PocketRead):
 
 
 class OperationCreate(BaseModel):
-    pocket_id: int
+    portfolio_id: int
     asset_id: int | None = None
     operation_type: str  # buy, sell, deposit, withdrawal, dividend
     quantity: float = 0
@@ -86,7 +86,7 @@ class OperationCreate(BaseModel):
 
 class OperationRead(BaseModel):
     id: int
-    pocket_id: int
+    portfolio_id: int
     asset_id: int | None = None
     operation_type: str
     quantity: float

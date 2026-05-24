@@ -16,13 +16,11 @@ from sqlalchemy.orm import relationship
 from app.infrastructure.sql.base import Base
 
 
-class Pocket(Base):
-    __tablename__ = "portfolios_pocket"
+class Portfolio(Base):
+    __tablename__ = "portfolios_portfolio"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    owner_id = Column(
-        BigInteger, ForeignKey("authentication_userprofile.id"), nullable=False
-    )
+    owner_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     base_currency_id = Column(
         BigInteger, ForeignKey("assets_currency.id"), nullable=False
@@ -45,14 +43,14 @@ class Pocket(Base):
     owner = relationship("User")
     base_currency = relationship("Currency")
     positions = relationship(
-        "Position", back_populates="pocket", cascade="all, delete-orphan"
+        "Position", back_populates="portfolio", cascade="all, delete-orphan"
     )
     operations = relationship(
-        "Operation", back_populates="pocket", cascade="all, delete-orphan"
+        "Operation", back_populates="portfolio", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
-        UniqueConstraint("owner_id", "name", name="unique_pocket_per_user"),
+        UniqueConstraint("owner_id", "name", name="unique_portfolio_per_user"),
     )
 
 
@@ -60,7 +58,9 @@ class Position(Base):
     __tablename__ = "portfolios_position"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    pocket_id = Column(BigInteger, ForeignKey("portfolios_pocket.id"), nullable=False)
+    portfolio_id = Column(
+        BigInteger, ForeignKey("portfolios_portfolio.id"), nullable=False
+    )
     asset_id = Column(BigInteger, ForeignKey("assets_asset.id"), nullable=False)
 
     quantity = Column(Numeric(18, 9), nullable=False, default=0)
@@ -79,12 +79,14 @@ class Position(Base):
         onupdate=func.now(),
     )
 
-    pocket = relationship("Pocket", back_populates="positions")
+    portfolio = relationship("Portfolio", back_populates="positions")
     asset = relationship("Asset")
 
     __table_args__ = (
-        UniqueConstraint("pocket_id", "asset_id", name="unique_position_per_pocket"),
-        Index("ix_position_pocket_asset", "pocket_id", "asset_id"),
+        UniqueConstraint(
+            "portfolio_id", "asset_id", name="unique_position_per_portfolio"
+        ),
+        Index("ix_position_portfolio_asset", "portfolio_id", "asset_id"),
     )
 
 
@@ -92,7 +94,9 @@ class Operation(Base):
     __tablename__ = "portfolios_operation"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    pocket_id = Column(BigInteger, ForeignKey("portfolios_pocket.id"), nullable=False)
+    portfolio_id = Column(
+        BigInteger, ForeignKey("portfolios_portfolio.id"), nullable=False
+    )
     asset_id = Column(BigInteger, ForeignKey("assets_asset.id"), nullable=True)
 
     operation_type = Column(
@@ -110,7 +114,9 @@ class Operation(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    pocket = relationship("Pocket", back_populates="operations")
+    portfolio = relationship("Portfolio", back_populates="operations")
     asset = relationship("Asset")
 
-    __table_args__ = (Index("ix_operation_pocket_date", "pocket_id", "operation_date"),)
+    __table_args__ = (
+        Index("ix_operation_portfolio_date", "portfolio_id", "operation_date"),
+    )

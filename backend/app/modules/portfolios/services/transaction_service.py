@@ -1,18 +1,18 @@
 from decimal import Decimal
 
-from ..models import Pocket, Position
-from ..repository import PocketRepository, PositionRepository
+from ..models import Portfolio, Position
+from ..repository import PortfolioRepository, PositionRepository
 
 
 class TransactionService:
     def __init__(
-        self, pocket_repo: PocketRepository, position_repo: PositionRepository
+        self, portfolio_repo: PortfolioRepository, position_repo: PositionRepository
     ):
-        self.pocket_repo = pocket_repo
+        self.portfolio_repo = portfolio_repo
         self.position_repo = position_repo
 
     def execute_buy(self, data: dict) -> bool:
-        pocket: Pocket = data["pocket"]
+        portfolio: Portfolio = data["portfolio"]
         asset = data["asset"]
         quantity = Decimal(str(data["quantity"]))
         price = Decimal(str(data["price"]))
@@ -21,13 +21,13 @@ class TransactionService:
 
         total_cost = (quantity * price + fee) * fx_rate
 
-        if pocket.cash_balance < total_cost:
+        if portfolio.cash_balance < total_cost:
             raise ValueError("Insufficient cash balance to execute buy operation")
 
-        pocket.cash_balance -= total_cost
-        self.pocket_repo.update(pocket)
+        portfolio.cash_balance -= total_cost
+        self.portfolio_repo.update(portfolio)
 
-        position = self.position_repo.get_by_pocket_and_asset(pocket.id, asset.id)
+        position = self.position_repo.get_by_portfolio_and_asset(portfolio.id, asset.id)
         if position:
             old_qty = position.quantity
             new_qty = old_qty + quantity
@@ -42,7 +42,7 @@ class TransactionService:
             self.position_repo.update(position)
         else:
             position = Position(
-                pocket_id=pocket.id,
+                portfolio_id=portfolio.id,
                 asset_id=asset.id,
                 quantity=quantity,
                 average_buy_price=(quantity * price + fee) / quantity,
@@ -54,14 +54,14 @@ class TransactionService:
         return True
 
     def execute_sell(self, data: dict) -> bool:
-        pocket: Pocket = data["pocket"]
+        portfolio: Portfolio = data["portfolio"]
         asset = data["asset"]
         quantity = Decimal(str(data["quantity"]))
         price = Decimal(str(data["price"]))
         fee = Decimal(str(data.get("fee", 0)))
         fx_rate = Decimal(str(data.get("fx_rate", 1)))
 
-        position = self.position_repo.get_by_pocket_and_asset(pocket.id, asset.id)
+        position = self.position_repo.get_by_portfolio_and_asset(portfolio.id, asset.id)
         if not position:
             raise ValueError(
                 "Position does not exist - cannot sell asset you do not own"
@@ -73,8 +73,8 @@ class TransactionService:
             )
 
         proceeds = (quantity * price - fee) * fx_rate
-        pocket.cash_balance += proceeds
-        self.pocket_repo.update(pocket)
+        portfolio.cash_balance += proceeds
+        self.portfolio_repo.update(portfolio)
 
         position.quantity -= quantity
         position.total_fees += fee

@@ -1,41 +1,41 @@
 from sqlalchemy.orm import Session
 
-from .models import Operation, Pocket, Position
+from .models import Operation, Portfolio, Position
 
 
-class PocketRepository:
+class PortfolioRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_owner(self, owner_id: int, name: str | None = None) -> list[Pocket]:
-        q = self.db.query(Pocket).filter(Pocket.owner_id == owner_id)
+    def list_by_owner(self, owner_id: int, name: str | None = None) -> list[Portfolio]:
+        q = self.db.query(Portfolio).filter(Portfolio.owner_id == owner_id)
         if name:
-            q = q.filter(Pocket.name == name)
-        return q.order_by(Pocket.created_at.desc()).all()
+            q = q.filter(Portfolio.name == name)
+        return q.order_by(Portfolio.created_at.desc()).all()
 
-    def get_by_id(self, pocket_id: int) -> Pocket | None:
-        return self.db.query(Pocket).filter(Pocket.id == pocket_id).first()
+    def get_by_id(self, portfolio_id: int) -> Portfolio | None:
+        return self.db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
 
-    def get_by_owner_and_name(self, owner_id: int, name: str) -> Pocket | None:
+    def get_by_owner_and_name(self, owner_id: int, name: str) -> Portfolio | None:
         return (
-            self.db.query(Pocket)
-            .filter(Pocket.owner_id == owner_id, Pocket.name == name)
+            self.db.query(Portfolio)
+            .filter(Portfolio.owner_id == owner_id, Portfolio.name == name)
             .first()
         )
 
-    def create(self, pocket: Pocket) -> Pocket:
-        self.db.add(pocket)
+    def create(self, portfolio: Portfolio) -> Portfolio:
+        self.db.add(portfolio)
         self.db.commit()
-        self.db.refresh(pocket)
-        return pocket
+        self.db.refresh(portfolio)
+        return portfolio
 
-    def update(self, pocket: Pocket) -> Pocket:
+    def update(self, portfolio: Portfolio) -> Portfolio:
         self.db.commit()
-        self.db.refresh(pocket)
-        return pocket
+        self.db.refresh(portfolio)
+        return portfolio
 
-    def delete(self, pocket: Pocket) -> None:
-        self.db.delete(pocket)
+    def delete(self, portfolio: Portfolio) -> None:
+        self.db.delete(portfolio)
         self.db.commit()
 
     def save(self) -> None:
@@ -46,18 +46,22 @@ class PositionRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_pocket(self, pocket_id: int) -> list[Position]:
+    def list_by_portfolio(self, portfolio_id: int) -> list[Position]:
         return (
             self.db.query(Position)
-            .filter(Position.pocket_id == pocket_id)
+            .filter(Position.portfolio_id == portfolio_id)
             .order_by(Position.updated_at.desc())
             .all()
         )
 
-    def get_by_pocket_and_asset(self, pocket_id: int, asset_id: int) -> Position | None:
+    def get_by_portfolio_and_asset(
+        self, portfolio_id: int, asset_id: int
+    ) -> Position | None:
         return (
             self.db.query(Position)
-            .filter(Position.pocket_id == pocket_id, Position.asset_id == asset_id)
+            .filter(
+                Position.portfolio_id == portfolio_id, Position.asset_id == asset_id
+            )
             .first()
         )
 
@@ -82,11 +86,15 @@ class OperationRepository:
         self.db = db
 
     def list_by_owner(
-        self, owner_id: int, pocket_name: str | None = None
+        self, owner_id: int, portfolio_name: str | None = None
     ) -> list[Operation]:
-        q = self.db.query(Operation).join(Pocket).filter(Pocket.owner_id == owner_id)
-        if pocket_name:
-            q = q.filter(Pocket.name == pocket_name)
+        q = (
+            self.db.query(Operation)
+            .join(Portfolio)
+            .filter(Portfolio.owner_id == owner_id)
+        )
+        if portfolio_name:
+            q = q.filter(Portfolio.name == portfolio_name)
         return q.order_by(
             Operation.operation_date.desc(), Operation.created_at.desc()
         ).all()

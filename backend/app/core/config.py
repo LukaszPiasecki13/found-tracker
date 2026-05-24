@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Database - required, must be set in .env
     database_url: str
+    # Database schema name (default: public)
+    database_schema: str = "public"
 
     # JWT
     secret_key: str
