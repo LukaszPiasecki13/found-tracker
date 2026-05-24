@@ -1,4 +1,4 @@
-"""Test fixtures for auth module tests."""
+"""Test fixtures for core_data module tests."""
 
 import os
 

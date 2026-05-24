@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 # Register all models so Alembic can detect their tables
 import app.infrastructure.sql.models_registry  # noqa: F401
@@ -29,10 +29,14 @@ config.set_main_option("sqlalchemy.url", get_settings().database_url)
 # Autogenerate compares this metadata against the live schema
 target_metadata = Base.metadata
 
+# Use the configured schema for Alembic's version table and include schema-aware
+# autogeneration so migrations respect the application's schema setting.
+_VERSION_TABLE_SCHEMA = get_settings().database_schema
+
 # Tables managed by this FastAPI application.
 # Alembic autogenerate will ONLY track these - Django tables are ignored.
 _MANAGED_TABLES = {
-    "authentication_userprofile",
+    "users",
     "assets_currency",
     "assets_assetclass",
     "assets_asset",
@@ -83,6 +87,8 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_schemas=True,
+        version_table_schema=_VERSION_TABLE_SCHEMA,
         include_name=include_name,
         include_object=include_object,
     )
@@ -105,10 +111,27 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Ensure the target schema exists for databases that support schemas (Postgres).
+        try:
+            dialect_name = connection.dialect.name
+        except Exception:
+            dialect_name = None
+
+        if dialect_name == "postgresql":
+            try:
+                connection.execute(
+                    text(f'CREATE SCHEMA IF NOT EXISTS "{_VERSION_TABLE_SCHEMA}"')
+                )
+            except Exception:
+                # Best-effort: if creation fails, continue and let migrations report errors.
+                pass
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            include_schemas=True,
+            version_table_schema=_VERSION_TABLE_SCHEMA,
             include_name=include_name,
             include_object=include_object,
         )

@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable, Generator
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,9 @@ class SQLConnectionFactory:
     def __init__(self) -> None:
         self._engines: dict[str, Engine] = {}
 
-    def get_or_create_engine(self, database_url: str) -> Engine:
+    def get_or_create_engine(
+        self, database_url: str, target_schema: str | None = None
+    ) -> Engine:
         """Return cached engine for the given URL, or create and cache a new one."""
         if database_url in self._engines:
             logger.debug("Returning cached engine for: %s", _mask_url(database_url))
@@ -43,6 +45,21 @@ class SQLConnectionFactory:
             pool_pre_ping=True,
             connect_args=connect_args,
         )
+
+        if engine.dialect.name == "postgresql" and target_schema:
+
+            def _on_connect(dbapi_connection, connection_record):
+                try:
+                    # psycopg2 / pg8000: execute SQL to set search_path
+                    cursor = dbapi_connection.cursor()
+                    cursor.execute(f'SET search_path TO "{target_schema}"')
+                    cursor.close()
+                except Exception:
+                    # best-effort: don't fail engine creation
+                    pass
+
+            event.listen(engine, "connect", _on_connect)
+
         self._engines[database_url] = engine
         return engine
 

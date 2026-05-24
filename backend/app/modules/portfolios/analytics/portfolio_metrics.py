@@ -1,12 +1,13 @@
 from datetime import datetime
 from itertools import groupby
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
 
-class PocketMetrics:
+class PortfolioMetrics:
     def __init__(
         self, operations: list, interval: str, start_time: datetime, end_time: datetime
     ):
@@ -25,7 +26,7 @@ class PocketMetrics:
         total_seconds = (end_time - start_time).total_seconds()
         self.time_diff = int(total_seconds // self.interval_seconds) + 1
 
-        self._saved_data = {
+        self._saved_data: dict[str, np.ndarray | None] = {
             "sum_value_vector": None,
             "transaction_cost_vector": None,
             "net_deposits_vector": None,
@@ -66,6 +67,10 @@ class PocketMetrics:
         for v in assets.values():
             total += v
         return total
+
+    @staticmethod
+    def _as_float(value: Any) -> float:
+        return float(value)
 
     def get_asset_classes_vectors(self) -> dict:
         asset_classes = {}
@@ -173,7 +178,7 @@ class PocketMetrics:
         self._saved_data["free_cash_vector"] = fcv
         return fcv
 
-    def get_pocket_value_vector(self) -> np.ndarray:
+    def get_portfolio_value_vector(self) -> np.ndarray:
         fcv = self._saved_data.get("free_cash_vector")
         svv = self._saved_data.get("sum_value_vector")
         if fcv is not None and svv is not None:
@@ -213,7 +218,7 @@ class PocketMetrics:
         ticker_df = yf.Ticker(ticker).history(
             start=self.start_time, end=self.end_time, interval=self.interval
         )[["Close"]]
-        ticker_df.index = ticker_df.index.tz_localize(None).date
+        ticker_df.index = pd.DatetimeIndex(ticker_df.index).tz_localize(None).date
 
         full_range = pd.date_range(start=start_str, end=end_str)
         ticker_df = ticker_df.reindex(full_range)
@@ -224,4 +229,4 @@ class PocketMetrics:
             )
 
         ticker_df["Close"] = ticker_df["Close"].ffill().bfill()
-        return ticker_df["Close"].values
+        return np.asarray(ticker_df["Close"].to_numpy())

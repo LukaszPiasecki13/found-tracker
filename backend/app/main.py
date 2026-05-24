@@ -4,8 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.modules.assets.api import router as assets_router
-from app.modules.auth.api import router as auth_router
+from app.modules.core_data.api import router as core_data_router
 from app.modules.portfolios.api import router as portfolios_router
+from app.modules.security.api import router as auth_router
 
 
 @asynccontextmanager
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(core_data_router)
 app.include_router(assets_router)
 app.include_router(portfolios_router)
 
