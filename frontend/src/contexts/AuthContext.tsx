@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => clearInterval(refreshInterval);
   }, [user]);
 
-  const login = async (credentials: { username: string; password: string }) => {
+  const login = async (credentials: { email: string; password: string }) => {
     try {
       const { access, refresh } = await authService.login(credentials);
       localStorage.setItem('access', access);

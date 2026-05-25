@@ -88,6 +88,7 @@ class OperationRead(BaseModel):
     id: int
     portfolio_id: int
     asset_id: int | None = None
+    asset: AssetDetailRead | None = None
     operation_type: str
     quantity: float
     price: float
@@ -97,5 +98,7 @@ class OperationRead(BaseModel):
     notes: str | None = None
     operation_date: datetime
     created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
 
     model_config = {"from_attributes": True}

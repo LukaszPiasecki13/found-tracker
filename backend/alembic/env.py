@@ -1,5 +1,7 @@
 import os
 import sys
+from contextlib import suppress
+from functools import lru_cache
 
 # Make the backend/app package importable when running alembic from backend/
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -9,9 +11,9 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool, text
 
 # Register all models so Alembic can detect their tables
-import app.infrastructure.sql.models_registry  # noqa: F401
 from alembic import context
 from app.core.config import get_settings
+from app.infrastructure.sql import models_registry  # noqa: F401
 from app.infrastructure.sql.base import Base
 
 # this is the Alembic Config object, which provides
@@ -24,42 +26,45 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Inject the database URL from .env so alembic.ini does not need it
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Autogenerate compares this metadata against the live schema
 target_metadata = Base.metadata
 
 # Use the configured schema for Alembic's version table and include schema-aware
 # autogeneration so migrations respect the application's schema setting.
-_VERSION_TABLE_SCHEMA = get_settings().database_schema
+_VERSION_TABLE_SCHEMA = settings.database_schema
 
-# Tables managed by this FastAPI application.
-# Alembic autogenerate will ONLY track these - Django tables are ignored.
-_MANAGED_TABLES = {
-    "users",
-    "assets_currency",
-    "assets_assetclass",
-    "assets_asset",
-    "portfolios_pocket",
-    "portfolios_position",
-    "portfolios_operation",
-}
+
+@lru_cache(maxsize=1)
+def get_managed_tables() -> set[str]:
+    """Resolve managed table names from imported SQLAlchemy model metadata."""
+    managed_tables: set[str] = set()
+    for table in Base.metadata.tables.values():
+        if table.schema in (None, _VERSION_TABLE_SCHEMA):
+            managed_tables.add(table.name)
+    return managed_tables
 
 
 def include_name(name, type_, parent_names):
     """Filter so autogenerate only considers our application's tables."""
     if type_ == "table":
-        return name in _MANAGED_TABLES
+        schema_name = parent_names.get("schema_name")
+        managed_tables = get_managed_tables()
+        return schema_name == _VERSION_TABLE_SCHEMA and name in managed_tables
     return True
 
 
-def include_object(obj, name, type_, reflected, compare_to):
-    """
-    Skip FK constraints and indexes from autogenerate comparison.
-    Django manages these with its own naming; only column-level changes
-    and new tables are tracked by Alembic.
-    """
-    return type_ not in ("foreign_key_constraint", "index", "unique_constraint")
+def configure_context(**kwargs) -> None:
+    """Apply the shared Alembic configuration for offline and online runs."""
+    context.configure(
+        target_metadata=target_metadata,
+        include_schemas=True,
+        version_table_schema=_VERSION_TABLE_SCHEMA,
+        include_name=include_name,
+        **kwargs,
+    )
 
 
 # other values from the config, defined by the needs of env.py,
@@ -81,17 +86,7 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-        compare_type=True,
-        include_schemas=True,
-        version_table_schema=_VERSION_TABLE_SCHEMA,
-        include_name=include_name,
-        include_object=include_object,
-    )
+    configure_context(url=url, literal_binds=True, dialect_opts={"paramstyle": "named"})
 
     with context.begin_transaction():
         context.run_migrations()
@@ -118,26 +113,19 @@ def run_migrations_online() -> None:
             dialect_name = None
 
         if dialect_name == "postgresql":
-            try:
+            with suppress(Exception):
                 connection.execute(
                     text(f'CREATE SCHEMA IF NOT EXISTS "{_VERSION_TABLE_SCHEMA}"')
                 )
-            except Exception:
-                # Best-effort: if creation fails, continue and let migrations report errors.
-                pass
+                # Best-effort: on failure, continue and let migrations report errors.
 
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-            include_schemas=True,
-            version_table_schema=_VERSION_TABLE_SCHEMA,
-            include_name=include_name,
-            include_object=include_object,
-        )
+        configure_context(connection=connection)
 
         with context.begin_transaction():
             context.run_migrations()
+
+        if connection.in_transaction():
+            connection.commit()
 
 
 if context.is_offline_mode():

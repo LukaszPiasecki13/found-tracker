@@ -33,7 +33,7 @@ const AddPocketDialog: React.FC<AddPocketDialogProps> = ({ open, onClose }) => {
     try {
       await createPocketMutation.mutateAsync({
         name,
-        base_currency: baseCurrency as number,
+        base_currency_id: baseCurrency as number,
       });
       handleClose();
     } catch (error) {

@@ -167,30 +167,6 @@ def create_portfolio(
     return repo.create(portfolio)
 
 
-@router.get("/{portfolio_id}", response_model=PortfolioDetailRead)
-def get_portfolio(
-    portfolio_id: int,
-    repo: PortfolioRepository = Depends(get_portfolio_repo),
-    user: User = Depends(get_current_user),
-):
-    portfolio = repo.get_by_id(portfolio_id)
-    if portfolio is None or _portfolio_owner_id(portfolio) != user.id:
-        raise HTTPException(status_code=404, detail="Portfolio not found")
-    return _serialize_portfolio(portfolio, detail=True)
-
-
-@router.delete("/{portfolio_id}", status_code=204)
-def delete_portfolio(
-    portfolio_id: int,
-    repo: PortfolioRepository = Depends(get_portfolio_repo),
-    user: User = Depends(get_current_user),
-):
-    portfolio = repo.get_by_id(portfolio_id)
-    if portfolio is None or _portfolio_owner_id(portfolio) != user.id:
-        raise HTTPException(status_code=404, detail="Portfolio not found")
-    repo.delete(portfolio)
-
-
 @router.get("/positions", response_model=list[dict])
 def list_positions(
     portfolio_name: str = Query(...),
@@ -227,6 +203,30 @@ def list_positions(
         )
         result.append(item)
     return result
+
+
+@router.get("/{portfolio_id}", response_model=PortfolioDetailRead)
+def get_portfolio(
+    portfolio_id: int,
+    repo: PortfolioRepository = Depends(get_portfolio_repo),
+    user: User = Depends(get_current_user),
+):
+    portfolio = repo.get_by_id(portfolio_id)
+    if portfolio is None or _portfolio_owner_id(portfolio) != user.id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    return _serialize_portfolio(portfolio, detail=True)
+
+
+@router.delete("/{portfolio_id}", status_code=204)
+def delete_portfolio(
+    portfolio_id: int,
+    repo: PortfolioRepository = Depends(get_portfolio_repo),
+    user: User = Depends(get_current_user),
+):
+    portfolio = repo.get_by_id(portfolio_id)
+    if portfolio is None or _portfolio_owner_id(portfolio) != user.id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    repo.delete(portfolio)
 
 
 @router.get("/operations", response_model=list[OperationRead])

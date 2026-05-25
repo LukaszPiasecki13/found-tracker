@@ -11,9 +11,9 @@ interface PocketVectorsParams {
 
 export const analyticsService = {
   async getPocketVectors(params: PocketVectorsParams): Promise<PocketVectorsResponse> {
-    const response = await api.get<PocketVectorsResponse>('/portfolios/pocket-vectors/', {
+    const response = await api.get<PocketVectorsResponse>('/portfolios/portfolio-vectors', {
       params: {
-        pocketName: params.pocketName,
+        portfolioName: params.pocketName,
         startDate: params.startDate,
         endDate: params.endDate,
         interval: params.interval,

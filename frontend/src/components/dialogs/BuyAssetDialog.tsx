@@ -56,7 +56,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
   useEffect(() => {
     if (selectedAsset && pocket) {
       const assetCurrency = selectedAsset.currency.code;
-      const pocketCurrency = pocket.base_currency_detail.code;
+      const pocketCurrency = pocket.base_currency.code;
       
       if (assetCurrency !== pocketCurrency) {
         // Get exchange rate from asset currency
@@ -96,8 +96,8 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
       }
 
       await createOperationMutation.mutateAsync({
-        pocket: pocketId,
-        asset: assetId,
+        portfolio_id: pocketId,
+        asset_id: assetId,
         operation_type: 'buy',
         quantity: parseFloat(quantity),
         price: parseFloat(price),
@@ -130,7 +130,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
   };
 
   const needsCurrencyConversion = selectedAsset && pocket && 
-    selectedAsset.currency.code !== pocket.base_currency_detail.code;
+    selectedAsset.currency.code !== pocket.base_currency.code;
 
   const totalAmount = quantity && price 
     ? parseFloat(quantity) * parseFloat(price) * parseFloat(fxRate) + parseFloat(fee || '0') 
@@ -241,7 +241,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                     color="primary"
                   />
                   <Chip 
-                    label={`Portfel: ${pocket.base_currency_detail.code}`} 
+                    label={`Portfel: ${pocket.base_currency.code}`} 
                     size="small" 
                     color="secondary"
                   />
@@ -250,10 +250,10 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                 {needsCurrencyConversion && (
                   <>
                     <Alert severity="info" sx={{ mb: 2 }}>
-                      Wymagana konwersja walut: {selectedAsset.currency.code} → {pocket.base_currency_detail.code}
+                      Wymagana konwersja walut: {selectedAsset.currency.code} → {pocket.base_currency.code}
                     </Alert>
                     <TextField
-                      label={`Kurs wymiany (1 ${selectedAsset.currency.code} = ? ${pocket.base_currency_detail.code})`}
+                      label={`Kurs wymiany (1 ${selectedAsset.currency.code} = ? ${pocket.base_currency.code})`}
                       type="number"
                       value={fxRate}
                       onChange={(e) => setFxRate(e.target.value)}
@@ -324,7 +324,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                         Po konwersji:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {(parseFloat(quantity || '0') * parseFloat(price || '0') * parseFloat(fxRate)).toFixed(2)} {pocket.base_currency_detail.code}
+                        {(parseFloat(quantity || '0') * parseFloat(price || '0') * parseFloat(fxRate)).toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between" mb={1}>
@@ -332,7 +332,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                         + Prowizja:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency_detail.code}
+                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                   </>
@@ -345,7 +345,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                         Wartość aktywów:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {(parseFloat(quantity || '0') * parseFloat(price || '0')).toFixed(2)} {pocket.base_currency_detail.code}
+                        {(parseFloat(quantity || '0') * parseFloat(price || '0')).toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between" mb={1}>
@@ -353,7 +353,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                         + Prowizja:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency_detail.code}
+                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                   </>
@@ -365,7 +365,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                       Łączny koszt:
                     </Typography>
                     <Typography variant="h6" fontWeight="bold" color="success.dark">
-                      {totalAmount.toFixed(2)} {pocket.base_currency_detail.code}
+                      {totalAmount.toFixed(2)} {pocket.base_currency.code}
                     </Typography>
                   </Box>
                 </Box>

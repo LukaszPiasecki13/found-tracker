@@ -43,7 +43,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
   useEffect(() => {
     if (selectedPosition && pocket) {
       const assetCurrency = selectedPosition.asset.currency.code;
-      const pocketCurrency = pocket.base_currency_detail.code;
+      const pocketCurrency = pocket.base_currency.code;
       
       if (assetCurrency !== pocketCurrency) {
         const rate = selectedPosition.asset.currency.exchange_rate || 1;
@@ -67,8 +67,8 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
 
     try {
       await createOperationMutation.mutateAsync({
-        pocket: pocketId,
-        asset: selectedPosition.asset.id,
+        portfolio_id: pocketId,
+        asset_id: selectedPosition.asset.id,
         operation_type: 'sell',
         quantity: quantityNum,
         price: parseFloat(price),
@@ -96,7 +96,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
   };
 
   const needsCurrencyConversion = selectedPosition && pocket && 
-    selectedPosition.asset.currency.code !== pocket.base_currency_detail.code;
+    selectedPosition.asset.currency.code !== pocket.base_currency.code;
 
   const totalAmount = quantity && price 
     ? parseFloat(quantity) * parseFloat(price) * parseFloat(fxRate) - parseFloat(fee || '0') 
@@ -190,7 +190,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                     color="primary"
                   />
                   <Chip 
-                    label={`Portfel: ${pocket.base_currency_detail.code}`} 
+                    label={`Portfel: ${pocket.base_currency.code}`} 
                     size="small" 
                     color="secondary"
                   />
@@ -199,10 +199,10 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                 {needsCurrencyConversion && (
                   <>
                     <Alert severity="info" sx={{ mb: 2 }}>
-                      Wymagana konwersja walut: {selectedPosition.asset.currency.code} → {pocket.base_currency_detail.code}
+                      Wymagana konwersja walut: {selectedPosition.asset.currency.code} → {pocket.base_currency.code}
                     </Alert>
                     <TextField
-                      label={`Kurs wymiany (1 ${selectedPosition.asset.currency.code} = ? ${pocket.base_currency_detail.code})`}
+                      label={`Kurs wymiany (1 ${selectedPosition.asset.currency.code} = ? ${pocket.base_currency.code})`}
                       type="number"
                       value={fxRate}
                       onChange={(e) => setFxRate(e.target.value)}
@@ -273,7 +273,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                         Po konwersji:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {(parseFloat(quantity || '0') * parseFloat(price || '0') * parseFloat(fxRate)).toFixed(2)} {pocket.base_currency_detail.code}
+                        {(parseFloat(quantity || '0') * parseFloat(price || '0') * parseFloat(fxRate)).toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between" mb={1}>
@@ -281,7 +281,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                         - Prowizja:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency_detail.code}
+                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                   </>
@@ -294,7 +294,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                         Wartość sprzedaży:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {(parseFloat(quantity || '0') * parseFloat(price || '0')).toFixed(2)} {pocket.base_currency_detail.code}
+                        {(parseFloat(quantity || '0') * parseFloat(price || '0')).toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                     <Box display="flex" justifyContent="space-between" mb={1}>
@@ -302,7 +302,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                         - Prowizja:
                       </Typography>
                       <Typography variant="body2" fontWeight="bold">
-                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency_detail.code}
+                        {parseFloat(fee || '0').toFixed(2)} {pocket.base_currency.code}
                       </Typography>
                     </Box>
                   </>
@@ -314,7 +314,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                       Kwota do otrzymania:
                     </Typography>
                     <Typography variant="h6" fontWeight="bold" color="warning.dark">
-                      {totalAmount.toFixed(2)} {pocket.base_currency_detail.code}
+                      {totalAmount.toFixed(2)} {pocket.base_currency.code}
                     </Typography>
                   </Box>
                 </Box>

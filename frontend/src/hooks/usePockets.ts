@@ -44,24 +44,6 @@ export const useCreatePocket = () => {
   });
 };
 
-export const useUpdatePocket = () => {
-  const queryClient = useQueryClient();
-  const { enqueueSnackbar } = useSnackbar();
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<CreatePocketRequest> }) =>
-      pocketService.updatePocket(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pockets'] });
-      enqueueSnackbar('Portfel zaktualizowany pomyślnie', { variant: 'success' });
-    },
-    onError: (error) => {
-      const message = getErrorMessage(error);
-      enqueueSnackbar(message, { variant: 'error' });
-    },
-  });
-};
-
 export const useDeletePocket = () => {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
