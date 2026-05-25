@@ -36,7 +36,7 @@ const CashOperationDialog: React.FC<CashOperationDialogProps> = ({ open, onClose
 
     try {
       await createOperationMutation.mutateAsync({
-        pocket: pocketId,
+        portfolio_id: pocketId,
         operation_type: operationType,
         amount: parseFloat(amount),
         fee: 0,

@@ -10,7 +10,6 @@ import {
   Button,
   Link,
   CircularProgress,
-  MenuItem,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -18,7 +17,6 @@ const RegisterPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [mainCurrency, setMainCurrency] = useState('PLN');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const { register } = useAuth();
@@ -56,7 +54,7 @@ const RegisterPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await register({ email, password, main_currency: mainCurrency });
+      await register({ email, password });
     } catch (error) {
       // Error is already handled in AuthContext with snackbar
     } finally {
@@ -122,19 +120,6 @@ const RegisterPage: React.FC = () => {
                 error={!!errors.confirmPassword}
                 helperText={errors.confirmPassword}
               />
-              <TextField
-                fullWidth
-                select
-                label="Główna waluta"
-                value={mainCurrency}
-                onChange={(e) => setMainCurrency(e.target.value)}
-                margin="normal"
-                disabled={isLoading}
-              >
-                <MenuItem value="PLN">PLN - Polski złoty</MenuItem>
-                <MenuItem value="USD">USD - Dolar amerykański</MenuItem>
-                <MenuItem value="EUR">EUR - Euro</MenuItem>
-              </TextField>
 
               <Button
                 type="submit"

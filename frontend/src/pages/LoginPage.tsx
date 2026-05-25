@@ -14,11 +14,11 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 
 const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
-  const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +26,7 @@ const LoginPage: React.FC = () => {
 
       setFieldErrors({});
     try {
-        await login({ username, password });
+        await login({ email, password });
     } catch (error) {
       // Error is already handled in AuthContext with snackbar
     } finally {
@@ -56,17 +56,17 @@ const LoginPage: React.FC = () => {
             <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
                 <TextField
                   fullWidth
-                  label="Nazwa użytkownika"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   margin="normal"
-                  autoComplete="username"
+                  autoComplete="email"
                   required
                   autoFocus
                   disabled={isLoading}
-                  error={!!fieldErrors.username}
-                  helperText={fieldErrors.username}
+                  error={!!fieldErrors.email}
+                  helperText={fieldErrors.email}
                 />
               <TextField
                 fullWidth

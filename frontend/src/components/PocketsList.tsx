@@ -36,10 +36,10 @@ const PocketsList: React.FC = () => {
     navigate(`/pockets/${encodeURIComponent(name)}`);
   };
 
-  const formatCurrency = (value: number, currencyCode: string) => {
+  const formatCurrency = (value: number, currencyCode?: string) => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
-      currency: currencyCode,
+      currency: currencyCode || 'PLN',
     }).format(value);
   };
 
@@ -106,7 +106,7 @@ const PocketsList: React.FC = () => {
                         {pocket.name}
                       </Typography>
                       <Chip
-                        label={pocket.base_currency_detail.code}
+                        label={pocket.base_currency?.code || '—'}
                         size="small"
                         sx={{ mt: 0.5 }}
                       />
@@ -125,14 +125,14 @@ const PocketsList: React.FC = () => {
                       Saldo gotówkowe
                     </Typography>
                     <Typography variant="h6" gutterBottom>
-                      {formatCurrency(Number(pocket.cash_balance) || 0, pocket.base_currency_detail.code)}
+                      {formatCurrency(Number(pocket.cash_balance) || 0, pocket.base_currency?.code)}
                     </Typography>
 
                     <Typography variant="body2" color="text.secondary">
                       Całkowite wpłaty
                     </Typography>
                     <Typography variant="body1">
-                      {formatCurrency(Number(pocket.total_deposited) || 0, pocket.base_currency_detail.code)}
+                      {formatCurrency(Number(pocket.total_deposited) || 0, pocket.base_currency?.code)}
                     </Typography>
 
                     {pocket.total_profit_loss !== undefined && (
@@ -149,7 +149,7 @@ const PocketsList: React.FC = () => {
                             variant="body1"
                             color={(Number(pocket.total_profit_loss) || 0) >= 0 ? 'success.main' : 'error.main'}
                           >
-                            {formatCurrency(Number(pocket.total_profit_loss) || 0, pocket.base_currency_detail.code)}
+                            {formatCurrency(Number(pocket.total_profit_loss) || 0, pocket.base_currency?.code)}
                             {pocket.total_return_pct !== undefined && (
                               <> ({Number(pocket.total_return_pct).toFixed(2)}%)</>
                             )}
