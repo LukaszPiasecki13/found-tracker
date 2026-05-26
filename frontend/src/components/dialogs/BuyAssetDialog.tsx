@@ -9,16 +9,15 @@ import {
   Box,
   CircularProgress,
   Autocomplete,
-  MenuItem,
   Chip,
   Typography,
   Alert,
 } from '@mui/material';
 import dayjs from 'dayjs';
-import { useCreateOperation, useAssetClasses, useSearchAssets } from '../../hooks/useOperations';
+import { useCreateOperation, useSearchAssets } from '../../hooks/useOperations';
 import { usePocket } from '../../hooks/usePockets';
 import { operationService } from '../../services/operationService';
-import type { Asset, AssetClass } from '../../types/api';
+import type { Asset } from '../../types/api';
 
 interface BuyAssetDialogProps {
   open: boolean;
@@ -48,7 +47,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
   }, [assetSearch]);
 
   const { data: pocket } = usePocket(pocketId);
-  const { data: assetClasses } = useAssetClasses();
+  
   const { data: searchResults, isLoading: searchLoading } = useSearchAssets(debouncedSearch);
   const createOperationMutation = useCreateOperation();
 
@@ -78,7 +77,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
       let assetId = selectedAsset.id;
 
       // If asset is from Yahoo (id = -1), create it first
-      if (selectedAsset.id === -1 || (selectedAsset as any)._fromYahoo) {
+      if (selectedAsset.id === -1 || (selectedAsset as Record<string, unknown>)['_fromYahoo'] === true) {
         setIsCreatingAsset(true);
         try {
           const newAsset = await operationService.createAssetFromYahoo(
@@ -108,7 +107,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
         notes,
       });
       handleClose();
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
   };
@@ -126,7 +125,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
   };
 
   const isFromYahoo = (asset: Asset) => {
-    return asset.id === -1 || (asset as any)._fromYahoo;
+    return asset.id === -1 || (asset as Record<string, unknown>)['_fromYahoo'] === true;
   };
 
   const needsCurrencyConversion = selectedAsset && pocket && 

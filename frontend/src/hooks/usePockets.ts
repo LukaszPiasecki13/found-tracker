@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { pocketService } from '../services/pocketService';
-import type { Pocket, CreatePocketRequest, Currency } from '../types/api';
+import type { CreatePocketRequest } from '../types/api';
 import { getErrorMessage } from '../lib/api';
 
 export const usePockets = () => {

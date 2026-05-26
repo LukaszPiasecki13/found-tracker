@@ -100,7 +100,7 @@ const PocketDetailsPage: React.FC = () => {
 
       {/* Summary Cards */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={3}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="caption" color="text.secondary">
               Saldo gotówkowe
@@ -110,7 +110,7 @@ const PocketDetailsPage: React.FC = () => {
             </Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="caption" color="text.secondary">
               Wartość pozycji
@@ -120,7 +120,7 @@ const PocketDetailsPage: React.FC = () => {
             </Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="caption" color="text.secondary">
               Całkowita wartość
@@ -130,7 +130,7 @@ const PocketDetailsPage: React.FC = () => {
             </Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={3}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="caption" color="text.secondary">
               Zysk/Strata

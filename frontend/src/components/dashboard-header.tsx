@@ -5,7 +5,6 @@ import {
   AppBar,
   Toolbar,
   Typography,
-  Button,
   IconButton,
   Box,
   Menu,
@@ -15,9 +14,7 @@ import {
 } from "@mui/material"
 import MenuIcon from "@mui/icons-material/Menu"
 import {
-  Notifications as NotificationsIcon,
   AccountCircle as AccountCircleIcon,
-  Add as AddIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
 } from "@mui/icons-material"
@@ -31,7 +28,6 @@ interface DashboardHeaderProps {
 export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const [openDialog, setOpenDialog] = useState(false)
   const location = useLocation() 
   const { logout, user } = useAuth();
 
@@ -88,18 +84,7 @@ export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
               {user?.email}
             </Typography>
             
-            <Button 
-              variant="outlined" 
-              startIcon={<AddIcon />} 
-              onClick={() => setOpenDialog(true)}
-              sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-            >
-              Dodaj transakcję
-            </Button>
-
-            <IconButton color="inherit" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
-              <NotificationsIcon />
-            </IconButton>
+            {/* Add-transaction button and notifications removed per request */}
 
             <IconButton color="inherit" onClick={handleMenu}>
               <AccountCircleIcon />
@@ -119,7 +104,7 @@ export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
         </Toolbar>
       </AppBar>
 
-      {/* <AddTransactionDialog open={openDialog} onClose={() => setOpenDialog(false)} /> */}
+      {/* AddTransactionDialog removed */}
     </>
   )
 }

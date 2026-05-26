@@ -57,7 +57,7 @@ const OperationsTable: React.FC<OperationsTableProps> = ({ operations, isLoading
   };
 
   const getOperationTypeColor = (type: string) => {
-    const colors: Record<string, any> = {
+    const colors: Record<string, 'success' | 'warning' | 'info' | 'error' | 'primary' | 'default'> = {
       buy: 'success',
       sell: 'warning',
       deposit: 'info',

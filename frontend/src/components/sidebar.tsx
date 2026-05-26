@@ -14,11 +14,14 @@ import {
   useMediaQuery,
   Typography,
 } from '@mui/material';
+import { Collapse, CircularProgress } from '@mui/material';
+import { ExpandLess, ExpandMore } from '@mui/icons-material';
+import { useState } from 'react';
+import { usePockets } from '../hooks/usePockets';
 import {
   Dashboard as DashboardIcon,
   AccountBalance as PocketIcon,
   SwapHoriz as OperationsIcon,
-  ShowChart as AnalyticsIcon,
   CompareArrows as CompareIcon,
 } from '@mui/icons-material';
 
@@ -39,6 +42,8 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onDrawerToggle }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const { data: pockets, isLoading: pocketsLoading, error: pocketsError } = usePockets();
 
   const drawerContent = (
     <Box>
@@ -68,13 +73,50 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onDrawerToggle }) => {
       <Divider />
       
       <List>
-        <ListItem>
-          <ListItemText 
-            primary="Moje Portfele" 
-            primaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
-          />
+        <ListItem disablePadding>
+          <ListItemButton onClick={() => setOpen(!open)}>
+            <ListItemIcon>
+              <PocketIcon />
+            </ListItemIcon>
+            <ListItemText
+              primary="Moje Portfele"
+              primaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+            />
+            {open ? <ExpandLess /> : <ExpandMore />}
+          </ListItemButton>
         </ListItem>
-        {/* Pockets will be dynamically loaded here */}
+
+        <Collapse in={open} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {pocketsLoading && (
+              <ListItem>
+                <ListItemText>
+                  <CircularProgress size={18} />
+                </ListItemText>
+              </ListItem>
+            )}
+
+            {pocketsError && (
+              <ListItem>
+                <ListItemText primary="Błąd ładowania" />
+              </ListItem>
+            )}
+
+            {pockets?.map((p) => (
+              <ListItem key={p.id} disablePadding>
+                <ListItemButton
+                  component={RouterLink}
+                  to={`/pockets/${encodeURIComponent(p.name)}`}
+                  onClick={isMobile ? onDrawerToggle : undefined}
+                  sx={{ pl: 4 }}
+                  selected={location.pathname === `/pockets/${encodeURIComponent(p.name)}`}
+                >
+                  <ListItemText primary={p.name} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
       </List>
     </Box>
   );

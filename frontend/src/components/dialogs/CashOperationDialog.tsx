@@ -44,7 +44,7 @@ const CashOperationDialog: React.FC<CashOperationDialogProps> = ({ open, onClose
         notes,
       });
       handleClose();
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
   };

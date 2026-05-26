@@ -79,7 +79,7 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
         notes,
       });
       handleClose();
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
   };

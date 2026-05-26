@@ -80,7 +80,7 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
         cell: (info) => {
           const row = info.row.original;
           const quantity = Number(row.quantity) || 0;
-          const costBasis = Number(row.cost_basis_in_pocket_currency) || 0;
+          const costBasis = Number(row.cost_basis_in_portfolio_currency) || 0;
           const avgPrice = quantity > 0 ? costBasis / quantity : Number(row.average_buy_price) || 0;
           return formatCurrency(avgPrice);
         },
@@ -143,7 +143,7 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
           );
         },
       }),
-      columnHelper.accessor('pocket_weight_pct', {
+      columnHelper.accessor('portfolio_weight_pct', {
         header: 'Udział %',
         cell: (info) => {
           const value = Number(info.getValue()) || 0;
