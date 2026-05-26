@@ -27,7 +27,7 @@ const LoginPage: React.FC = () => {
       setFieldErrors({});
     try {
         await login({ email, password });
-    } catch (error) {
+    } catch {
       // Error is already handled in AuthContext with snackbar
     } finally {
       setIsLoading(false);

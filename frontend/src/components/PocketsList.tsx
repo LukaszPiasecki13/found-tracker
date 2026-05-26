@@ -76,7 +76,7 @@ const PocketsList: React.FC = () => {
 
       <Grid container spacing={2}>
         {pockets && pockets.length === 0 ? (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Card>
               <CardContent>
                 <Typography align="center" color="text.secondary">
@@ -87,7 +87,7 @@ const PocketsList: React.FC = () => {
           </Grid>
         ) : (
           pockets?.map((pocket) => (
-            <Grid item xs={12} sm={6} md={4} key={pocket.id}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={pocket.id}>
               <Card
                 sx={{
                   cursor: 'pointer',

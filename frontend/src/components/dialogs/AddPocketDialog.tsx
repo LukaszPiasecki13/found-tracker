@@ -36,7 +36,7 @@ const AddPocketDialog: React.FC<AddPocketDialogProps> = ({ open, onClose }) => {
         base_currency_id: baseCurrency as number,
       });
       handleClose();
-    } catch (error) {
+    } catch {
       // Error is handled by the mutation
     }
   };

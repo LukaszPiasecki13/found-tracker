@@ -28,33 +28,43 @@ export const operationService = {
       return [];
     }
 
-    const response = await api.get<{ local: Asset[], yahoo: any[] }>('/assets/search-yahoo', {
+    const response = await api.get<{ local: Asset[]; yahoo: unknown[] }>('/assets/search-yahoo', {
       params: { q: query },
     });
 
     const localAssets = response.data.local || [];
     const yahooResults = response.data.yahoo || [];
 
-    const yahooAssets: Asset[] = yahooResults.map((result) => ({
-      id: -1,
-      ticker: result.symbol,
-      name: result.name || result.symbol,
-      asset_class: {
+    const yahooAssets: Asset[] = yahooResults.map((result) => {
+      const r = result as Record<string, unknown>;
+      const symbol = String(r.symbol ?? '');
+      const name = String(r.name ?? symbol);
+      const type = String(r.type ?? 'Stock');
+      const currency = String(r.currency ?? 'USD');
+      const exchange = String(r.exchange ?? '');
+      const sector = String(r.sector ?? '');
+
+      return {
         id: -1,
-        name: result.type || 'Stock',
-      },
-      currency: {
-        id: -1,
-        code: result.currency || 'USD',
-        exchange_rate: 1,
-        base_currency_id: null,
-      },
-      current_price: 0,
-      exchange: result.exchange || '',
-      sector: result.sector || '',
-      updated_at: new Date().toISOString(),
-      _fromYahoo: true,
-    } as any));
+        ticker: symbol,
+        name,
+        asset_class: {
+          id: -1,
+          name: type,
+        },
+        currency: {
+          id: -1,
+          code: currency,
+          exchange_rate: 1,
+          base_currency_id: null,
+        },
+        current_price: 0,
+        exchange,
+        sector,
+        updated_at: new Date().toISOString(),
+        _fromYahoo: true,
+      };
+    });
 
     return [...localAssets, ...yahooAssets];
   },

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
@@ -73,16 +74,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(userData);
       enqueueSnackbar('Zalogowano pomyślnie', { variant: 'success' });
       navigate('/');
-    } catch (error: any) {
-      // Try to extract backend error details for field errors
-      if (error && typeof error === 'object' && error.details) {
-        // pass error up for field error display
+      } catch (error: unknown) {
+        // Try to extract backend error details for field errors
+        const errObj = error as Record<string, unknown>;
+        if (errObj && 'details' in errObj) {
+          // pass error up for field error display
+          throw error;
+        }
+        const message = getErrorMessage(error);
+        enqueueSnackbar(message, { variant: 'error' });
         throw error;
       }
-      const message = getErrorMessage(error);
-      enqueueSnackbar(message, { variant: 'error' });
-      throw error;
-    }
   };
 
   const register = async (userData: RegisterRequest) => {

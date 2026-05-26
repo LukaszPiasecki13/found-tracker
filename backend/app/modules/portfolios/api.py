@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from typing import Any, cast
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.modules.assets.dependencies import (
@@ -205,7 +206,7 @@ def list_positions(
     return result
 
 
-@router.get("/{portfolio_id}", response_model=PortfolioDetailRead)
+@router.get("/{portfolio_id:int}", response_model=PortfolioDetailRead)
 def get_portfolio(
     portfolio_id: int,
     repo: PortfolioRepository = Depends(get_portfolio_repo),
@@ -217,7 +218,7 @@ def get_portfolio(
     return _serialize_portfolio(portfolio, detail=True)
 
 
-@router.delete("/{portfolio_id}", status_code=204)
+@router.delete("/{portfolio_id:int}", status_code=204)
 def delete_portfolio(
     portfolio_id: int,
     repo: PortfolioRepository = Depends(get_portfolio_repo),
@@ -408,6 +409,7 @@ def portfolio_vectors(
         "transaction_cost_vector": metrics.get_transaction_cost_vector,
         "profit_vector": metrics.get_profit_vector,
         "free_cash_vector": metrics.get_free_cash_vector,
+        "pocket_value_vector": metrics.get_portfolio_value_vector,
         "portfolio_value_vector": metrics.get_portfolio_value_vector,
     }
 
@@ -415,7 +417,15 @@ def portfolio_vectors(
     for key in keys:
         if key not in vector_map:
             continue
-        value = vector_map[key]()
+        try:
+            value = vector_map[key]()
+        except Exception:
+            logger.exception(
+                "Failed to compute portfolio vector %s for portfolio %s",
+                key,
+                portfolio_name,
+            )
+            value = np.zeros(metrics.time_diff, dtype=float)
         if isinstance(value, dict):
             result[key] = {name: series.tolist() for name, series in value.items()}
         else:

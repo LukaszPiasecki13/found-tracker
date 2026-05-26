@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from itertools import groupby
 from typing import Any
 
@@ -18,8 +18,8 @@ class PortfolioMetrics:
             raise ValueError("Only daily interval is supported now.")
 
         self.interval = interval
-        self.start_time = start_time
-        self.end_time = end_time
+        self.start_time = self._to_naive_utc(start_time)
+        self.end_time = self._to_naive_utc(end_time)
         self.operations = operations
 
         self.interval_seconds = 24 * 60 * 60
@@ -32,6 +32,12 @@ class PortfolioMetrics:
             "net_deposits_vector": None,
             "free_cash_vector": None,
         }
+
+    @staticmethod
+    def _to_naive_utc(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
 
     def get_date_vector(self) -> np.ndarray:
         return np.array(
@@ -108,7 +114,7 @@ class PortfolioMetrics:
             for op in self.operations
             if op.operation_type in ("deposit", "withdrawal")
         ]
-        fund_ops.sort(key=lambda x: x.operation_date)
+        fund_ops.sort(key=lambda x: self._to_naive_utc(x.operation_date))
         vector = np.zeros(self.time_diff, dtype=float)
         saldo = 0.0
 
@@ -116,7 +122,9 @@ class PortfolioMetrics:
             index = max(
                 0,
                 int(
-                    (op.operation_date - self.start_time).total_seconds()
+                    (
+                        self._to_naive_utc(op.operation_date) - self.start_time
+                    ).total_seconds()
                     / self.interval_seconds
                 ),
             )
@@ -131,7 +139,9 @@ class PortfolioMetrics:
         return vector
 
     def get_transaction_cost_vector(self) -> np.ndarray:
-        ops = sorted(self.operations, key=lambda x: x.operation_date)
+        ops = sorted(
+            self.operations, key=lambda x: self._to_naive_utc(x.operation_date)
+        )
         vector = np.zeros(self.time_diff, dtype=float)
         cost = 0.0
 
@@ -139,7 +149,9 @@ class PortfolioMetrics:
             index = max(
                 0,
                 int(
-                    (op.operation_date - self.start_time).total_seconds()
+                    (
+                        self._to_naive_utc(op.operation_date) - self.start_time
+                    ).total_seconds()
                     / self.interval_seconds
                 ),
             )
@@ -189,14 +201,16 @@ class PortfolioMetrics:
         return fcv + svv
 
     def _quantity_vector(self, operations: list) -> np.ndarray:
-        ops = sorted(operations, key=lambda x: x.operation_date)
+        ops = sorted(operations, key=lambda x: self._to_naive_utc(x.operation_date))
         vector = np.zeros(self.time_diff, dtype=float)
         qty = 0.0
         for op in ops:
             index = max(
                 0,
                 int(
-                    (op.operation_date - self.start_time).total_seconds()
+                    (
+                        self._to_naive_utc(op.operation_date) - self.start_time
+                    ).total_seconds()
                     / self.interval_seconds
                 ),
             )

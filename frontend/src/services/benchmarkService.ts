@@ -27,10 +27,7 @@ export const normalizeToPercent = (values: number[]): number[] => {
  * For now, returns null so the UI can handle the absence gracefully.
  */
 export const benchmarkService = {
-  async getSP500Data(
-    _startDate: string,
-    _endDate: string
-  ): Promise<BenchmarkDataPoint[] | null> {
+  async getSP500Data(): Promise<BenchmarkDataPoint[] | null> {
     // TODO: Integrate with external API for S&P 500 data
     // Options:
     // 1. Backend endpoint that uses yfinance to fetch ^GSPC
