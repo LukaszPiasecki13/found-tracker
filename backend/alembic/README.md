@@ -1,6 +1,6 @@
 ## 1. Introduction
 
-Alembic is used for database schema migrations in the AIData-ESG backend. It provides version control for database schemas, allowing developers to track and apply changes incrementally across different environments.
+Alembic is used for database schema migrations. It provides version control for database schemas, allowing developers to track and apply changes incrementally across different environments.
 
 ## 2. Prerequisites
 
@@ -9,7 +9,7 @@ Alembic is used for database schema migrations in the AIData-ESG backend. It pro
 
 ## 3. Common Commands
 
-Run all commands from `code/cloud_run/fastapi/` directory:
+Run all commands from `backend/` directory:
 
 ```bash
 # Generate a new migration (autogenerate from model changes)
@@ -88,3 +88,13 @@ alembic upgrade head
 4. **Write meaningful messages** - describe what the migration does
 5. **Include downgrade** - ensure migrations can be reverted
 6. **Never edit applied migrations** - create new migrations instead
+
+---
+
+Migracje są niezależne od schematu: `Base.metadata` nie ma wbitego `schema`, a docelowy
+schemat wybiera `env.py` (`alembic -x db_schema=<nazwa> ...` albo `DATABASE_SCHEMA`, domyślnie
+`public`) przez `search_path`. Nigdy nie dodawaj `schema=` do modeli ani ręcznie do migracji.
+
+Obecny baseline jest przeznaczony dla świeżych środowisk. Baza utworzona ze starego baseline
+(z `schema='public'` i indeksami `ix_public_*`) ma te same tabele, ale inne nazwy indeksów —
+`alembic check` pokaże różnicę; zresetuj taki schemat zamiast stampować go na istniejących danych.

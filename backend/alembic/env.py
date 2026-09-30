@@ -1,104 +1,97 @@
 import os
+import re
 import sys
 from contextlib import suppress
 from functools import lru_cache
-
-# Make the backend/app package importable when running alembic from backend/
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool, text
 
-# Register all models so Alembic can detect their tables
 from alembic import context
+
+# Make backend/app importable when running alembic from backend/
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 from app.core.config import get_settings
 from app.infrastructure.sql import models_registry  # noqa: F401
 from app.infrastructure.sql.base import Base
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Inject the database URL from .env so alembic.ini does not need it
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
-# Autogenerate compares this metadata against the live schema
 target_metadata = Base.metadata
 
-# Use the configured schema for Alembic's version table and include schema-aware
-# autogeneration so migrations respect the application's schema setting.
-_VERSION_TABLE_SCHEMA = settings.database_schema
+
+def get_schema_name() -> str | None:
+    """
+    Resolve target schema in this order:
+    1. alembic -x db_schema=dev1 ...
+    2. settings.database_schema
+    3. public (default for postgres)
+    """
+    x_args = context.get_x_argument(as_dictionary=True)
+
+    if x_args.get("db_schema"):
+        return x_args["db_schema"]
+
+    return settings.database_schema or "public"
+
+
+_SCHEMA_NAME = get_schema_name()
+if _SCHEMA_NAME and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", _SCHEMA_NAME):
+    raise RuntimeError("Invalid database schema name")
 
 
 @lru_cache(maxsize=1)
-def get_managed_tables() -> set[str]:
-    """Resolve managed table names from imported SQLAlchemy model metadata."""
-    managed_tables: set[str] = set()
-    for table in Base.metadata.tables.values():
-        if table.schema in (None, _VERSION_TABLE_SCHEMA):
-            managed_tables.add(table.name)
-    return managed_tables
+def get_managed_tables() -> set:
+    """Resolve managed table names from imported SQLAlchemy metadata."""
+    return {table.name for table in Base.metadata.tables.values()}
 
 
 def include_name(name, type_, parent_names):
-    """Filter so autogenerate only considers our application's tables."""
+    """
+    Filter autogenerate so Alembic only considers our application's tables.
+    Works in the currently selected schema via search_path.
+    """
     if type_ == "table":
-        schema_name = parent_names.get("schema_name")
         managed_tables = get_managed_tables()
-        return schema_name == _VERSION_TABLE_SCHEMA and name in managed_tables
+        return name in managed_tables
     return True
 
 
 def configure_context(**kwargs) -> None:
-    """Apply the shared Alembic configuration for offline and online runs."""
+    """Apply shared Alembic configuration."""
     context.configure(
         target_metadata=target_metadata,
-        include_schemas=True,
-        version_table_schema=_VERSION_TABLE_SCHEMA,
+        include_schemas=False,
+        version_table_schema=_SCHEMA_NAME,
         include_name=include_name,
+        compare_type=True,
+        compare_server_default=True,
         **kwargs,
     )
 
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
-
-
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
+    """Run migrations in offline mode."""
     url = config.get_main_option("sqlalchemy.url")
-    configure_context(url=url, literal_binds=True, dialect_opts={"paramstyle": "named"})
+    configure_context(
+        url=url,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
 
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
+    """Run migrations in online mode."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -106,18 +99,20 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # Ensure the target schema exists for databases that support schemas (Postgres).
-        try:
-            dialect_name = connection.dialect.name
-        except Exception:
-            dialect_name = None
+        dialect_name = connection.dialect.name
 
-        if dialect_name == "postgresql":
+        if dialect_name == "postgresql" and _SCHEMA_NAME:
+            schema_sql = connection.dialect.identifier_preparer.quote(_SCHEMA_NAME)
             with suppress(Exception):
-                connection.execute(
-                    text(f'CREATE SCHEMA IF NOT EXISTS "{_VERSION_TABLE_SCHEMA}"')
-                )
-                # Best-effort: on failure, continue and let migrations report errors.
+                connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_sql}"))
+
+            # Isolate reflection and DDL to the selected schema. Adding public
+            # here makes an empty test schema appear populated through
+            # PostgreSQL search_path fallback and corrupts autogenerate output.
+            connection.execute(text(f"SET search_path TO {schema_sql}"))
+
+            # Ważne dla refleksji/autogenerate
+            connection.dialect.default_schema_name = _SCHEMA_NAME
 
         configure_context(connection=connection)
 

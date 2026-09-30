@@ -258,3 +258,37 @@ class TestMaskUrl:
         url = "postgresql://localhost/mydb"
         result = _mask_url(url)
         assert result == url
+
+
+class TestSchemaIsolation:
+    @patch("app.infrastructure.sql.factory.event")
+    @patch("app.infrastructure.sql.factory.create_engine")
+    def test_postgres_schema_is_applied_per_transaction(
+        self, mock_create_engine, mock_event
+    ):
+        """`SET LOCAL` on every `begin`, with the schema name quoted."""
+        engine = MagicMock()
+        engine.dialect.name = "postgresql"
+        engine.dialect.identifier_preparer.quote.return_value = '"my schema"'
+        mock_create_engine.return_value = engine
+
+        SQLConnectionFactory().get_or_create_engine(POSTGRES_URL, "my schema")
+
+        name, listener = mock_event.listen.call_args[0][1:3]
+        assert name == "begin"
+        connection = MagicMock()
+        listener(connection)
+        connection.exec_driver_sql.assert_called_once_with(
+            'SET LOCAL search_path TO "my schema"'
+        )
+
+    @patch("app.infrastructure.sql.factory.event")
+    @patch("app.infrastructure.sql.factory.create_engine")
+    def test_no_listener_without_schema(self, mock_create_engine, mock_event):
+        engine = MagicMock()
+        engine.dialect.name = "postgresql"
+        mock_create_engine.return_value = engine
+
+        SQLConnectionFactory().get_or_create_engine(POSTGRES_URL)
+
+        mock_event.listen.assert_not_called()
