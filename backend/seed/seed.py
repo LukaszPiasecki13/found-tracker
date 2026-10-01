@@ -322,6 +322,14 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
+    # The seed creates a demo account with a known password and replaces that
+    # account's portfolios, so it must never touch a production-like database.
+    if get_settings().is_production:
+        logger.error(
+            "Refusing to seed demo data when ENVIRONMENT is staging/production"
+        )
+        return 1
+
     session = build_session()
     try:
         with session.begin():

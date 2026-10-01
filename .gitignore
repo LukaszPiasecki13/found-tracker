@@ -32,3 +32,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.code-workspace
+
+# Secrets (never commit; use .env.example as the template)
+.env
+.env.*
+!.env.example
+*.pem
+*.key

@@ -13,7 +13,7 @@ Plan (L3) — **nie opisuje stanu systemu**; stan opisują dokumenty [L2](../tec
 ## Zasady wykonania
 
 - Jeden krok = jedno zadanie = osobny przegląd. Bez commitów bez zgody ([CLAUDE.md](../../CLAUDE.md)).
-- Przed krokiem: przeczytaj odpowiedni dokument modułu i fragment `backend-old/` ([ADR-0009](../technical/adr/0009-backend-old-jako-referencja.md)).
+- Przed krokiem: przeczytaj odpowiedni dokument modułu i fragment `backend-old/` (ADR-0009, usunięty).
 - Po kroku: `ruff check .`, `ruff format --check .`, `pytest` (wymaga `DATABASE_URL`), aktualizacja sekcji „Stan vs cel” dokumentu modułu i `last_reviewed`.
 - Moduł, którego dotykasz, doprowadzasz do pełnej struktury docelowej (nie mieszaj stylów).
 - Instalacja zależności i uruchomienie `install.py` — tylko za zgodą.
@@ -46,7 +46,7 @@ Plan (L3) — **nie opisuje stanu systemu**; stan opisują dokumenty [L2](../tec
 | **R-10** | `mypy`: instalacja w `.venv` (za zgodą), poprawka `mypy_path` w `pyproject.toml` (dziś wskazuje katalog obcego projektu), override dla `api/` i testów; naprawa błędów | `mypy app` przechodzi |
 | **R-11** | Reguły `architecture-decisions` i `knowledge-base` w `.claude/rules/ai-tools/` (`install.py --only ...`, za zgodą); `.claude/rules/ai-tools/` zsynchronizowane z ai-tools | reguły obecne; wpis w `CLAUDE.md` zgodny |
 | **R-12** | `.github/workflows` (backend: ruff, mypy, pytest z Postgres; frontend: lint, build), `.pre-commit-config.yaml` | CI zielone na `main` |
-| **R-13** | `docs/knowledge_base/` (potwierdzone ustalenia), hook `kb-validate`; usunięcie `backend-old/` po zgodzie właściciela ([ADR-0009](../technical/adr/0009-backend-old-jako-referencja.md)) | walidator `--strict` zielony; `backend-old/` usunięty |
+| **R-13** | `docs/knowledge_base/` (potwierdzone ustalenia), hook `kb-validate`; usunięcie `backend-old/` po zgodzie właściciela (ADR-0009, usunięty) | walidator `--strict` zielony; `backend-old/` usunięty |
 
 ## Kolejność i równoległość
 

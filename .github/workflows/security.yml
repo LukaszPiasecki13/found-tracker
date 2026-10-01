@@ -1,0 +1,40 @@
+name: Security Scanning
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Scans the whole history, so a committed .env is caught here.
+      - name: Gitleaks secret scanning
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: pip-audit backend dependencies
+        run: pip install pip-audit && pip-audit -r backend/requirements.txt
+        continue-on-error: true
+
+      - name: npm audit frontend
+        run: npm audit --audit-level=high
+        working-directory: frontend
+        continue-on-error: true
