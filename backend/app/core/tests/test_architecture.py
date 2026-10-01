@@ -30,11 +30,7 @@ _MODULE_REPOSITORIES_RE = re.compile(r"^app\.modules\.[^.]+\.repositories(\.|$)"
 # Files not yet migrated to the target architecture (refactor plan R-04...R-07).
 # Each entry is a debt, not a licence: the list only shrinks. A stale entry (the
 # file no longer violates) fails `test_legacy_allowlist_has_no_stale_entries`.
-_LEGACY_R1_FASTAPI_IMPORTS = frozenset(
-    {
-        "modules/security/services/auth.py",  # HTTPException -> R-06
-    }
-)
+_LEGACY_R1_FASTAPI_IMPORTS: frozenset[str] = frozenset()
 
 
 def _relative(path: Path) -> str:

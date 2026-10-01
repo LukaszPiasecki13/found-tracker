@@ -4,7 +4,10 @@ from app.core.errors import ConflictError
 from app.modules.core_data.models.user import User
 from app.modules.core_data.repositories.users import UserRepository
 from app.modules.core_data.schemas.users import UserCreateRequest
-from app.modules.security.services.password import hash_password
+from app.modules.security.services.password import (
+    hash_password,
+    validate_password_length,
+)
 
 
 class UserService:
@@ -20,6 +23,7 @@ class UserService:
     def register(self, data: UserCreateRequest) -> User:
         """Create an account; the e-mail must be unique."""
         email = self._normalize_email(data.email)
+        validate_password_length(data.password)
         with self._repo.transaction():
             if self._repo.find_by_email(email):
                 raise ConflictError(

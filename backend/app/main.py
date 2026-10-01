@@ -13,7 +13,7 @@ from app.core.logging import configure_logging
 from app.modules.assets.api.assets import router as assets_router
 from app.modules.core_data.api import users_router as core_data_router
 from app.modules.portfolios.api import router as portfolios_router
-from app.modules.security.api import router as auth_router
+from app.modules.security.api import auth_router
 
 settings = get_settings()
 configure_logging(level=settings.log_level, json_output=settings.log_json)
