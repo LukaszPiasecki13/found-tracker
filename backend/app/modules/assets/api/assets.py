@@ -19,7 +19,7 @@ from app.modules.assets.schemas.assets import (
     AssetUpdateRequest,
 )
 from app.modules.assets.services.assets import AssetService
-from app.modules.security.dependencies import get_current_user
+from app.modules.security.dependencies import get_current_admin, get_current_user
 
 router = APIRouter(
     prefix="/assets",
@@ -69,8 +69,16 @@ def get_asset(
     return service.get_by_id(asset_id)
 
 
-@router.put("/{asset_id:int}", response_model=AssetResponse)
-@router.patch("/{asset_id:int}", response_model=AssetResponse)
+@router.put(
+    "/{asset_id:int}",
+    dependencies=[Depends(get_current_admin)],
+    response_model=AssetResponse,
+)
+@router.patch(
+    "/{asset_id:int}",
+    dependencies=[Depends(get_current_admin)],
+    response_model=AssetResponse,
+)
 def update_asset(
     asset_id: int,
     data: AssetUpdateRequest,
@@ -79,7 +87,9 @@ def update_asset(
     return service.update(asset_id, data)
 
 
-@router.delete("/{asset_id:int}", status_code=204)
+@router.delete(
+    "/{asset_id:int}", dependencies=[Depends(get_current_admin)], status_code=204
+)
 def delete_asset(
     asset_id: int,
     service: AssetService = Depends(get_asset_service),

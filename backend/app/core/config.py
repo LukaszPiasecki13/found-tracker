@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # HTTP
     cors_origins: list[str] = Field(default_factory=list)
 
+    # Accounts (e-mails, comma-separated or a JSON list) allowed to change the
+    # data every user shares: assets, asset classes and currencies.
+    admin_emails: list[str] = Field(default_factory=list)
+
     # Rate limiter: trust `X-Forwarded-For` from a reverse proxy. `None` means
     # "not set explicitly": on in production, off elsewhere; an explicit value wins.
     trust_proxy_headers: bool | None = None
@@ -56,12 +60,12 @@ class Settings(BaseSettings):
             return self.trust_proxy_headers
         return self.is_production
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "admin_emails", mode="before")
     @classmethod
-    def split_cors_origins(cls, value: object) -> object:
-        """Accept CORS_ORIGINS as a comma-separated string or a JSON list."""
+    def split_list_setting(cls, value: object) -> object:
+        """Accept a comma-separated string or a JSON list (CORS_ORIGINS, ...)."""
         if isinstance(value, str) and not value.strip().startswith("["):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
+            return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
     @field_validator("log_level")

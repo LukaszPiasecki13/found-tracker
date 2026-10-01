@@ -292,6 +292,19 @@ def test_positions_require_a_portfolio_name(services: Services) -> None:
     assert client.get("/portfolios/positions").status_code == 422
     client.get("/portfolios/positions", params={"portfolio_name": "Main"})
     services.positions.list_valued.assert_called_once_with(7, "Main")
+    services.positions.refresh_valued.assert_not_called()
+
+
+def test_refreshing_positions_is_a_post(services: Services) -> None:
+    client = build_client(services)
+    services.positions.refresh_valued.return_value = []
+
+    response = client.post(
+        "/portfolios/positions/refresh", params={"portfolio_name": "Main"}
+    )
+
+    assert response.status_code == 200
+    services.positions.refresh_valued.assert_called_once_with(7, "Main")
 
 
 # --- Operations ---
