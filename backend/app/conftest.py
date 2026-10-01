@@ -1,18 +1,19 @@
+import secrets
+import string
 from collections.abc import Generator
 from dataclasses import dataclass, field
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 import app.infrastructure.sql.models_registry
 from app.core.config import get_settings
 from app.core.dependencies import get_db
 from app.main import app
-from app.modules.assets.models.assets import Asset, AssetClass
-from app.modules.assets.models.currencies import Currency
+from app.modules.assets.models import Asset, AssetClass, Currency
 from app.modules.core_data.models import User
 from app.modules.portfolios.models import Portfolio
 
@@ -23,6 +24,31 @@ class IntegrationData:
 
     def value(self, suffix: str) -> str:
         return f"{self.prefix}_{suffix}"
+
+
+@dataclass
+class CurrencyCodes:
+    """Unused 3-letter currency codes for integration tests.
+
+    A code cannot carry the `it_` prefix, so `integration_data` cannot find test
+    currencies; this fixture remembers every code it issued and deletes those
+    currencies (and assets still pointing at them) itself.
+    """
+
+    session: Session
+    issued: list[str] = field(default_factory=list)
+
+    def new(self) -> str:
+        while True:
+            code = "".join(secrets.choice(string.ascii_uppercase) for _ in range(3))
+            if code in self.issued:
+                continue
+            taken = self.session.execute(
+                select(Currency.id).where(Currency.code == code)
+            ).first()
+            if taken is None:
+                self.issued.append(code)
+                return code
 
 
 @pytest.fixture
@@ -71,6 +97,32 @@ def integration_data(
         integration_session.delete(asset_class)
     for user in users:
         integration_session.delete(user)
+    integration_session.commit()
+
+
+@pytest.fixture
+def currency_codes(integration_session: Session) -> Generator[CurrencyCodes]:
+    codes = CurrencyCodes(integration_session)
+    yield codes
+
+    integration_session.rollback()
+    currencies = list(
+        integration_session.execute(
+            select(Currency).where(Currency.code.in_(codes.issued))
+        ).scalars()
+    )
+    if not currencies:
+        return
+    currency_ids = [currency.id for currency in currencies]
+    for asset in integration_session.execute(
+        select(Asset).where(Asset.currency_id.in_(currency_ids))
+    ).scalars():
+        integration_session.delete(asset)
+    for currency in currencies:
+        currency.base_currency_id = None
+    integration_session.flush()
+    for currency in currencies:
+        integration_session.delete(currency)
     integration_session.commit()
 
 

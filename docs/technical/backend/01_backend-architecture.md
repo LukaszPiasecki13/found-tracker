@@ -1,7 +1,7 @@
 ---
 id: be-architecture
 status: current
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-01
 type: mixed
 scope: backend/architecture
 applies_to:
@@ -31,7 +31,7 @@ Wzorzec architektoniczny jest przejęty z projektu **waterworks-monitoring-platf
 
 **Architektura warstwowa (Layered Architecture) zorganizowana jako modularny monolit (Modular Monolith).** Kod dzieli się na poziome warstwy **API → Services → Repositories → Infrastructure**. Każda warstwa zależy wyłącznie od warstwy bezpośrednio poniżej. `core/` i błędy są przekrojowe.
 
-Moduł, którego logika da się wyrazić bez ORM, sesji i zegara, dostaje opcjonalną piątą warstwę **`domain/`** pod Services ([ADR-0005](../adr/0005-warstwa-domeny.md)). W FundTrackerze kandydatem jest `portfolios` (reguły salda i pozycji).
+Moduł, którego logika da się wyrazić bez ORM, sesji i zegara, dostaje opcjonalną piątą warstwę **`domain/`** pod Services ([ADR-0005](../adr/0005-warstwa-domeny.md)). W FundTrackerze ma ją `portfolios` (reguły salda i pozycji, wycena).
 
 Moduł ma dwa wejścia do serwisów: **API** (żądanie HTTP) i **Entrypoints** (start aplikacji, CLI, zadanie w tle). Oba dostają serwisy złożone przez **Wiring** — jedno miejsce składania obiektów. Wiring nie jest warstwą wywołań: działa raz, przed pracą ([ADR-0002](../adr/0002-sesja-poza-zadaniem-entrypointy-i-wiring.md), [`06_wiring_i_entrypointy.md`](./06_wiring_i_entrypointy.md)).
 
@@ -81,7 +81,7 @@ flowchart TB
 | **Repositories** | Infrastructure, Core, Errors |
 | **Infrastructure** | Core, Errors |
 | **`dependencies.py`** (adapter HTTP) | Wiring (własny moduł), zależności HTTP innych modułów (`get_current_user`), Core |
-| **Wiring** (`wiring.py`) | Services i Repositories własnego modułu, Wiring innych modułów, Core — nigdy `fastapi` ani `dependencies.py` |
+| **Wiring** (`wiring.py`) | Services, Repositories i komponenty `domain/` własnego modułu, Wiring innych modułów, adaptery z `infrastructure/` (wybór implementacji portu, np. `assets/wiring.py` → `YahooFinanceProvider`), Core — nigdy `fastapi` ani `dependencies.py` |
 | **Entrypoints** (`entrypoints.py`) | Wiring (własny moduł), `core.dependencies.session_scope`, Core, Errors — nigdy Repositories, `fastapi` ani `dependencies.py` |
 | **Drivery** (`main.py`, `cli.py`, `BackgroundTasks` w `api/`) | Entrypoints dowolnego modułu, Core |
 
@@ -124,13 +124,15 @@ backend/
 │  ├─ core/
 │  │  ├─ config.py
 │  │  ├─ dependencies.py         ← get_db, session_scope, provide
-│  │  └─ errors.py               ← APIError + handlery (ADR-0007)
+│  │  ├─ errors.py               ← APIError + handlery (ADR-0007)
+│  │  └─ market_data.py, schemas.py ← port danych rynkowych; DecimalNumber
 │  ├─ infrastructure/
 │  │  ├─ sql/
 │  │  │  ├─ base.py
 │  │  │  ├─ factory.py
 │  │  │  ├─ repository.py        ← SQLRepository.transaction()
 │  │  │  └─ models_registry.py
+│  │  ├─ market_data/yahoo.py    ← adapter portu (jedyny import yfinance)
 │  │  └─ tests/
 │  └─ modules/
 │     ├─ core_data/              ← użytkownicy
@@ -138,7 +140,7 @@ backend/
 │     ├─ assets/                 ← waluty, klasy, walory, dane rynkowe
 │     └─ portfolios/             ← portfele, pozycje, operacje, metryki
 │        ├─ api/  services/  domain/  repositories/  schemas/  models/
-│        ├─ dependencies.py  wiring.py  entrypoints.py(opc.)  exceptions.py(opc.)
+│        ├─ dependencies.py  wiring.py  entrypoints.py(opc.)  exceptions.py
 │        └─ tests/{unit,integration}/
 ├─ alembic/
 ├─ seed/                         ← skrypty seedujące (poza zakresem testu architektury)
@@ -157,18 +159,23 @@ Elementy współdzielone przez wszystkie moduły. **Bez logiki biznesowej.**
 
 | Plik | Odpowiedzialność |
 |---|---|
-| `config.py` | Ustawienia z zmiennych środowiskowych (`pydantic-settings`): baza, JWT, schemat DB |
+| `config.py` | Ustawienia z zmiennych środowiskowych (`pydantic-settings`): aplikacja, baza, JWT, CORS; `extra="ignore"`; w `staging`/`production` walidacja (`secret_key` ≥ 32 znaki, jawne `cors_origins` bez `*`) |
 | `dependencies.py` | Silnik i `sessionmaker`; `get_db` (sesja żądania), `session_scope` + typ `SessionScope` (poza żądaniem), `provide` (builder z `wiring.py` jako zależność FastAPI). Nie importuje żadnego modułu |
 | `errors.py` | Hierarchia wyjątków `APIError` z `code` i globalne handlery (§7) |
+| `logging.py` | `configure_logging` — jeden handler na stdout (tekst lub JSON), czas UTC; wołane raz w `main.py` |
+| `health.py` | `GET /health` — 200 tylko gdy baza odpowiada, inaczej 503 |
+| `market_data.py` | Port danych rynkowych: `Quote`, `MarketDataProvider` (`Protocol`), `MarketDataUnavailableError` (502) — kontrakt bez logiki ([`04_assets_module.md` §4](./04_assets_module.md#4-dane-rynkowe--port-i-adapter)) |
+| `schemas.py` | Wspólne typy pól Pydantic: `DecimalNumber` (`Decimal` w Pythonie, liczba w JSON) |
 
 ### 4.2. `infrastructure/sql/`
 
 | Plik | Odpowiedzialność |
 |---|---|
 | `base.py` | `DeclarativeBase`; wszystkie modele ORM z niej dziedziczą |
-| `factory.py` | `SQLConnectionFactory`: cache silników, `sessionmaker` (`expire_on_commit=False`), zależność sesji żądania, `create_session_scope` |
-| `repository.py` | `SQLRepository`: baza repozytoriów, `transaction()`, `flush()`, `rollback()` |
+| `factory.py` | `SQLConnectionFactory`: cache silników, `sessionmaker` (`expire_on_commit=False`), zależność sesji żądania, `create_session_scope`; schemat Postgresa ustawiany `SET LOCAL search_path` na każdą transakcję (pooler Supabase gubi ustawienia sesyjne) |
+| `repository.py` | `SQLRepository`: baza repozytoriów, `transaction()`, `savepoint()`, `flush()`, `commit()`, `rollback()`, `refresh()` |
 | `models_registry.py` | Import wszystkich modeli dla Alembic `autogenerate` — **każdy nowy model musi być tu zarejestrowany** |
+| `../market_data/yahoo.py` | `YahooFinanceProvider` — adapter portu `core/market_data.py`, jedyny import `yfinance`; wybiera go `assets/wiring.py` |
 
 **`SQLRepository.transaction()`** zastępuje powtarzany blok `try: ... commit() except: rollback(); raise` i jest jedyną granicą commitu ([ADR-0001](../adr/0001-jedna-sesja-na-request.md)):
 
@@ -366,7 +373,7 @@ Poza żądaniem HTTP nie ma globalnego handlera — wyjątek trafia do entrypoin
 - Testy mieszkają w `<moduł>/tests/unit/` i `<moduł>/tests/integration/`; testy przekrojowe w `core/tests/` (`pyproject.toml` ma `testpaths = ["app"]`).
 - Testy integracyjne wymagają prawdziwego `DATABASE_URL` (PostgreSQL); **brak fallbacku na sqlite**.
 - Serwis w teście składamy tym samym builderem co produkcja; entrypoint dostaje sesję testu przez parametr `scope` ([`06_wiring_i_entrypointy.md` §7](./06_wiring_i_entrypointy.md#7-testy-entrypointów-i-wiringu)).
-- **Test architektury** (`core/tests/test_architecture.py`, AST, ścieżki od `Path(__file__)`) egzekwuje: serwisy/repozytoria nie otwierają sesji i nie importują `fastapi`; `wiring.py`/`entrypoints.py`/serwisy nie importują `dependencies.py`; entrypoint nie importuje repozytoriów; API nie importuje repozytoriów; brak `HTTPException` poza `dependencies.py`.
+- **Test architektury** (`core/tests/test_architecture.py`, AST, ścieżki od `Path(__file__)`, każda grupa reguł z testem detektorów) egzekwuje: serwisy/repozytoria nie otwierają sesji i nie importują `fastapi`; `wiring.py`/`entrypoints.py`/serwisy nie importują `dependencies.py`; entrypoint nie importuje repozytoriów; drivery wołają tylko entrypointy; sesję otwierają tylko `core/`, `infrastructure/` i `entrypoints.py`; `api/` nie importuje repozytoriów ani modeli ORM (wyjątek: `core_data.models` — `User` do typowania `get_current_user`); brak `HTTPException` poza `dependencies.py`; brak importów Django/`backend-old/`; `yfinance` tylko w `infrastructure/`. Czystość `domain/` (DOM-1/2/3/9/11) sprawdza test modułu (`portfolios/tests/unit/test_domain_purity.py`).
 
 ---
 
@@ -378,17 +385,15 @@ Tylko `alembic revision --autogenerate -m "..."`; pliku migracji nie edytuje si�
 
 ## 10. Stan kodu vs cel
 
-Opis powyżej to **cel**. Stan faktyczny kodu na 2026-09-30 i krok planu, który domyka lukę ([plan refaktoryzacji](../../plans/01_refaktoryzacja_do_wzorca_waterworks.md)):
+Opis powyżej to **cel**. Stan faktyczny kodu na 2026-10-01 i krok planu, który domyka lukę ([plan refaktoryzacji](../../plans/01_refaktoryzacja_do_wzorca_waterworks.md)):
 
 | Element wzorca | Stan w kodzie | Krok planu |
 |---|---|---|
-| `core/errors.py`, `APIError` z `code` | Brak. Serwisy i API rzucają `HTTPException` i gołe `ValueError` | R-01 |
-| `SQLRepository.transaction()` | Brak. Repozytoria commitują same lub mają `commit: bool` | R-02 |
-| `session_scope`, `provide` | Brak. Jest tylko `get_db` | R-03 |
-| `wiring.py` + `dependencies.py` jako adapter | Brak `wiring.py`. `dependencies.py` składa graf łańcuchami `Depends` | R-04…R-07 (per moduł) |
-| Struktura podfolderów | `assets` — prawie (brak `wiring.py`, serwisy w jednym pliku); `portfolios`, `core_data`, `security` — płaskie pliki | R-04…R-07 |
-| `portfolios/domain/` | Brak. Reguły salda w `PortfolioService`/`TransactionService` na `dict`; metryki w `portfolios/analytics/` (numpy/pandas/yfinance) | R-08 |
-| Test architektury | Brak | R-09 |
+| `core/errors.py`, `APIError` z `code` | Wszystkie moduły (`core_data`, `security`, `assets`, `portfolios`): błędy z `code`, brak `HTTPException` poza `dependencies.py`, wyjątki domeny `portfolios` tłumaczone na `BadRequestError` z `code` | — (R-01 domknięty) |
+| `SQLRepository.transaction()` | Wszystkie repozytoria dziedziczą po `SQLRepository`, tylko `add`/`flush`; granica commitu w serwisach | — (R-02 domknięty) |
+| `session_scope`, `provide` | Są (`core/dependencies.py`, `factory.create_session_scope`); `provide` używane przez wszystkie `dependencies.py`. `session_scope` czeka na pierwszy `entrypoints.py` (dziś żaden moduł go nie ma) | — (R-03 domknięty) |
+| `wiring.py` + `dependencies.py` jako adapter | Wszystkie moduły; `dependencies.py` to tylko `get_x = provide(build_x)` (+ `get_current_user` w `security`) | — (R-04…R-07 domknięte) |
+| Struktura podfolderów | Wszystkie moduły zgodne z §5.1; testy w `tests/unit/` i `tests/integration/` | — (R-04…R-07 domknięte) |
+| `portfolios/domain/` | Jest: `PortfolioLedger`, `PortfolioValuator`, enumy, błędy z `code`, `Protocol`y ([`05_portfolios_module.md` §4](./05_portfolios_module.md#4-warstwa-domain)); metryki (`numpy`) w `services/metrics.py` z portem cen — wariant (a) [ADR-0005](../adr/0005-warstwa-domeny.md), ADR wciąż `Proposed` | — (R-08 domknięty; akceptacja ADR — właściciel) |
+| Test architektury | `core/tests/test_architecture.py`: R1, R4, R5, R8, zakaz otwierania sesji poza `core/`/`infrastructure/`/`entrypoints.py`, API bez repozytoriów i modeli (poza `User`), brak `HTTPException` poza `dependencies.py`, brak importów Django/`backend-old/`, `yfinance` tylko w `infrastructure/`; czystość `domain/` w teście modułu `portfolios`. Lista legacy pusta. **Brak:** ogólnego testu czystości `domain/` dla przyszłych modułów | R-09 (część) |
 | `mypy` | Skonfigurowany, niezainstalowany; `mypy_path` wskazuje obcy projekt | R-10 |
-| Logika w routerach | `portfolios/api.py` (493 linie) zawiera walidację i orkiestrację operacji | R-08 |
-| Testy w `unit/` i `integration/` | `infrastructure` — tak; `assets` ma tylko `integration/`; pozostałe moduły płasko | R-04…R-07 |

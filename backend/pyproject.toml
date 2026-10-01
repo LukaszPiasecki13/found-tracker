@@ -10,7 +10,7 @@ exclude = [
     ".pytest_cache",
     ".mypy_cache",
     ".git",
-    "/alembic",
+    "alembic",
 
 ]
 
@@ -82,3 +82,8 @@ module = [
     "*.conftest"
 ]
 ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["app"]
+python_files = ["test_*.py"]
+addopts = "--strict-markers"

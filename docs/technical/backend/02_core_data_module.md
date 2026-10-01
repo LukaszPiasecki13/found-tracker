@@ -33,10 +33,12 @@ Prefiks `/auth` jest historyczny (kompatybilność z frontendem); logowanie leż
 
 ## 3. Reguły biznesowe
 
-- E-mail unikalny (konflikt → `ConflictError`, `code=EMAIL_ALREADY_REGISTERED`).
-- Hasło hashuje `security` (`hash_password`). `core_data` **zależy od `security` tylko przez serwis haszujący**, a `security` zależy od `core_data` przez odczyt użytkownika — cykl rozwiązywany przez port albo wydzielenie hashowania do `core/` (decyzja w R-06).
+- E-mail unikalny (konflikt → `ConflictError`, HTTP 409, `code=EMAIL_ALREADY_REGISTERED`); porównanie po normalizacji (`strip().lower()`), sprawdzenie i zapis w jednym `transaction()`.
+- Hasło hashuje `security` (`hash_password`, funkcja z `security/services/password.py`). `core_data` importuje ją bezpośrednio; `security` zależy od `core_data` przez `UserService` — to cykl importów modułów (`core_data.services` → `security.services.password` → …, `security.services.auth` → `core_data.services`), tolerowany dzięki pustemu `security/services/__init__.py`; szczegóły w [`03_security_module.md` §4](./03_security_module.md#4-układ).
+- Serwis wystawia dla innych modułów: `find_by_id`, `find_by_email` (zwracają `None`), `register`. Repozytorium: `find_by_id`, `get_by_id` (`USER_NOT_FOUND`), `find_by_email`, `create` (tylko `add` + `flush`).
+- Schemat żądania `UserCreateRequest` ma `extra="forbid"`; odpowiedź `UserResponse` nie zawiera `password_hash`.
 
-## 4. Układ docelowy
+## 4. Struktura
 
 ```text
 core_data/
@@ -45,18 +47,15 @@ core_data/
 ├─ repositories/users.py
 ├─ schemas/users.py
 ├─ models/user.py
-├─ dependencies.py      # get_user_service, get_current_user
+├─ dependencies.py      # get_user_service = provide(build_user_service)
 ├─ wiring.py            # build_user_service
 └─ tests/{unit,integration}/
 ```
+
+Brak `entrypoints.py` — moduł nie ma jeszcze operacji spoza HTTP (kandydat: utworzenie konta administracyjnego).
 
 ## 5. Stan vs cel
 
 | Element | Stan | Cel | Krok |
 |---|---|---|---|
-| Struktura | płaskie pliki: `api.py`, `service.py`, `repository.py`, `models.py`, `schemas.py` | podfoldery wg §4 | R-05 |
-| Błędy | `HTTPException(400)` w serwisie dla zajętego e-maila | `ConflictError` z `code` | R-01 |
-| Transakcje | `repo.create` robi `commit` + `refresh` | `transaction()` w serwisie, repo tylko `add`/`flush` | R-02 |
-| Wiring | łańcuch `Depends` w `dependencies.py` | `wiring.py` + `provide` | R-05 |
-| `get_current_user` | w `core_data/dependencies.py`, rzuca `HTTPException`, import `security` w ciele funkcji (obejście cyklu) | zależność HTTP w `security/dependencies.py`, rzuca `AuthenticationError` z `code` | R-06 |
-| Testy | `tests/` płasko + `integration/` | `tests/unit/`, `tests/integration/` | R-05 |
+| Struktura, wiring, transakcje, błędy (`ConflictError`), testy `unit/` + `integration/` | zgodne ze wzorcem | — | R-05 (domknięty) |
