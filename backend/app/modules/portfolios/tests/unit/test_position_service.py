@@ -68,7 +68,11 @@ def test_list_valued_refreshes_market_data_then_values_in_the_given_order(
     market_data: MagicMock,
 ) -> None:
     portfolios.get_owned_by_name.return_value = SimpleNamespace(
-        id=1, base_currency_id=1, cash_balance=D("80"), total_deposited=D("100")
+        id=1,
+        base_currency_id=1,
+        base_currency=SimpleNamespace(exchange_rate=D("1")),
+        cash_balance=D("80"),
+        total_deposited=D("100"),
     )
     positions = [_position(2, "12"), _position(1, "8")]
     position_repo.list_by_portfolio.return_value = positions

@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # HTTP
     cors_origins: list[str] = Field(default_factory=list)
 
+    # Rate limiter: trust `X-Forwarded-For` from a reverse proxy. `None` means
+    # "not set explicitly": on in production, off elsewhere; an explicit value wins.
+    trust_proxy_headers: bool | None = None
+
     # A deployment may retain variables used by an older/newer application
     # version. They must not prevent the backend from starting after a rollback.
     model_config = SettingsConfigDict(
@@ -45,6 +49,12 @@ class Settings(BaseSettings):
     @property
     def docs_enabled(self) -> bool:
         return not self.is_production
+
+    @property
+    def effective_trust_proxy_headers(self) -> bool:
+        if self.trust_proxy_headers is not None:
+            return self.trust_proxy_headers
+        return self.is_production
 
     @field_validator("cors_origins", mode="before")
     @classmethod

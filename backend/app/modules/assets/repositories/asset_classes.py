@@ -1,7 +1,6 @@
 """Asset class repository for data access."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.infrastructure.sql.repository import SQLRepository
 from app.modules.assets.exceptions import AssetClassNotFoundError
@@ -10,9 +9,6 @@ from app.modules.assets.models.asset_classes import AssetClass
 
 class AssetClassRepository(SQLRepository):
     """Repository for AssetClass model database operations."""
-
-    def __init__(self, session: Session):
-        super().__init__(session)
 
     def list_all(self) -> list[AssetClass]:
         """All asset classes ordered by name."""

@@ -2,7 +2,6 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -50,5 +49,17 @@ class SQLRepository:
     def rollback(self) -> None:
         self.session.rollback()
 
-    def refresh(self, entity: Any) -> None:
+    def refresh(self, entity: object) -> None:
         self.session.refresh(entity)
+
+    def persist[T](self, entity: T) -> T:
+        """Write the entity's pending changes and reload it, so values the
+        database rounded or generated (`updated_at`, ...) are in the object."""
+        self.flush()
+        self.refresh(entity)
+        return entity
+
+    def save_new[T](self, entity: T) -> T:
+        """Add a new entity to the session, then `persist` it."""
+        self.session.add(entity)
+        return self.persist(entity)

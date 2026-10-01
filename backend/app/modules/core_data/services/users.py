@@ -1,13 +1,13 @@
 """User management service."""
 
 from app.core.errors import ConflictError
-from app.modules.core_data.models.user import User
-from app.modules.core_data.repositories.users import UserRepository
-from app.modules.core_data.schemas.users import UserCreateRequest
-from app.modules.security.services.password import (
+from app.core.passwords import (
     hash_password,
     validate_password_length,
 )
+from app.modules.core_data.models.user import User
+from app.modules.core_data.repositories.users import UserRepository
+from app.modules.core_data.schemas.users import UserCreateRequest
 
 
 class UserService:

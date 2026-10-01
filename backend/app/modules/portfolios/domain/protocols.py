@@ -55,6 +55,8 @@ class PortfolioBalanceLike(Protocol):
 
 
 class CurrencyRateLike(Protocol):
+    """A currency's rate against the one reference currency all rates share."""
+
     @property
     def exchange_rate(self) -> Decimal: ...
 
@@ -90,6 +92,8 @@ class ValuedPortfolioLike(Protocol):
 
     @property
     def base_currency_id(self) -> int: ...
+    @property
+    def base_currency(self) -> CurrencyRateLike: ...
     @property
     def cash_balance(self) -> Decimal: ...
     @property

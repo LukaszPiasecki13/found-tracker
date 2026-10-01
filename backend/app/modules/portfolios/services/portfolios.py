@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.entities import apply_changes
 from app.modules.assets.services.currencies import CurrencyService
 from app.modules.portfolios.domain import (
     PortfolioValuation,
@@ -13,6 +14,7 @@ from app.modules.portfolios.domain import (
 )
 from app.modules.portfolios.exceptions import (
     PortfolioAlreadyExistsError,
+    PortfolioCurrencyLockedError,
     UnknownCurrencyError,
 )
 from app.modules.portfolios.models import Portfolio, Position
@@ -136,7 +138,8 @@ class PortfolioService:
         self, portfolio_id: int, data: PortfolioUpdateRequest, owner_id: int
     ) -> Portfolio:
         """Set the given, non-null fields. Raises PortfolioNotFoundError,
-        PortfolioAlreadyExistsError, UnknownCurrencyError."""
+        PortfolioAlreadyExistsError, UnknownCurrencyError,
+        PortfolioCurrencyLockedError."""
         values = data.model_dump(exclude_unset=True, exclude_none=True)
         try:
             with self._repo.transaction():
@@ -148,9 +151,8 @@ class PortfolioService:
                     if duplicate is not None and duplicate.id != portfolio.id:
                         raise PortfolioAlreadyExistsError
                 if "base_currency_id" in values:
-                    self._require_currency(values["base_currency_id"])
-                for field, value in values.items():
-                    setattr(portfolio, field, value)
+                    self._change_base_currency(portfolio, values["base_currency_id"])
+                apply_changes(portfolio, values)
                 return self._repo.update(portfolio)
         except IntegrityError as err:
             if "name" in values:
@@ -166,6 +168,15 @@ class PortfolioService:
             self._repo.delete(self._repo.get_owned(portfolio_id, owner_id))
 
     # --- Helpers ---
+
+    def _change_base_currency(self, portfolio: Portfolio, currency_id: int) -> None:
+        """The stored amounts are in the base currency and are not converted, so
+        it may only change while the portfolio has no operations."""
+        self._require_currency(currency_id)
+        if currency_id != portfolio.base_currency_id and self._repo.has_operations(
+            portfolio.id
+        ):
+            raise PortfolioCurrencyLockedError
 
     def _require_currency(self, currency_id: int) -> None:
         if self._currencies.find_by_id(currency_id) is None:

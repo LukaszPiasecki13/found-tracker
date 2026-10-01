@@ -2,6 +2,7 @@
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.entities import apply_changes
 from app.modules.assets.exceptions import (
     CurrencyAlreadyExistsError,
     CurrencyInUseError,
@@ -65,8 +66,7 @@ class CurrencyService:
                         raise CurrencyAlreadyExistsError
                 if values.get("base_currency_id") is not None:
                     self._require_base_currency(values["base_currency_id"])
-                for field, value in values.items():
-                    setattr(currency, field, value)
+                apply_changes(currency, values)
                 return self._repo.update(currency)
         except IntegrityError as err:
             if "code" in values:

@@ -9,9 +9,14 @@ D = Decimal
 PLN, USD = 1, 2
 
 
-def _portfolio(cash: str = "0", deposited: str = "0") -> SimpleNamespace:
+def _portfolio(
+    cash: str = "0", deposited: str = "0", *, base_rate: str = "1"
+) -> SimpleNamespace:
     return SimpleNamespace(
-        base_currency_id=PLN, cash_balance=D(cash), total_deposited=D(deposited)
+        base_currency_id=PLN,
+        base_currency=SimpleNamespace(exchange_rate=D(base_rate)),
+        cash_balance=D(cash),
+        total_deposited=D(deposited),
     )
 
 
@@ -113,3 +118,15 @@ def test_values_are_exact_not_rounded() -> None:
 
     assert position.market_value == D("0.333333333")
     assert position.return_pct == (D("0.333333333") - D("0.3")) / D("0.3") * 100
+
+
+def test_foreign_position_is_converted_through_the_cross_rate() -> None:
+    # Rates are against a common reference: 1 USD = 4 ref, 1 PLN = 0.5 ref, so
+    # 1 USD = 8 PLN. The portfolio's own rate is not assumed to be 1.
+    holding = _holding("10", "20", "25", currency_id=USD, exchange_rate="4")
+
+    position = (
+        PortfolioValuator().value(_portfolio(base_rate="0.5"), [holding]).positions[0]
+    )
+
+    assert position.market_value == D("2000")

@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import Select, select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.infrastructure.sql.repository import SQLRepository
 from app.modules.assets.models import Asset
@@ -25,9 +25,6 @@ def _with_asset() -> Select[tuple[Operation]]:
 
 class OperationRepository(SQLRepository):
     """Repository for Operation model database operations."""
-
-    def __init__(self, session: Session):
-        super().__init__(session)
 
     def list_by_owner(
         self, owner_id: int, portfolio_name: str | None = None
@@ -103,17 +100,12 @@ class OperationRepository(SQLRepository):
             notes=notes,
             operation_date=operation_date,
         )
-        self.session.add(operation)
-        self.flush()
-        self.refresh(operation)
-        return operation
+        return self.save_new(operation)
 
     def update(self, operation: Operation) -> Operation:
         """Write pending changes; refreshed so stored (rounded) values are
         loaded."""
-        self.flush()
-        self.refresh(operation)
-        return operation
+        return self.persist(operation)
 
     def delete(self, operation: Operation) -> None:
         self.session.delete(operation)

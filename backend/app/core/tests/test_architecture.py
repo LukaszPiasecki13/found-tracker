@@ -587,3 +587,59 @@ def test_commit_and_rollback_stay_in_the_transaction_boundary() -> None:
     assert not violations, "commit/rollback outside infrastructure/:\n" + "\n".join(
         violations
     )
+
+
+# --- No cycles between modules (01_backend-architecture.md §2.4) ---
+
+# `wiring.py` tolerates a cycle (a module import), and the HTTP adapter files
+# (`api/`, `dependencies.py`) are left out: `core_data/api` still imports
+# `security.dependencies.get_current_user` while `security` depends on
+# `core_data` - a known HTTP-level cycle, to be removed by moving the user
+# endpoints (`/auth/register`, `/auth/me`) into `security/api`.
+_CYCLE_CHECKED_LAYERS = frozenset(
+    {"services", "repositories", "models", "schemas", "domain"}
+)
+_MODULE_IMPORT_RE = re.compile(r"^app\.modules\.([^.]+)(\.|$)")
+
+
+def _module_dependency_graph() -> dict[str, set[str]]:
+    graph: dict[str, set[str]] = {}
+    for module_dir in _module_dirs():
+        dependencies = graph.setdefault(module_dir.name, set())
+        for path in _iter_py_files(module_dir):
+            relative = path.relative_to(module_dir)
+            if relative.parts[0] not in _CYCLE_CHECKED_LAYERS:
+                continue
+            for name in _imported_names(_parse(path)):
+                match = _MODULE_IMPORT_RE.match(name)
+                if match and match.group(1) != module_dir.name:
+                    dependencies.add(match.group(1))
+    return graph
+
+
+def _find_cycle(graph: dict[str, set[str]]) -> list[str] | None:
+    def visit(node: str, path: list[str]) -> list[str] | None:
+        if node in path:
+            return [*path[path.index(node) :], node]
+        for neighbour in sorted(graph.get(node, ())):
+            cycle = visit(neighbour, [*path, node])
+            if cycle:
+                return cycle
+        return None
+
+    for start in sorted(graph):
+        cycle = visit(start, [])
+        if cycle:
+            return cycle
+    return None
+
+
+def test_cycle_detector_finds_a_cycle() -> None:
+    assert _find_cycle({"a": {"b"}, "b": {"c"}, "c": {"a"}}) == ["a", "b", "c", "a"]
+    assert _find_cycle({"a": {"b"}, "b": set(), "c": {"b"}}) is None
+
+
+def test_modules_do_not_depend_on_each_other_in_a_cycle() -> None:
+    cycle = _find_cycle(_module_dependency_graph())
+
+    assert cycle is None, "module dependency cycle: " + " -> ".join(cycle or [])

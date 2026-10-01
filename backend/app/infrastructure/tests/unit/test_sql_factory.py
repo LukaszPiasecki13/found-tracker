@@ -249,6 +249,14 @@ class TestMaskUrl:
         assert "admin" in result
         assert "***" in result
 
+    def test_masks_a_password_containing_an_at_sign(self):
+        result = _mask_url("postgresql://admin:p@ss@db.host/mydb")
+        assert "p@ss" not in result
+        assert "db.host" in result
+
+    def test_unparseable_url_is_not_echoed(self):
+        assert "secret" not in _mask_url("not a url with secret")
+
     def test_passes_through_sqlite_url(self):
         url = "sqlite:///local.db"
         result = _mask_url(url)

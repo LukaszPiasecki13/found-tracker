@@ -2,7 +2,8 @@
 
 Safety: integration tests write to the database, so they must never run against a
 shared or production one. The target is `TEST_DATABASE_URL`; without it,
-`DATABASE_URL` is accepted only when it points at a local host. Each integration
+`DATABASE_URL` is accepted only when it points at a local host - otherwise the
+integration tests are skipped. Each integration
 test runs inside a transaction that is rolled back, so nothing is left behind.
 """
 
@@ -25,29 +26,37 @@ load_dotenv()
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "postgres"}
 
 
-def _resolve_test_database_url() -> str:
-    """Pick the test database or abort the run before any app code connects."""
-    url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
-    if not url:
-        pytest.exit("Set TEST_DATABASE_URL to a disposable database.", returncode=2)
-    if not os.environ.get("TEST_DATABASE_URL") and (
-        make_url(url).host not in _LOCAL_HOSTS
-    ):
-        pytest.exit(
-            "Refusing to run tests against a non-local DATABASE_URL. "
-            "Set TEST_DATABASE_URL to a disposable database.",
-            returncode=2,
-        )
-    return url
+# Placeholder for runs without a safe database: `Settings` needs a URL to import,
+# and engines connect lazily, so unit tests never touch it.
+_UNIT_ONLY_DATABASE_URL = "postgresql+psycopg2://unit:unit@localhost:5432/unit_only"
+
+
+def _resolve_test_database_url() -> tuple[str, bool]:
+    """Pick the test database and say whether it is safe for integration tests.
+
+    Without a disposable database (no `TEST_DATABASE_URL`, and `DATABASE_URL`
+    missing or not local) the run is unit-only: a placeholder URL is used and
+    integration tests are skipped, so `pytest -m "not integration"` needs no
+    database at all.
+    """
+    explicit = os.environ.get("TEST_DATABASE_URL")
+    if explicit:
+        return explicit, True
+    url = os.environ.get("DATABASE_URL")
+    if url and make_url(url).host in _LOCAL_HOSTS:
+        return url, True
+    return _UNIT_ONLY_DATABASE_URL, False
 
 
 # Settings read the environment at import time, so this must precede `app.*`.
-os.environ["DATABASE_URL"] = _resolve_test_database_url()
+_DATABASE_URL, _DATABASE_IS_SAFE = _resolve_test_database_url()
+os.environ["DATABASE_URL"] = _DATABASE_URL
 os.environ.setdefault("ENVIRONMENT", "test")
 
 import app.infrastructure.sql.models_registry
 from app.core.config import get_settings
 from app.core.dependencies import get_db
+from app.core.rate_limit import limiter
 from app.main import app
 from app.modules.assets.models import Asset, Currency
 
@@ -163,10 +172,25 @@ def seeded_asset(integration_session: Session) -> Asset:
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Mark tests by directory so `-m "not integration"` skips database tests."""
+    """Mark tests by directory so `-m "not integration"` skips database tests;
+    without a safe database, integration tests are skipped."""
+    no_database = pytest.mark.skip(
+        reason="No disposable database: set TEST_DATABASE_URL (or a local DATABASE_URL)"
+    )
     for item in items:
         parts = item.path.parts
         if "integration" in parts:
             item.add_marker(pytest.mark.integration)
+            if not _DATABASE_IS_SAFE:
+                item.add_marker(no_database)
         elif "unit" in parts:
             item.add_marker(pytest.mark.unit)
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter() -> Generator[None]:
+    """Counters are process-wide: without a reset, tests hitting a limited
+    endpoint would draw down the same budget."""
+    limiter.reset()
+    yield
+    limiter.reset()

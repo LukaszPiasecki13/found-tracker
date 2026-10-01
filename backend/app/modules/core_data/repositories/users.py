@@ -1,7 +1,6 @@
 """User repository for data access."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError
 from app.infrastructure.sql.repository import SQLRepository
@@ -10,9 +9,6 @@ from app.modules.core_data.models.user import User
 
 class UserRepository(SQLRepository):
     """Repository for User model database operations."""
-
-    def __init__(self, session: Session):
-        super().__init__(session)
 
     def find_by_id(self, user_id: int) -> User | None:
         """Find user by ID. Returns None if not found."""

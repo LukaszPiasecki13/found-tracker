@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.modules.portfolios.domain import PortfolioValuator
 from app.modules.portfolios.exceptions import (
     PortfolioAlreadyExistsError,
+    PortfolioCurrencyLockedError,
     PortfolioNotFoundError,
     UnknownCurrencyError,
 )
@@ -213,6 +214,32 @@ def test_update_to_an_unknown_currency_is_400(
         service.update(1, PortfolioUpdateRequest(base_currency_id=99), owner_id=7)
 
     portfolio_repo.update.assert_not_called()
+
+
+def test_base_currency_cannot_change_once_there_are_operations(
+    service: PortfolioService, portfolio_repo: MagicMock, session: MagicMock
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    portfolio_repo.has_operations.return_value = True
+
+    with pytest.raises(PortfolioCurrencyLockedError) as exc_info:
+        service.update(1, PortfolioUpdateRequest(base_currency_id=2), owner_id=7)
+
+    assert exc_info.value.code == "PORTFOLIO_CURRENCY_LOCKED"
+    portfolio_repo.update.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_base_currency_changes_while_the_portfolio_has_no_operations(
+    service: PortfolioService, portfolio_repo: MagicMock
+) -> None:
+    portfolio = _portfolio()
+    portfolio_repo.get_owned.return_value = portfolio
+    portfolio_repo.has_operations.return_value = False
+
+    service.update(1, PortfolioUpdateRequest(base_currency_id=2), owner_id=7)
+
+    assert portfolio.base_currency_id == 2
 
 
 def test_another_owners_portfolio_is_not_found(
