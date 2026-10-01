@@ -3,7 +3,7 @@
 Osobista aplikacja do śledzenia inwestycji finansowych (akcje, fundusze, obligacje) — zakupy,
 sprzedaże, wpłaty/wypłaty, przeliczanie metryk portfela, wykresy w czasie.
 
-**Backend jest w trakcie migracji z Django (`backend-old/`) na FastAPI (`backend/`).**
+**Backend (FastAPI, `backend/`) zastąpił dawną aplikację Django; `backend-old/` usunięto 2026-10-01.**
 Docelowa architektura: Layered Modular Monolith wzorowany na projekcie
 `waterworks-monitoring-platform` (źródło prawdy dla wzorca), opisana w
 [`docs/technical/backend/01_backend-architecture.md`](docs/technical/backend/01_backend-architecture.md).
@@ -25,7 +25,7 @@ Docelowa architektura: Layered Modular Monolith wzorowany na projekcie
 | Test | `pytest` — wymaga prawdziwego `DATABASE_URL` (Postgres, `psycopg2`); brak fallbacku na sqlite |
 | Lint | `ruff check .` (verified) |
 | Format check | `ruff format --check .` (verified) |
-| Typecheck | `mypy app` — konfiguracja (`strict`, py3.14) jest w `pyproject.toml`, ale **`mypy` nie jest jeszcze zainstalowany w `.venv`** — doinstaluj przed użyciem |
+| Typecheck | `mypy app` — konfiguracja (`strict`, py3.14) w `pyproject.toml`; `mypy==2.3.0` w `requirements.txt` |
 | Migration status | `alembic current` |
 | Migration apply | `alembic upgrade head` |
 | Migration create | `alembic revision --autogenerate -m "..."` |
@@ -54,9 +54,6 @@ Docelowa architektura: Layered Modular Monolith wzorowany na projekcie
 - `backend/app/core/` — konfiguracja (`pydantic-settings`, `.env`), zależności współdzielone,
   `errors.py`, `schemas.py` (`DecimalNumber`), porty współdzielone.
 - `backend/alembic/` — migracje.
-- `backend-old/` — **stara aplikacja Django**, referencja logiki biznesowej na czas migracji.
-  Nie importuj z niej i nie dodawaj tam nowych funkcji — zostanie usunięta po zakończeniu
-  przepisywania.
 - `frontend/src/` — React (Vite, MUI, TanStack Query/Table, Recharts) — nieruszany podczas
   migracji backendu, konsumuje REST API.
 
@@ -102,9 +99,10 @@ to `Decimal`, nie `float` ([ADR-0010](docs/technical/adr/0010-decimal-i-precyzja
 **Migracje tylko przez `alembic revision --autogenerate -m "..."`.** Nigdy nie edytuj pliku
 migracji ręcznie — desynchronizuje łańcuch i psuje upgrade.
 
-**`backend-old/` to referencja, nie kod produkcyjny.** Czytaj go, żeby zrozumieć obecne
-zachowanie (np. logikę w `portfolios/services/`, `portfolios/analytics/`), ale całą nową
-logikę pisz w `backend/app/`.
+**Django (`backend-old/`) usunięto** ([ADR-0009](docs/technical/adr/0009-backend-old-jako-referencja.md)).
+Katalog nie był w git, więc nie ma go w historii; zgodność reguł z Django chronią testy
+parytetu w `portfolios/tests/unit/test_ledger_parity.py`. Test architektury zabrania importów
+z Django.
 
 **`python-jose`** — `backend/requirements.txt` wymaga `>=3.4.0` (próg z `security-checklist`,
 CVE-2024-33663/33664/29370); w HEAD było `3.3.0`, poprawka jest w niezacommitowanym drzewie
@@ -132,14 +130,14 @@ Reguły (`python-coding-standards`, `typescript-coding-standards`, `error-handli
 `ai-tools/rules/` nie propagują się automatycznie — po aktualizacji uruchom ręcznie:
 
 ```
-python <ai-tools>/scripts/install.py --target . --only error-handling-patterns,python-coding-standards,security-checklist,typescript-coding-standards
+python <ai-tools>/scripts/install.py --target . --only error-handling-patterns,python-coding-standards,security-checklist,typescript-coding-standards,architecture-decisions,knowledge-base
 ```
 
-Reguły `architecture-decisions` i `knowledge-base` (obecne w waterworks) nie są jeszcze
-zainstalowane — krok R-11 planu; do tego czasu ADR-y i dokumenty piszemy według
-`.claude/skills/knowledge-base/` (szablony, `METADATA.md`). Walidator dokumentów:
-`.venv/Scripts/python.exe .claude/skills/knowledge-base/scripts/kb_validate.py --root . --strict`
-(dodaj `--exclude "backend-old/**"`).
+Reguły `architecture-decisions` i `knowledge-base` są zainstalowane (R-11); szablony ADR i
+dokumentów oraz `METADATA.md` — `.claude/skills/knowledge-base/`. Walidator dokumentów:
+`.venv/Scripts/python.exe .claude/skills/knowledge-base/scripts/kb_validate.py --root . --strict`. Uwaga: reguła `architecture-decisions` wskazuje
+`docs/business/bdr/` dla decyzji biznesowych, a ten projekt trzyma je w `docs/business/adr/`
+(konwencja projektu wygrywa).
 
 Agenty, skille i hooki (m.in. `code-reviewer`, `explorer`, `commit`, `fastapi-endpoint`,
 `react-patterns`) pochodzą z pluginu ai-tools — zainstaluj go raz, globalnie:

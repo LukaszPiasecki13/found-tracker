@@ -77,7 +77,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
       let assetId = selectedAsset.id;
 
       // If asset is from Yahoo (id = -1), create it first
-      if (selectedAsset.id === -1 || (selectedAsset as Record<string, unknown>)['_fromYahoo'] === true) {
+      if (selectedAsset.id === -1 || (selectedAsset as unknown as Record<string, unknown>)['_fromYahoo'] === true) {
         setIsCreatingAsset(true);
         try {
           const newAsset = await operationService.createAssetFromYahoo(
@@ -125,7 +125,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
   };
 
   const isFromYahoo = (asset: Asset) => {
-    return asset.id === -1 || (asset as Record<string, unknown>)['_fromYahoo'] === true;
+    return asset.id === -1 || (asset as unknown as Record<string, unknown>)['_fromYahoo'] === true;
   };
 
   const needsCurrencyConversion = selectedAsset && pocket && 

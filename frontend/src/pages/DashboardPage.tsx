@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { PortfolioOverview } from "../components/portfolio-overview";
 import PocketsList from "../components/PocketsList";
 import { Box, Typography, Divider } from "@mui/material";

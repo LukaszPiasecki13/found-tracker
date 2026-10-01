@@ -57,5 +57,5 @@ app.include_router(portfolios_router)
 
 
 @app.get("/")
-def root():
+def root() -> dict[str, str]:
     return {"status": "ok"}

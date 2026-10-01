@@ -208,9 +208,9 @@ class OperationService:
 
         rows = {row.asset_id: row for row in positions}
         held = {position.asset_id for position in state.positions}
-        for asset_id, row in rows.items():
+        for asset_id, closed in rows.items():
             if asset_id not in held:
-                self._position_repo.delete(row)
+                self._position_repo.delete(closed)
         for position in state.positions:
             row = rows.get(position.asset_id)
             if row is None:

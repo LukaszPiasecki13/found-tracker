@@ -1,0 +1,76 @@
+# Backend quality gates (refactor plan R-12): ruff, mypy, pytest on real PostgreSQL.
+# The repo has no Alembic revisions yet, so the schema is created from the ORM metadata;
+# switch this step to `alembic upgrade head` once a baseline revision is committed.
+name: Backend Quality Gates
+
+on:
+  pull_request:
+    paths:
+      - backend/**
+      - .github/workflows/backend.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - .github/workflows/backend.yml
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/test
+      SECRET_KEY: test-secret-key-at-least-32-chars-long!
+      ENVIRONMENT: development
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Type check
+        run: mypy app
+
+      - name: Create schema and reference data
+        run: |
+          python -c "import app.infrastructure.sql.models_registry; from app.core.dependencies import get_sql_engine; from app.infrastructure.sql.base import Base; Base.metadata.create_all(get_sql_engine())"
+          python -m seed.seed
+
+      - name: Tests
+        run: pytest

@@ -302,7 +302,8 @@ def _parse_date(value: str | None) -> datetime:
 def _as_json_value(value: Vector | dict[str, Vector]) -> list[float] | dict[str, Any]:
     if isinstance(value, dict):
         return {name: series.tolist() for name, series in value.items()}
-    return value.tolist()
+    series_list: list[float] = value.tolist()
+    return series_list
 
 
 class MetricsService:

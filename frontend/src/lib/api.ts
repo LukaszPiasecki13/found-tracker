@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import type { AxiosRequestConfig } from 'axios';
+import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import type { ApiError } from '../types/api';
 
 const api = axios.create({
@@ -11,7 +11,7 @@ const api = axios.create({
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+  (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('access');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;

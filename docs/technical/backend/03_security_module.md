@@ -1,7 +1,7 @@
 ---
 id: be-security-module
 status: current
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-01
 type: mixed
 scope: backend/security
 applies_to:
