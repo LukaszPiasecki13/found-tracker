@@ -59,4 +59,4 @@ Rekomendacja: (a) — DOM-1 zostaje bez wyjątków, a metryki i tak są adaptere
 
 ## Notatki
 
-Mapowanie plik-po-plik: [`05_portfolios_module.md` §4](../backend/05_portfolios_module.md#4-warstwa-domain-plan). Moduły `assets`, `security`, `core_data` `domain/` nie dostają (DOM-7).
+Mapowanie plik-po-plik: [`05_portfolios_module.md` §4](../backend/05_portfolios_module.md#4-warstwa-domain). Moduły `assets`, `security`, `core_data` `domain/` nie dostają (DOM-7).

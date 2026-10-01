@@ -17,6 +17,7 @@ Aplikacja jest osobista i jednoużytkownikowa, bez danych innych osób. Stan fak
 - access token 30 min, refresh token 1 dzień, oba bezstanowe (brak rotacji, brak listy unieważnionych);
 - tokeny w `localStorage` przeglądarki;
 - brak rate limitingu na `/auth/login`;
+- logowanie nieistniejącego konta kosztuje tyle samo co błędne hasło (`burn_password_verification`), a błąd jest jeden (`INVALID_CREDENTIALS`) — brak enumeracji kont;
 - biblioteka `python-jose[cryptography]>=3.4.0` (zgodna z progiem CVE).
 
 ## Decyzja

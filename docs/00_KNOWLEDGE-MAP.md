@@ -3,7 +3,7 @@ id: knowledge-map
 status: current
 type: reference
 scope: docs/knowledge-map
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-01
 ---
 
 # Mapa wiedzy — FundTracker
@@ -32,7 +32,7 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 |---|---|
 | Pierwszy kontakt z projektem | [`CONTEXT.md`](./business/CONTEXT.md) → [architektura backendu](./technical/backend/01_backend-architecture.md) → [plan refaktoryzacji](./plans/01_refaktoryzacja_do_wzorca_waterworks.md) |
 | Zmiana w backendzie | [`CONTEXT.md`](./business/CONTEXT.md) → [architektura](./technical/backend/01_backend-architecture.md) → dokument modułu (niżej) → [wiring](./technical/backend/06_wiring_i_entrypointy.md) |
-| Nowa operacja lub reguła portfela | [`05_portfolios_module.md`](./technical/backend/05_portfolios_module.md) → [ADR-0005 (domain)](./technical/adr/0005-warstwa-domeny.md) → `backend-old/portfolios/` (referencja) |
+| Nowa operacja lub reguła portfela | [`05_portfolios_module.md`](./technical/backend/05_portfolios_module.md) → [ADR-0005 (domain)](./technical/adr/0005-warstwa-domeny.md) → testy parytetu `portfolios/tests/unit/test_ledger_parity.py` |
 | Zmiana we frontendzie | [architektura frontendu](./technical/frontend/frontend-architecture.md) |
 | Decyzja techniczna | [ADR-y techniczne](#adr-y-techniczne) |
 
@@ -53,11 +53,11 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`0002`](./technical/adr/0002-sesja-poza-zadaniem-entrypointy-i-wiring.md) | Poza żądaniem sesję otwiera `entrypoints.py` przez `session_scope()`; serwisy składa wyłącznie `wiring.py` (R1–R8) |
 | [`0003`](./technical/adr/0003-serwisy-zwracaja-encje-orm.md) | Serwisy CRUD zwracają encje ORM; DTO buduje FastAPI przez `response_model` |
 | [`0004`](./technical/adr/0004-repozytoria-get-vs-find.md) | `find_*` zwraca `None`, `get_*` rzuca `NotFoundError` |
-| [`0005`](./technical/adr/0005-warstwa-domeny.md) | Opcjonalna warstwa `domain/` (DOM-1–DOM-11); otwarte: `numpy` w domenie |
+| [`0005`](./technical/adr/0005-warstwa-domeny.md) | Opcjonalna warstwa `domain/` (DOM-1–DOM-11); otwarte: `numpy` w domenie (kod realizuje wariant (a)) |
 | [`0006`](./technical/adr/0006-cross-module-wylacznie-przez-serwisy.md) | Cross-module wyłącznie przez serwisy; API nie importuje repozytoriów |
 | [`0007`](./technical/adr/0007-kontrakt-bledow-z-code.md) | Jedna hierarchia `APIError` z `code`, odpowiedź `{"detail","code"}` |
 | [`0008`](./technical/adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md) | Rdzenie bez commitu w operacjach wielomodułowych; transakcję trzyma orkiestrator |
-| [`0009`](./technical/adr/0009-backend-old-jako-referencja.md) | `backend-old/` (Django) wyłącznie referencją |
+| [`0009`](./technical/adr/0009-backend-old-jako-referencja.md) | `backend-old/` (Django) wyłącznie referencją; usunięty 2026-10-01 |
 | [`0010`](./technical/adr/0010-decimal-i-precyzja-pieniedzy.md) | `Decimal` dla kwot/cen/ilości/kursów; `float` tylko w wektorach do wykresów |
 | [`0011`](./technical/adr/0011-audyt-odlozony.md) | Audyt zmian świadomie odłożony |
 | [`0012`](./technical/adr/0012-jwt-odstepstwa-od-checklisty.md) | JWT: odstępstwa od security-checklist (HS256, `localStorage`, stateless refresh) |
@@ -81,17 +81,24 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 |---|---|
 | [architektura frontendu](./technical/frontend/frontend-architecture.md) | `frontend/src/**` — opis stanu faktycznego (`draft`) |
 
+## Baza potwierdzonych ustaleń technicznych (`docs/knowledge_base/`)
+
+Osobny zbiór od tej mapy: zdiagnozowane, potwierdzone zaskoczenia, jeden plik na problem. Zasady: [`knowledge_base/README.md`](./knowledge_base/README.md).
+
+| Domena | Pliki dziś |
+|---|---|
+| `backend/` | [`except A, B:` w Pythonie 3.14](./knowledge_base/backend/python-314-except-bez-nawiasow.md), [operacja wsteczna blokuje edycję historii](./knowledge_base/backend/operacja-wsteczna-blokuje-edycje-historii.md), [brak rewizji Alembica](./knowledge_base/backend/brak-rewizji-alembic.md) |
+
 ## L3 — Pamięć robocza
 
 | Dokument | Status |
 |---|---|
-| [plan refaktoryzacji do wzorca waterworks](./plans/01_refaktoryzacja_do_wzorca_waterworks.md) | `draft` — kroki R-01…R-13; start po akceptacji ADR-ów |
+| [plan refaktoryzacji do wzorca waterworks](./plans/01_refaktoryzacja_do_wzorca_waterworks.md) | `draft` — kroki R-01…R-13 wykonane (2026-10-01) |
 | [archiwum: dawny plan architektury](./plans/archive/backend-architecture-plan.md) | Zastąpiony przez L2; do usunięcia za zgodą |
 
 ## Czego tu nie ma
 
 - **Kontrakt API** (REST) jako osobny dokument — opisują go schematy w `backend/app/modules/*/schemas/` i dokumenty modułów.
-- **Baza potwierdzonych ustaleń** (`docs/knowledge_base/`) — krok R-13 planu.
 - **`PRODUCT.md`** — kanon produktu w jednym miejscu; do czasu powstania zakres opisuje [`CONTEXT.md`](./business/CONTEXT.md).
 - **Automatyczny walidator** — ręcznie: `python .claude/skills/knowledge-base/scripts/kb_validate.py --root . --strict`. Sekcja *Indeks dokumentów* poniżej pozostaje pusta, dopóki walidator nie wygeneruje jej (`--write-index`).
 
