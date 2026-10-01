@@ -57,7 +57,7 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`0006`](./technical/adr/0006-cross-module-wylacznie-przez-serwisy.md) | Cross-module wyłącznie przez serwisy; API nie importuje repozytoriów |
 | [`0007`](./technical/adr/0007-kontrakt-bledow-z-code.md) | Jedna hierarchia `APIError` z `code`, odpowiedź `{"detail","code"}` |
 | [`0008`](./technical/adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md) | Rdzenie bez commitu w operacjach wielomodułowych; transakcję trzyma orkiestrator |
-| [`0009`](./technical/adr/0009-backend-old-jako-referencja.md) | `backend-old/` (Django) wyłącznie referencją; usunięty 2026-10-01 |
+| `0009` | Usunięty wraz z `backend-old/` (2026-10-01); numer nie jest ponownie używany |
 | [`0010`](./technical/adr/0010-decimal-i-precyzja-pieniedzy.md) | `Decimal` dla kwot/cen/ilości/kursów; `float` tylko w wektorach do wykresów |
 | [`0011`](./technical/adr/0011-audyt-odlozony.md) | Audyt zmian świadomie odłożony |
 | [`0012`](./technical/adr/0012-jwt-odstepstwa-od-checklisty.md) | JWT: odstępstwa od security-checklist (HS256, `localStorage`, stateless refresh) |
@@ -87,7 +87,7 @@ Osobny zbiór od tej mapy: zdiagnozowane, potwierdzone zaskoczenia, jeden plik n
 
 | Domena | Pliki dziś |
 |---|---|
-| `backend/` | [`except A, B:` w Pythonie 3.14](./knowledge_base/backend/python-314-except-bez-nawiasow.md), [operacja wsteczna blokuje edycję historii](./knowledge_base/backend/operacja-wsteczna-blokuje-edycje-historii.md), [brak rewizji Alembica](./knowledge_base/backend/brak-rewizji-alembic.md) |
+| `backend/` | [`except A, B:` w Pythonie 3.14](./knowledge_base/backend/python-314-except-bez-nawiasow.md) |
 
 ## L3 — Pamięć robocza
 

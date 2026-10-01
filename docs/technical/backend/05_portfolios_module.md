@@ -10,7 +10,7 @@ applies_to:
 
 # Moduł `portfolios`
 
-Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłata, dywidenda) oraz metryki i wektory portfela do wykresów. Słownik: [`CONTEXT.md`](../../business/CONTEXT.md). Logika biznesowa pochodzi z dawnej aplikacji Django, usuniętej w R-13 ([ADR-0009](../adr/0009-backend-old-jako-referencja.md)); jej zachowanie chronią testy parytetu. Jedyny moduł z warstwą `domain/` ([ADR-0005](../adr/0005-warstwa-domeny.md)).
+Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłata, dywidenda) oraz metryki i wektory portfela do wykresów. Słownik: [`CONTEXT.md`](../../business/CONTEXT.md). Logika biznesowa pochodzi z dawnej aplikacji Django, usuniętej w R-13 (ADR-0009, usunięty); jej zachowanie chronią testy parytetu. Jedyny moduł z warstwą `domain/` ([ADR-0005](../adr/0005-warstwa-domeny.md)).
 
 ## 1. Model danych
 

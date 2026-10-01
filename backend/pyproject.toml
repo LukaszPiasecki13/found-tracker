@@ -34,6 +34,11 @@ ignore = [
     "B008",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# conftest.py sets DATABASE_URL (and aborts on a non-test database) before any
+# `app.*` import, because Settings reads the environment at import time.
+"conftest.py" = ["E402"]
+
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
@@ -76,3 +81,7 @@ disallow_incomplete_defs = false
 testpaths = ["app"]
 python_files = ["test_*.py"]
 addopts = "--strict-markers"
+markers = [
+    "integration: needs a real database (deselect with '-m \"not integration\"')",
+    "unit: runs without a database",
+]

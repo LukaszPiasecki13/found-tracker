@@ -1,6 +1,5 @@
 # Backend quality gates (refactor plan R-12): ruff, mypy, pytest on real PostgreSQL.
-# The repo has no Alembic revisions yet, so the schema is created from the ORM metadata;
-# switch this step to `alembic upgrade head` once a baseline revision is committed.
+# The schema comes from Alembic revisions; `alembic check` fails on model/migration drift.
 name: Backend Quality Gates
 
 on:
@@ -67,10 +66,18 @@ jobs:
       - name: Type check
         run: mypy app
 
-      - name: Create schema and reference data
-        run: |
-          python -c "import app.infrastructure.sql.models_registry; from app.core.dependencies import get_sql_engine; from app.infrastructure.sql.base import Base; Base.metadata.create_all(get_sql_engine())"
-          python -m seed.seed
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Alembic schema check
+        run: alembic check
+
+      - name: Seed reference data
+        run: python -m seed.seed
 
       - name: Tests
         run: pytest
+
+      - name: Ruff security/time checks (non-blocking)
+        run: ruff check . --select S,DTZ --exclude "**/tests/**,seed"
+        continue-on-error: true

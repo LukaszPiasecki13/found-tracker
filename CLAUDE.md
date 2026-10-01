@@ -22,7 +22,7 @@ Docelowa architektura: Layered Modular Monolith wzorowany na projekcie
 |------|---------|
 | Install | `pip install -r requirements.txt` |
 | Run (dev) | `uvicorn app.main:app --reload` |
-| Test | `pytest` — wymaga prawdziwego `DATABASE_URL` (Postgres, `psycopg2`); brak fallbacku na sqlite |
+| Test | `pytest` — wymaga jednorazowej bazy Postgres w `TEST_DATABASE_URL` (albo lokalnego `DATABASE_URL`); `conftest.py` odmawia startu na nielokalnej bazie. Bez bazy: `pytest -m "not integration"` |
 | Lint | `ruff check .` (verified) |
 | Format check | `ruff format --check .` (verified) |
 | Typecheck | `mypy app` — konfiguracja (`strict`, py3.14) w `pyproject.toml`; `mypy==2.3.0` w `requirements.txt` |
@@ -99,7 +99,7 @@ to `Decimal`, nie `float` ([ADR-0010](docs/technical/adr/0010-decimal-i-precyzja
 **Migracje tylko przez `alembic revision --autogenerate -m "..."`.** Nigdy nie edytuj pliku
 migracji ręcznie — desynchronizuje łańcuch i psuje upgrade.
 
-**Django (`backend-old/`) usunięto** ([ADR-0009](docs/technical/adr/0009-backend-old-jako-referencja.md)).
+**Django (`backend-old/`) usunięto** (ADR-0009, usunięty razem z katalogiem).
 Katalog nie był w git, więc nie ma go w historii; zgodność reguł z Django chronią testy
 parytetu w `portfolios/tests/unit/test_ledger_parity.py`. Test architektury zabrania importów
 z Django.
