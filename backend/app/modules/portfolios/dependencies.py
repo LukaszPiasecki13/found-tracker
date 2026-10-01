@@ -1,33 +1,15 @@
-from fastapi import Depends
-from sqlalchemy.orm import Session
+"""FastAPI adapter for portfolios: exposes `wiring.py` builders as request-session
+dependencies (ADR-0002)."""
 
-from app.core.dependencies import get_db
+from app.core.dependencies import provide
+from app.modules.portfolios.wiring import (
+    build_metrics_service,
+    build_operation_service,
+    build_portfolio_service,
+    build_position_service,
+)
 
-from .repository import OperationRepository, PortfolioRepository, PositionRepository
-from .services import PortfolioService, TransactionService
-
-
-def get_portfolio_repo(db: Session = Depends(get_db)) -> PortfolioRepository:
-    return PortfolioRepository(db)
-
-
-def get_position_repo(db: Session = Depends(get_db)) -> PositionRepository:
-    return PositionRepository(db)
-
-
-def get_operation_repo(db: Session = Depends(get_db)) -> OperationRepository:
-    return OperationRepository(db)
-
-
-def get_transaction_service(
-    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repo),
-    position_repo: PositionRepository = Depends(get_position_repo),
-) -> TransactionService:
-    return TransactionService(portfolio_repo, position_repo)
-
-
-def get_portfolio_service(
-    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repo),
-    operation_repo: OperationRepository = Depends(get_operation_repo),
-) -> PortfolioService:
-    return PortfolioService(portfolio_repo, operation_repo)
+get_portfolio_service = provide(build_portfolio_service)
+get_position_service = provide(build_position_service)
+get_operation_service = provide(build_operation_service)
+get_metrics_service = provide(build_metrics_service)

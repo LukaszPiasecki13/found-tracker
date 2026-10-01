@@ -44,13 +44,15 @@ Docelowa architektura: Layered Modular Monolith wzorowany na projekcie
 - `backend/app/modules/{security,core_data,assets,portfolios}/` — moduły domenowe. Docelowo
   każdy ma `api/`, `services/`, `repositories/`, `schemas/`, `models/`, `dependencies.py`,
   `wiring.py`, `tests/{unit,integration}/`; opcjonalnie `domain/` (logika bez ORM/sesji/zegara,
-  [ADR-0005](docs/technical/adr/0005-warstwa-domeny.md) — dziś planowany dla `portfolios`) i
-  `entrypoints.py` (operacje spoza HTTP). **Migracja w toku** — `assets` jest już rozbity na
-  podfoldery, `core_data`, `security` i `portfolios` wciąż mają płaskie pliki. Nie mieszaj
-  stylów w jednym module podczas edycji — jeśli dotykasz modułu, doprowadź go do docelowej
-  struktury.
+  [ADR-0005](docs/technical/adr/0005-warstwa-domeny.md) — dziś ma go `portfolios`) i
+  `entrypoints.py` (operacje spoza HTTP). Wszystkie cztery moduły mają już strukturę docelową
+  (R-04…R-08); nowy kod pisz w tym samym stylu.
 - `backend/app/infrastructure/sql/` — silnik SQLAlchemy, fabryka sesji, rejestr modeli.
-- `backend/app/core/` — konfiguracja (`pydantic-settings`, `.env`), zależności współdzielone.
+- `backend/app/infrastructure/market_data/` — adapter Yahoo Finance (`yfinance` importowany
+  tylko tutaj); port `MarketDataProvider` w `core/market_data.py`, wybór adaptera w
+  `assets/wiring.py`.
+- `backend/app/core/` — konfiguracja (`pydantic-settings`, `.env`), zależności współdzielone,
+  `errors.py`, `schemas.py` (`DecimalNumber`), porty współdzielone.
 - `backend/alembic/` — migracje.
 - `backend-old/` — **stara aplikacja Django**, referencja logiki biznesowej na czas migracji.
   Nie importuj z niej i nie dodawaj tam nowych funkcji — zostanie usunięta po zakończeniu
@@ -91,11 +93,11 @@ to `Decimal`, nie `float` ([ADR-0010](docs/technical/adr/0010-decimal-i-precyzja
 `0001`, status `Proposed` dopóki człowiek nie zaakceptuje — agent nie przełącza sam na
 `Accepted`. Nowy dokument → wpis w [`docs/00_KNOWLEDGE-MAP.md`](docs/00_KNOWLEDGE-MAP.md).
 
-> **Stan vs cel.** Opisane wyżej reguły są **celem**; kod jest w połowie drogi (brak
-> `core/errors.py`, `transaction()`, `session_scope`, `wiring.py`). Nie zakładaj, że istnieją —
-> sprawdź tabelę w [§10 architektury](docs/technical/backend/01_backend-architecture.md#10-stan-kodu-vs-cel)
-> i [plan refaktoryzacji](docs/plans/01_refaktoryzacja_do_wzorca_waterworks.md). Do czasu
-> akceptacji ADR-ów nie przepisuj istniejącego kodu „przy okazji".
+> **Stan vs cel.** Moduły realizują opisane wyżej reguły (egzekwuje je
+> `core/tests/test_architecture.py`); otwarte kroki to m.in. `mypy` (R-10), reguły ai-tools
+> (R-11), CI (R-12) — sprawdź tabelę w [§10 architektury](docs/technical/backend/01_backend-architecture.md#10-stan-kodu-vs-cel)
+> i [plan refaktoryzacji](docs/plans/01_refaktoryzacja_do_wzorca_waterworks.md). ADR-y wciąż
+> mają status `Proposed` — do ich akceptacji nie przepisuj istniejącego kodu „przy okazji".
 
 **Migracje tylko przez `alembic revision --autogenerate -m "..."`.** Nigdy nie edytuj pliku
 migracji ręcznie — desynchronizuje łańcuch i psuje upgrade.

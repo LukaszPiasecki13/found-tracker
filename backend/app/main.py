@@ -10,7 +10,7 @@ from app.core.dependencies import dispose_sql_engines
 from app.core.errors import register_error_handlers
 from app.core.health import router as health_router
 from app.core.logging import configure_logging
-from app.modules.assets.api.assets import router as assets_router
+from app.modules.assets.api import router as assets_router
 from app.modules.core_data.api import users_router as core_data_router
 from app.modules.portfolios.api import router as portfolios_router
 from app.modules.security.api import auth_router

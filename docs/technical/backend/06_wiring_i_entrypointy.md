@@ -1,7 +1,7 @@
 ---
 id: be-wiring-entrypoints
 status: current
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-01
 type: mixed
 scope: backend/wiring-entrypoints
 applies_to:
@@ -17,7 +17,7 @@ applies_to:
 
 Jak moduł backendu składa serwisy (`wiring.py`), jak FastAPI z tego korzysta (`dependencies.py`) i jak moduł przyjmuje wywołania, które nie są żądaniem HTTP: start aplikacji, polecenie CLI, zadanie w tle (`entrypoints.py`). Decyzja i odrzucone alternatywy: [ADR-0002](../adr/0002-sesja-poza-zadaniem-entrypointy-i-wiring.md). Miejsce w warstwach: [`01_backend-architecture.md` §1–§2](./01_backend-architecture.md#2-zasady-architektury).
 
-> **Stan kodu:** żaden moduł nie ma jeszcze `wiring.py`; `session_scope` i `provide` nie istnieją. Ten dokument opisuje **cel**; luki i kroki: [plan refaktoryzacji](../../plans/01_refaktoryzacja_do_wzorca_waterworks.md) (R-03, R-04).
+> **Stan kodu:** `session_scope` i `provide` istnieją; `wiring.py` + `dependencies.py` (adapter `provide`) mają wszystkie moduły (`core_data`, `security`, `assets`, `portfolios` — ten ostatni buduje też komponenty `domain/`: `build_portfolio_ledger`, `build_portfolio_valuator`). Żaden moduł nie ma jeszcze `entrypoints.py` — sekcje §4–§5 opisują **cel** dla pierwszej operacji spoza HTTP (np. odświeżanie kursów walut, dziś wołane synchronicznie w `GET /portfolios/positions`).
 
 ## 1. Dwa przepływy: składanie i praca
 
