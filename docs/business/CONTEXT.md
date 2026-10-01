@@ -1,7 +1,7 @@
 ---
 id: business-context
 status: current
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-01
 type: reference
 scope: business/vocabulary
 ---
@@ -24,7 +24,7 @@ _Unikać_: holding, udział, lot (nie modelujemy lotów)
 
 **Operacja** (`portfolios_operation`)
 Zdarzenie zapisane przez użytkownika, niezmienne co do znaczenia: `buy`, `sell`, `deposit`, `withdrawal`, `dividend`. Operacje są źródłem prawdy o portfelu. Usunięcie lub edycja Operacji wymusza przebudowę salda i Pozycji z pozostałej historii.
-_Unikać_: transakcja (w kodzie `TransactionService` obsługuje tylko buy/sell/dividend — to nazwa implementacyjna, nie pojęcie domenowe), transfer, wpis
+_Unikać_: transakcja (w kodzie tylko w nazwie technicznej `transaction()` — granica commitu, nie pojęcie domenowe), transfer, wpis
 
 **Saldo gotówki** (`cash_balance`)
 Wolna gotówka w walucie bazowej Portfela. Zakup je zmniejsza, sprzedaż i dywidenda zwiększają, wpłata i wypłata zmieniają.
@@ -76,7 +76,7 @@ _Unikać_: klient, konto (konto = Użytkownik + jego dane)
 ## Migracja
 
 **Backend-old**
-Dawna aplikacja Django w `backend-old/`, referencja logiki biznesowej na czas przepisywania na FastAPI. Nie importujemy z niej i nie rozwijamy jej — zostanie usunięta po zakończeniu migracji.
+Dawna aplikacja Django (`backend-old/`), usunięta 2026-10-01 po przepisaniu na FastAPI. Nie wracamy do niej; zachowanie odtwarzają testy parytetu.
 
 ## Relacje
 

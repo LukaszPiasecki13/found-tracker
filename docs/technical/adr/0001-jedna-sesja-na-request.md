@@ -12,7 +12,7 @@ Wszystkie repozytoria w jednym żądaniu HTTP dzielą **jedną** `Session` z zal
 
 ## Kontekst
 
-Operacje biznesowe dotykają wielu tabel: dodanie operacji zmienia `Operation`, `Position` i `Portfolio` naraz, a usunięcie operacji przebudowuje pozycje. Dziś repozytoria commitują same albo przyjmują `commit: bool` (`create(..., commit=False)`), a router woła `op_repo.commit()` ręcznie na końcu ([`portfolios/api.py`](../../../backend/app/modules/portfolios/api.py)) — granica transakcji jest rozsiana po trzech warstwach.
+Operacje biznesowe dotykają wielu tabel: dodanie operacji zmienia `Operation`, `Position` i `Portfolio` naraz, a usunięcie operacji przebudowuje pozycje. Dziś repozytoria commitują same albo przyjmują `commit: bool` (`create(..., commit=False)`), a router woła `op_repo.commit()` ręcznie na końcu (`portfolios/api.py` sprzed kroku R-07) — granica transakcji jest rozsiana po trzech warstwach.
 
 ## Decyzja
 
