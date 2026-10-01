@@ -30,7 +30,7 @@ from app.modules.assets.schemas.assets import (
     AssetUpdateRequest,
     ProviderQuoteResponse,
 )
-from app.modules.security.dependencies import get_current_user
+from app.modules.security.dependencies import get_current_admin, get_current_user
 
 USER = SimpleNamespace(id=1, email="user@example.com", is_active=True)
 
@@ -87,6 +87,7 @@ def build_client(
     app.dependency_overrides[get_currency_service] = lambda: services.currencies
     if authenticated:
         app.dependency_overrides[get_current_user] = lambda: USER
+        app.dependency_overrides[get_current_admin] = lambda: USER
     return TestClient(app, raise_server_exceptions=False)
 
 

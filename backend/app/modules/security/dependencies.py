@@ -4,12 +4,14 @@ dependencies (ADR-0002) plus the HTTP-only `get_current_user`."""
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.config import get_settings
 from app.core.dependencies import provide
 from app.modules.core_data.dependencies import get_user_service
 from app.modules.core_data.models.user import User
 from app.modules.core_data.services.users import UserService
 from app.modules.security.constants import TOKEN_TYPE_ACCESS
 from app.modules.security.errors import (
+    AdminRequiredError,
     InactiveUserError,
     InvalidAccessTokenError,
     MissingCredentialsError,
@@ -51,4 +53,12 @@ def get_current_user(
     user = users.find_by_id(user_id)
     if user is None or not user.is_active:
         raise InactiveUserError
+    return user
+
+
+def get_current_admin(user: User = Depends(get_current_user)) -> User:
+    """The authenticated user, who must be listed in `ADMIN_EMAILS`."""
+    admins = {email.strip().lower() for email in get_settings().admin_emails}
+    if user.email.strip().lower() not in admins:
+        raise AdminRequiredError
     return user

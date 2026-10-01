@@ -143,7 +143,15 @@ export interface CreateOperationRequest {
 }
 
 // Error Response
+export interface ValidationDetail {
+  type: string;
+  loc: (string | number)[];
+  msg: string;
+}
+
+// Error body: `code` is the stable identifier, `detail` a message or, for 422,
+// the list of invalid fields.
 export interface ApiError {
-  detail?: string;
-  [key: string]: unknown;
+  detail?: string | ValidationDetail[];
+  code?: string;
 }

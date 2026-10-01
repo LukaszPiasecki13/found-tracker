@@ -9,7 +9,7 @@ from app.modules.assets.schemas.currencies import (
     CurrencyUpdateRequest,
 )
 from app.modules.assets.services.currencies import CurrencyService
-from app.modules.security.dependencies import get_current_user
+from app.modules.security.dependencies import get_current_admin, get_current_user
 
 router = APIRouter(
     prefix="/assets/currencies",
@@ -23,7 +23,12 @@ def list_currencies(service: CurrencyService = Depends(get_currency_service)):
     return service.list_currencies()
 
 
-@router.post("", response_model=CurrencyResponse, status_code=201)
+@router.post(
+    "",
+    dependencies=[Depends(get_current_admin)],
+    response_model=CurrencyResponse,
+    status_code=201,
+)
 def create_currency(
     data: CurrencyCreateRequest,
     service: CurrencyService = Depends(get_currency_service),
@@ -39,8 +44,16 @@ def get_currency(
     return service.get_by_id(currency_id)
 
 
-@router.put("/{currency_id:int}", response_model=CurrencyResponse)
-@router.patch("/{currency_id:int}", response_model=CurrencyResponse)
+@router.put(
+    "/{currency_id:int}",
+    dependencies=[Depends(get_current_admin)],
+    response_model=CurrencyResponse,
+)
+@router.patch(
+    "/{currency_id:int}",
+    dependencies=[Depends(get_current_admin)],
+    response_model=CurrencyResponse,
+)
 def update_currency(
     currency_id: int,
     data: CurrencyUpdateRequest,
@@ -49,7 +62,9 @@ def update_currency(
     return service.update(currency_id, data)
 
 
-@router.delete("/{currency_id:int}", status_code=204)
+@router.delete(
+    "/{currency_id:int}", dependencies=[Depends(get_current_admin)], status_code=204
+)
 def delete_currency(
     currency_id: int,
     service: CurrencyService = Depends(get_currency_service),
