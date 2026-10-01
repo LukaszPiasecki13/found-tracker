@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # JWT
     secret_key: str
     access_token_expire_minutes: int = Field(default=30, gt=0)
+    refresh_token_expire_days: int = Field(default=1, gt=0)
     algorithm: str = "HS256"
     jwt_issuer: str = "found-tracker"
     jwt_audience: str = "found-tracker-client"

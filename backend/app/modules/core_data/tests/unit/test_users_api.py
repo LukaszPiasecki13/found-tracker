@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from app.core.errors import ConflictError, register_error_handlers
 from app.modules.core_data.api.users import router
-from app.modules.core_data.dependencies import get_current_user, get_user_service
+from app.modules.core_data.dependencies import get_user_service
+from app.modules.security.dependencies import get_current_user
 
 
 def build_client(
