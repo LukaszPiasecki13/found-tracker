@@ -10,7 +10,7 @@ applies_to:
 
 # Moduł `portfolios`
 
-Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłata, dywidenda) oraz metryki i wektory portfela do wykresów. Słownik: [`CONTEXT.md`](../../business/CONTEXT.md). Logika biznesowa pochodzi z Django (`backend-old/portfolios/services/`, `backend-old/portfolios/analytics/`) — referencja, nie kod do importu ([ADR-0009](../adr/0009-backend-old-jako-referencja.md)). Jedyny moduł z warstwą `domain/` ([ADR-0005](../adr/0005-warstwa-domeny.md)).
+Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłata, dywidenda) oraz metryki i wektory portfela do wykresów. Słownik: [`CONTEXT.md`](../../business/CONTEXT.md). Logika biznesowa pochodzi z dawnej aplikacji Django, usuniętej w R-13 ([ADR-0009](../adr/0009-backend-old-jako-referencja.md)); jej zachowanie chronią testy parytetu. Jedyny moduł z warstwą `domain/` ([ADR-0005](../adr/0005-warstwa-domeny.md)).
 
 ## 1. Model danych
 
@@ -133,7 +133,7 @@ portfolios/
    tests/integration/ # pełny przepływ HTTP + baza, repozytoria na PostgreSQL
 ```
 
-Testy parytetu (`tests/unit/test_ledger_parity.py`) odtwarzają scenariusze `backend-old/portfolios/tests/integration/test_views.py` (losowe kupna i sprzedaże ze stałym ziarnem, wpłaty, wypłaty, błędne dane, usuwanie wpłat/wypłat) na księdze. Świadome różnice wobec Django: `total_fees` portfela to suma opłat pozycji (Django: wszystkich operacji); usuwanie kupna/sprzedaży działa (w Django niezaimplementowane).
+Testy parytetu (`tests/unit/test_ledger_parity.py`) odtwarzają scenariusze testów widoków z dawnego Django (`test_views.py`, usuniętego) (losowe kupna i sprzedaże ze stałym ziarnem, wpłaty, wypłaty, błędne dane, usuwanie wpłat/wypłat) na księdze. Świadome różnice wobec Django: `total_fees` portfela to suma opłat pozycji (Django: wszystkich operacji); usuwanie kupna/sprzedaży działa (w Django niezaimplementowane).
 
 ## 9. Zmiany kontraktu HTTP przy R-07/R-08
 

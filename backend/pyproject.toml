@@ -44,44 +44,33 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 [tool.mypy]
 python_version = "3.14"
-
-# Cache for faster subsequent runs
 cache_dir = ".mypy_cache"
 incremental = true
-
-
-# Add path to app module for proper resolution
-mypy_path = "code/cloud_run/fastapi"
-
-# Exclude directories with standalone scripts
-exclude = [
-    "^alembic/.*",
-    "^tests/.*",
-    "^\\.venv/.*",
-    "^\\.git/.*"
-]
-
-# Explicit package bases for proper module resolution
 explicit_package_bases = true
-
-# Default: strict mode for ENTIRE project (automatic for new modules)
 strict = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-warn_return_any = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-show_error_codes = true
-pretty = true
+exclude = ["alembic/", "seed/"]
 
-# Test files - relaxed type checking
 [[tool.mypy.overrides]]
 module = [
     "*.tests.*",
-    "*.conftest"
+    "*.conftest",
+    "app.conftest",
+    "sqlalchemy.*",
+    "alembic.*",
 ]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["jose", "jose.*", "yfinance", "yfinance.*", "pandas", "pandas.*"]
+ignore_missing_imports = true
+
+# FastAPI route handlers: response contract is `response_model=` on the decorator,
+# so a missing return annotation isn't a defect (python-coding-standards). Everything
+# below the router (services, repositories, helpers) stays fully annotated.
+[[tool.mypy.overrides]]
+module = ["app.modules.*.api.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["app"]
