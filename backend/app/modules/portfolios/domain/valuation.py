@@ -62,20 +62,17 @@ class PortfolioValuation:
 
 
 def _rate_into_base(
-    holding: HoldingLike, base_currency_id: int, fx_rates: FxMap | None
+    holding: HoldingLike, base_currency_id: int, fx_rates: FxMap
 ) -> Decimal | None:
     """The rate turning one unit of the asset's currency into the base currency,
-    `None` when unknown. Without a rate map (transitional, until the services
-    pass one) the currency's own stored rate is used, as before."""
+    `None` when the map has none."""
     if holding.asset.currency_id == base_currency_id:
         return _ONE
-    if fx_rates is None:
-        return holding.asset.currency.exchange_rate
     return fx_rates.get((holding.asset.currency_id, base_currency_id))
 
 
 def _value_holding(
-    holding: HoldingLike, base_currency_id: int, fx_rates: FxMap | None
+    holding: HoldingLike, base_currency_id: int, fx_rates: FxMap
 ) -> PositionValuation:
     cost_basis = holding.quantity * holding.average_buy_price
     cost_in_portfolio = cost_basis * holding.average_fx_rate
@@ -116,7 +113,7 @@ class PortfolioValuator:
         self,
         portfolio: ValuedPortfolioLike,
         holdings: Sequence[HoldingLike],
-        fx_rates: FxMap | None = None,
+        fx_rates: FxMap,
     ) -> PortfolioValuation:
         """`fx_rates` maps (asset currency id, base currency id) to the rate
         that converts one unit of the first into the second."""

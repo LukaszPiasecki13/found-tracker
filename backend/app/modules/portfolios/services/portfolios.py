@@ -10,14 +10,13 @@ from app.modules.assets.services.currencies import CurrencyService
 from app.modules.portfolios.domain import (
     PortfolioValuation,
     PortfolioValuator,
-    PositionValuation,
 )
 from app.modules.portfolios.exceptions import (
     PortfolioAlreadyExistsError,
     PortfolioCurrencyLockedError,
     UnknownCurrencyError,
 )
-from app.modules.portfolios.models import Portfolio, Position
+from app.modules.portfolios.models import Portfolio
 from app.modules.portfolios.repositories.portfolios import PortfolioRepository
 from app.modules.portfolios.schemas.portfolios import (
     PortfolioCreateRequest,
@@ -26,23 +25,8 @@ from app.modules.portfolios.schemas.portfolios import (
     PortfolioSummaryResponse,
     PortfolioUpdateRequest,
 )
-from app.modules.portfolios.schemas.positions import PositionFields, PositionResponse
-
-
-def position_response(
-    position: Position, valuation: PositionValuation
-) -> PositionResponse:
-    """A stored position plus its valuation as the response DTO; the schema
-    rounds the computed figures."""
-    return PositionResponse(
-        **dict(PositionFields.model_validate(position)),
-        cost_basis=valuation.cost_basis,
-        cost_basis_in_portfolio_currency=valuation.cost_basis_in_portfolio_currency,
-        market_value=valuation.market_value,
-        unrealized_pnl=valuation.unrealized_pnl,
-        return_pct=valuation.return_pct,
-        portfolio_weight_pct=valuation.portfolio_weight_pct,
-    )
+from app.modules.portfolios.services.fx import FxMapBuilder
+from app.modules.portfolios.services.mappers import position_response
 
 
 def _summary_fields(
@@ -55,6 +39,7 @@ def _summary_fields(
         "total_profit_loss": valuation.total_profit_loss,
         "total_return_pct": valuation.total_return_pct,
         "total_fees": valuation.total_fees,
+        "rate_missing": valuation.rate_missing,
     }
 
 
@@ -63,7 +48,8 @@ class PortfolioService:
     found (404), never as forbidden. Names are unique per owner.
 
     The read models value positions at the asset prices and currency rates
-    stored in `assets` (refreshing them is `PositionService`'s job).
+    stored in `assets` (refreshing them is `PositionService`'s job); a position
+    whose currency has no rate is reported as `rate_missing`, not valued.
     """
 
     def __init__(
@@ -71,10 +57,12 @@ class PortfolioService:
         portfolio_repo: PortfolioRepository,
         currency_service: CurrencyService,
         valuator: PortfolioValuator,
+        fx_map_builder: FxMapBuilder,
     ) -> None:
         self._repo = portfolio_repo
         self._currencies = currency_service
         self._valuator = valuator
+        self._fx = fx_map_builder
 
     # --- Reads ---
 
@@ -90,9 +78,13 @@ class PortfolioService:
         self, owner_id: int, name: str | None = None
     ) -> list[PortfolioSummaryResponse]:
         """The owner's valued portfolios, newest first; `name` filters."""
+        portfolios = self._repo.list_by_owner(owner_id, name=name)
+        fx_rates = self._fx.build(
+            {portfolio.base_currency_id for portfolio in portfolios}
+        )
         summaries = []
-        for portfolio in self._repo.list_by_owner(owner_id, name=name):
-            valuation = self._valuator.value(portfolio, portfolio.positions)
+        for portfolio in portfolios:
+            valuation = self._valuator.value(portfolio, portfolio.positions, fx_rates)
             summaries.append(
                 PortfolioSummaryResponse(**_summary_fields(portfolio, valuation))
             )
@@ -103,7 +95,8 @@ class PortfolioService:
         the total value, cash included). Raises PortfolioNotFoundError."""
         portfolio = self._repo.get_owned(portfolio_id, owner_id)
         positions = list(portfolio.positions)
-        valuation = self._valuator.value(portfolio, positions)
+        fx_rates = self._fx.build([portfolio.base_currency_id])
+        valuation = self._valuator.value(portfolio, positions, fx_rates)
         return PortfolioDetailResponse(
             **_summary_fields(portfolio, valuation),
             positions=[
