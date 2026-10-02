@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 import { TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon } from '@mui/icons-material';
 import type { Position } from '../types/api';
+import RateMissingChip from './RateMissingChip';
 
 interface PositionsTableProps {
   positions: Position[];
@@ -31,6 +32,8 @@ interface PositionsTableProps {
 }
 
 const columnHelper = createColumnHelper<Position>();
+
+const NO_VALUE = '—';
 
 const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, currencyCode }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -91,25 +94,27 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
         cell: (info) => {
           const row = info.row.original;
           const quantity = Number(row.quantity) || 0;
-          if (quantity > 0 && row.market_value !== undefined) {
-            const mv = Number(row.market_value) || 0;
-            return formatCurrency(mv / quantity);
+          if (quantity > 0 && row.market_value != null) {
+            return formatCurrency(Number(row.market_value) / quantity);
           }
-          const assetPrice = Number(info.getValue()) || 0;
-          const exchangeRate = row.asset.currency.code === currencyCode
-            ? 1
-            : Number(row.asset.currency.exchange_rate) || 1;
-          return formatCurrency(assetPrice * exchangeRate);
+          return NO_VALUE;
         },
       }),
       columnHelper.accessor('market_value', {
         header: 'Wartość rynkowa',
-        cell: (info) => formatCurrency(Number(info.getValue() || 0)),
+        cell: (info) => {
+          const value = info.getValue();
+          if (value == null) {
+            return info.row.original.rate_missing ? <RateMissingChip /> : NO_VALUE;
+          }
+          return formatCurrency(Number(value));
+        },
       }),
       columnHelper.accessor('unrealized_pnl', {
         header: 'Zysk/Strata',
         cell: (info) => {
-          const value = Number(info.getValue()) || 0;
+          if (info.getValue() == null) return NO_VALUE;
+          const value = Number(info.getValue());
           return (
             <Box display="flex" alignItems="center">
               {value >= 0 ? (
@@ -131,7 +136,8 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
       columnHelper.accessor('return_pct', {
         header: 'Stopa zwrotu',
         cell: (info) => {
-          const value = Number(info.getValue()) || 0;
+          if (info.getValue() == null) return NO_VALUE;
+          const value = Number(info.getValue());
           return (
             <Typography
               variant="body2"
@@ -146,8 +152,8 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
       columnHelper.accessor('portfolio_weight_pct', {
         header: 'Udział %',
         cell: (info) => {
-          const value = Number(info.getValue()) || 0;
-          return `${value.toFixed(2)}%`;
+          if (info.getValue() == null) return NO_VALUE;
+          return `${Number(info.getValue()).toFixed(2)}%`;
         },
       }),
     ],
