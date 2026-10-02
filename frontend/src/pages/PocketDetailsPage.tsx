@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Typography,
   Paper,
@@ -9,6 +10,7 @@ import {
   ButtonGroup,
   Chip,
   CircularProgress,
+  Skeleton,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -20,6 +22,7 @@ import {
 import { usePocketByName } from '../hooks/usePockets';
 import { usePositions } from '../hooks/usePositions';
 import PositionsTable from '../components/PositionsTable';
+import RateMissingChip from '../components/RateMissingChip';
 import BuyAssetDialog from '../components/dialogs/BuyAssetDialog';
 import SellAssetDialog from '../components/dialogs/SellAssetDialog';
 import CashOperationDialog from '../components/dialogs/CashOperationDialog';
@@ -65,22 +68,23 @@ const PocketDetailsPage: React.FC = () => {
   };
 
   const cashBalance = Number(pocket.cash_balance) || 0;
-  // While positions are still refreshing, fall back to the value stored on the pocket.
-  const totalPositionsValue = positions
-    ? positions.reduce((sum, pos) => sum + (Number(pos.market_value) || 0), 0)
-    : Number(pocket.positions_value) || 0;
-  const totalValue = cashBalance + totalPositionsValue;
   const totalDeposited = Number(pocket.total_deposited) || 0;
-  // Once positions are refreshed, derive the result from the same fresh values as the
-  // totals above; the pocket's own figures were computed at the previously stored prices.
-  const totalProfitLoss = positions
-    ? totalValue - totalDeposited
-    : Number(pocket.total_profit_loss) || 0;
-  const totalReturnPct = positions
-    ? totalDeposited > 0
-      ? (totalProfitLoss / totalDeposited) * 100
-      : 0
-    : Number(pocket.total_return_pct);
+  // Totals come from the freshly valued positions; when any position has no currency rate
+  // they cannot be computed (null) rather than shown as a misleading partial sum.
+  // The positions endpoint refreshes rates first, so once it has answered it is authoritative;
+  // the pocket flag (no refresh) only covers the time the positions are still loading.
+  const rateMissing = positions
+    ? positions.some((pos) => pos.rate_missing === true)
+    : pocket.rate_missing === true;
+  const totalPositionsValue = rateMissing
+    ? null
+    : positions
+      ? positions.reduce((sum, pos) => sum + Number(pos.market_value ?? 0), 0)
+      : (pocket.positions_value ?? null);
+  const totalValue = totalPositionsValue === null ? null : cashBalance + totalPositionsValue;
+  const totalProfitLoss = totalValue === null ? null : totalValue - totalDeposited;
+  const totalReturnPct =
+    totalProfitLoss === null ? null : totalDeposited === 0 ? 0 : (totalProfitLoss / totalDeposited) * 100;
 
   return (
     <Box>
@@ -109,6 +113,13 @@ const PocketDetailsPage: React.FC = () => {
         </ButtonGroup>
       </Box>
 
+      {rateMissing && !positionsLoading && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Dla części pozycji brakuje kursu waluty wobec waluty portfela — wartość portfela i wynik
+          nie mogą zostać policzone.
+        </Alert>
+      )}
+
       {/* Summary Cards */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -126,9 +137,15 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Wartość pozycji
             </Typography>
-            <Typography variant="h5" fontWeight="bold">
-              {formatCurrency(totalPositionsValue)}
-            </Typography>
+            {positionsLoading ? (
+              <Skeleton width={120} height={40} />
+            ) : totalPositionsValue === null ? (
+              <RateMissingChip />
+            ) : (
+              <Typography variant="h5" fontWeight="bold">
+                {formatCurrency(totalPositionsValue)}
+              </Typography>
+            )}
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -136,9 +153,15 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Całkowita wartość
             </Typography>
-            <Typography variant="h5" fontWeight="bold">
-              {formatCurrency(totalValue)}
-            </Typography>
+            {positionsLoading ? (
+              <Skeleton width={120} height={40} />
+            ) : totalValue === null ? (
+              <RateMissingChip />
+            ) : (
+              <Typography variant="h5" fontWeight="bold">
+                {formatCurrency(totalValue)}
+              </Typography>
+            )}
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -146,17 +169,25 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Zysk/Strata
             </Typography>
-            <Typography
-              variant="h5"
-              fontWeight="bold"
-              color={totalProfitLoss >= 0 ? 'success.main' : 'error.main'}
-            >
-              {formatCurrency(totalProfitLoss)}
-            </Typography>
-            {!Number.isNaN(totalReturnPct) && (
-              <Typography variant="caption" color="text.secondary">
-                ({totalReturnPct.toFixed(2)}%)
-              </Typography>
+            {positionsLoading ? (
+              <Skeleton width={120} height={40} />
+            ) : totalProfitLoss === null ? (
+              <RateMissingChip />
+            ) : (
+              <>
+                <Typography
+                  variant="h5"
+                  fontWeight="bold"
+                  color={totalProfitLoss >= 0 ? 'success.main' : 'error.main'}
+                >
+                  {formatCurrency(totalProfitLoss)}
+                </Typography>
+                {totalReturnPct !== null && (
+                  <Typography variant="caption" color="text.secondary">
+                    ({totalReturnPct.toFixed(2)}%)
+                  </Typography>
+                )}
+              </>
             )}
           </Paper>
         </Grid>
