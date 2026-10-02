@@ -27,9 +27,9 @@ Słownictwo wg [CONTEXT.md](../business/CONTEXT.md); architektura wg
 - **Największe luki wobec myfund:** brak historii cen i kursów, brak TWR/MWR/XIRR, brak zrealizowanego zysku, brak
   partii zakupu (lotów podatkowych) i FIFO (PIT-38), brak obligacji skarbowych (EDO/COI…), brak zdarzeń korporacyjnych,
   brak importu CSV/z brokera, brak benchmarku (stub we frontendzie zwraca `null`). Wielowalutowość jest w praktyce
-  zepsuta (D1).
-- **Defekty poprawności (§7):** D1 wycena FX względem USD, D2 wektory ignorują FX i dywidendy, D3 „Całkowita wartość"
-  na dashboardzie sumuje tylko gotówkę, D4 dialog kupna podpowiada kurs USD, D5 Walor tworzony po tickerze dostaje
+  zepsuta (F1).
+- **Defekty poprawności (§7):** F1 wycena FX względem USD, F2 wektory ignorują FX i dywidendy, F3 „Całkowita wartość"
+  na dashboardzie sumuje tylko gotówkę, F4 dialog kupna podpowiada kurs USD, F5 Walor tworzony po tickerze dostaje
   Walutę Portfela.
 
 ## 1. Model danych
@@ -41,7 +41,7 @@ Kwoty, ilości i kursy: `Numeric` → `Decimal` (ADR-0010).
 |---|---|---|
 | `users` / `User` (`core_data/models/user.py:7-13`) | id; email String(254) unique; password_hash; is_active | brak ustawień użytkownika (Waluta wyświetlania, locale), brak znaczników czasu |
 | `assets_assetclass` / `AssetClass` | id; name String(20) unique | — |
-| `assets_currency` / `Currency` (`assets/models/currencies.py:13-31`) | id; code String(3) unique; exchange_rate Numeric(18,9) default 1; base_currency_id FK self, nullable | **exchange_rate = jednostki USD za 1 jednostkę** (§4, D1); `base_currency_id` nieużywane przez logikę |
+| `assets_currency` / `Currency` (`assets/models/currencies.py:13-31`) | id; code String(3) unique; exchange_rate Numeric(18,9) default 1; base_currency_id FK self, nullable | **exchange_rate = jednostki USD za 1 jednostkę** (§4, F1); `base_currency_id` nieużywane przez logikę |
 | `assets_asset` / `Asset` (`assets/models/assets.py:15-42`) | ticker String(20) unique (`strip().upper()`); name; asset_class_id; currency_id; current_price Numeric(18,9); exchange; sector; updated_at | **jedyna cena, bez historii**; brak ISIN, symbolu dostawcy, kuponu, zapadalności, nominału |
 | `portfolios_portfolio` / `Portfolio` (`portfolios/models/portfolio.py:26-67`) | owner_id; name (unique per owner); base_currency_id; cash_balance Numeric(18,3); total_deposited Numeric(18,3); is_active; created_at/updated_at | **jedna pula gotówki w Walucie bazowej**; kaskada tylko w ORM, w FK bazy brak `ON DELETE CASCADE` |
 | `portfolios_position` / `Position` (`portfolios/models/position.py:23-70`) | portfolio_id+asset_id unique; quantity; average_buy_price (w Walucie Waloru, **z prowizją**); average_fx_rate (ważony ilością); total_fees; total_dividends; opened_at/updated_at | stan pochodny, przebudowywany z Operacji; wiersz usuwany przy ilości 0; brak partii zakupu (CONTEXT: „nie modelujemy lotów") |
@@ -188,7 +188,7 @@ Daty wysyłane jako `YYYY-MM-DD` (bez godziny).
 
 | Element | Dowód |
 |---|---|
-| „Całkowita wartość" = suma samego `cash_balance`; `positionsCount` dostaje liczbę Portfeli; sumy bez przeliczenia Walut (D3) | `frontend/src/pages/DashboardPage.tsx:14`, `:36` |
+| „Całkowita wartość" = suma samego `cash_balance`; `positionsCount` dostaje liczbę Portfeli; sumy bez przeliczenia Walut (F3) | `frontend/src/pages/DashboardPage.tsx:14`, `:36` |
 | `PortfolioOverview` zawsze formatuje w PLN; wpłaty podpisane „Kapitał początkowy" | `frontend/src/components/portfolio-overview.tsx:27`, `:116` |
 | `benchmarkService.getSP500Data()` zwraca `null` (TODO); **nigdzie nieimportowany** (grep); brak endpointu benchmarku w backendzie | `frontend/src/services/benchmarkService.ts:29-37` |
 | Zakładki „Portfele" i „Analizy" bez linku; menu linkuje do `/settings`, którego nie ma w `App.tsx`; indeks zakładek zna `/analytics` i `/alerts` (nie istnieją) | `frontend/src/components/dashboard-header.tsx:52-53, 77, 79, 94` |
@@ -221,12 +221,12 @@ Zweryfikowane 2026-10-02 czytaniem kodu (nie uruchomieniem). Każdy wymaga testu
 
 | # | Defekt | Dowód (`plik:linia`) | Skutek |
 |---|---|---|---|
-| D1 | **Wycena FX względem USD.** `refresh_currency_rates` ustawia kursy jako „USD za jednostkę" (domyślne `base_code = DEFAULT_CURRENCY_CODE = "USD"`), wywoływane bez argumentu; seed też w USD. `_value_holding` mnoży wartość rynkową przez `asset.currency.exchange_rate`, gdy Waluta Waloru ≠ bazowa Portfela, bez względu na to, jaka jest Waluta bazowa | `app/modules/assets/services/market_data.py:109`; `app/modules/assets/constants.py:4`; `app/modules/portfolios/services/positions.py:37`; `app/modules/portfolios/domain/valuation.py:55-57`; `backend/seed/seed_data.py:67-74` | Portfel PLN + akcja USD: wartość zostaje w USD (×1); Portfel PLN + akcja EUR: wynik w USD (×1.08). Poprawne tylko dla Portfela w USD. Koszt liczony po `average_fx_rate` Operacji (l.54), więc niezrealizowany zysk miesza jednostki |
-| D2 | **Wektory metryk ignorują FX i dywidendy.** Koszt bez `fx_rate`; wartości Walorów nieprzeliczane; dywidenda liczona tylko jako koszt prowizji | `app/modules/portfolios/services/metrics.py:108-116`, `:185-187` | Wykresy Portfeli wielowalutowych błędne; `free_cash_vector` ≠ `cash_balance` po dywidendzie; zysk na wykresie zaniżony o dywidendy |
-| D3 | **„Całkowita wartość" na dashboardzie = sama gotówka**; `positionsCount` = liczba Portfeli; sumowanie różnych Walut bez przeliczenia | `frontend/src/pages/DashboardPage.tsx:14`, `:36` | Główna liczba aplikacji pomija wartość Pozycji |
-| D4 | **Dialog kupna podpowiada `fx_rate` z kursu względem USD** (`selectedAsset.currency.exchange_rate`) | `frontend/src/components/dialogs/BuyAssetDialog.tsx:55-69` (kurs l.63) | Dla Portfela nie-USD domyślny kurs Operacji jest błędny i trafia do `average_fx_rate` |
-| D5 | **Walor tworzony po tickerze w POST Operacji dostaje Walutę bazową Portfela** (`currency_id=portfolio.base_currency_id`) | `app/modules/portfolios/services/operations.py:176-180` | Zagraniczna akcja kupiona w Portfelu PLN zapisana jako Walor w PLN — wycena i FX trwale błędne |
-| D6 | **Zmiana Waluty bazowej Portfela** ustawia pole bez przeliczenia gotówki, `total_deposited` i historii | `app/modules/portfolios/services/portfolios.py:150-153` | Ta sama liczba gotówki cicho zmienia Walutę |
+| F1 | **Wycena FX względem USD.** `refresh_currency_rates` ustawia kursy jako „USD za jednostkę" (domyślne `base_code = DEFAULT_CURRENCY_CODE = "USD"`), wywoływane bez argumentu; seed też w USD. `_value_holding` mnoży wartość rynkową przez `asset.currency.exchange_rate`, gdy Waluta Waloru ≠ bazowa Portfela, bez względu na to, jaka jest Waluta bazowa | `app/modules/assets/services/market_data.py:109`; `app/modules/assets/constants.py:4`; `app/modules/portfolios/services/positions.py:37`; `app/modules/portfolios/domain/valuation.py:55-57`; `backend/seed/seed_data.py:67-74` | Portfel PLN + akcja USD: wartość zostaje w USD (×1); Portfel PLN + akcja EUR: wynik w USD (×1.08). Poprawne tylko dla Portfela w USD. Koszt liczony po `average_fx_rate` Operacji (l.54), więc niezrealizowany zysk miesza jednostki |
+| F2 | **Wektory metryk ignorują FX i dywidendy.** Koszt bez `fx_rate`; wartości Walorów nieprzeliczane; dywidenda liczona tylko jako koszt prowizji | `app/modules/portfolios/services/metrics.py:108-116`, `:185-187` | Wykresy Portfeli wielowalutowych błędne; `free_cash_vector` ≠ `cash_balance` po dywidendzie; zysk na wykresie zaniżony o dywidendy |
+| F3 | **„Całkowita wartość" na dashboardzie = sama gotówka**; `positionsCount` = liczba Portfeli; sumowanie różnych Walut bez przeliczenia | `frontend/src/pages/DashboardPage.tsx:14`, `:36` | Główna liczba aplikacji pomija wartość Pozycji |
+| F4 | **Dialog kupna podpowiada `fx_rate` z kursu względem USD** (`selectedAsset.currency.exchange_rate`) | `frontend/src/components/dialogs/BuyAssetDialog.tsx:55-69` (kurs l.63) | Dla Portfela nie-USD domyślny kurs Operacji jest błędny i trafia do `average_fx_rate` |
+| F5 | **Walor tworzony po tickerze w POST Operacji dostaje Walutę bazową Portfela** (`currency_id=portfolio.base_currency_id`) | `app/modules/portfolios/services/operations.py:176-180` | Zagraniczna akcja kupiona w Portfelu PLN zapisana jako Walor w PLN — wycena i FX trwale błędne |
+| F6 | **Zmiana Waluty bazowej Portfela** ustawia pole bez przeliczenia gotówki, `total_deposited` i historii | `app/modules/portfolios/services/portfolios.py:150-153` | Ta sama liczba gotówki cicho zmienia Walutę |
 
 ## 8. Luki funkcjonalne
 
@@ -239,16 +239,16 @@ Zweryfikowane 2026-10-02 czytaniem kodu (nie uruchomieniem). Każdy wymaga testu
 | G5 | Brak partii zakupu (lotów podatkowych) / FIFO (PIT-38) i śledzenia podatku Belki; tylko średnia ważona | `ledger.py:184-196`; CONTEXT.md |
 | G6 | Brak zdarzeń korporacyjnych (split, spin-off, prawa poboru, zmiana tickera) i typów Operacji: odsetki, podatek, sama opłata, przeniesienie między Portfelami, wymiana Walut | `portfolios/domain/enums.py:9-14` |
 | G7 | Jedna pula gotówki w Walucie bazowej; brak gotówki wielowalutowej | `portfolios/models/portfolio.py:38-43` |
-| G8 | Defekt wyceny FX | D1 |
+| G8 | Defekt wyceny FX | F1 |
 | G9 | Brak historycznych kursów FX; `fx_rate` wpisywany ręcznie; brak NBP (do PIT potrzebny kurs NBP z dnia poprzedzającego **[niezweryfikowane]** — reguła podatkowa nie sprawdzona w tym badaniu) | `ledger.py:170` |
-| G10 | Wektory ignorują FX i dywidendy | D2 |
+| G10 | Wektory ignorują FX i dywidendy | F2 |
 | G11 | Brak obligacji skarbowych (EDO/COI/ROR…, naliczanie wg wzoru inflacyjnego), lokat, Walorów wycenianych ręcznie (nieruchomości) poza statycznym `current_price` | `assets/models/assets.py:15-42` |
 | G12 | Brak źródła danych dla GPW/Polski; tylko Yahoo, wyszukiwanie po dokładnym tickerze, domyślna Waluta USD; tickery GPW w seedzie bez `.WA` (**[niezweryfikowane]** zachowanie Yahoo) | `assets/services/market_data.py:49-68`; `assets/constants.py:4` |
 | G13 | Brak importu/eksportu (CSV, wyciągi XTB/mBank/Bossa, eksport myfund) | brak kodu (grep) |
 | G14 | Brak benchmarku w backendzie; stub nieużywany we frontendzie | `frontend/src/services/benchmarkService.ts:29-37` |
 | G15 | Operacje z datą wsteczną nie są walidowane na historii w POST | `portfolios/services/operations.py:99-126` |
-| G16 | Brak agregacji między Portfelami we wspólnej Walucie | `portfolios/services/metrics.py:328-330`; D3 |
-| G17 | Zmiana Waluty bazowej Portfela reinterpretuje gotówkę i historię | D6 |
+| G16 | Brak agregacji między Portfelami we wspólnej Walucie | `portfolios/services/metrics.py:328-330`; F3 |
+| G17 | Zmiana Waluty bazowej Portfela reinterpretuje gotówkę i historię | F6 |
 | G18 | Brak audytu i soft-delete (ADR-0011 świadomie odłożony) | `docs/technical/adr/0011-audyt-odlozony.md` |
 | G19 | Brak paginacji i filtrowania list | `portfolios/repositories/operations.py:32-45` |
 | G20 | Dane referencyjne globalne: każdy zarejestrowany użytkownik edytuje Walory, Waluty i ceny, a rejestracja jest otwarta | `assets/api/*.py` (brak sprawdzania właściciela) |
@@ -332,7 +332,7 @@ Badanie wyłącznie wewnętrzne — brak źródeł zewnętrznych (URL). Dowody: 
 
 ## Luki i niepewności
 
-- Nic nie było uruchamiane (testy, serwer, Yahoo) — defekty D1–D6 potwierdzone czytaniem, nie wykonaniem.
+- Nic nie było uruchamiane (testy, serwer, Yahoo) — defekty F1–F6 potwierdzone czytaniem, nie wykonaniem.
 - Zachowanie Yahoo dla tickerów GPW bez `.WA` — **[niezweryfikowane]**.
 - Reguła kursu NBP z dnia poprzedzającego dla PIT-38 — **[niezweryfikowane]** w tym badaniu.
 - Liczby testów w §6 przejęte z materiału wejściowego, nie przeliczone ponownie.
