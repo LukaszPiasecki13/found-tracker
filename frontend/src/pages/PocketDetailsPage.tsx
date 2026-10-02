@@ -70,8 +70,11 @@ const PocketDetailsPage: React.FC = () => {
   const totalDeposited = Number(pocket.total_deposited) || 0;
   // Totals come from the freshly valued positions; when any position has no currency rate
   // they cannot be computed (null) rather than shown as a misleading partial sum.
-  const rateMissing =
-    pocket.rate_missing === true || (positions?.some((pos) => pos.rate_missing === true) ?? false);
+  // The positions endpoint refreshes rates first, so once it has answered it is authoritative;
+  // the pocket flag (no refresh) only covers the time the positions are still loading.
+  const rateMissing = positions
+    ? positions.some((pos) => pos.rate_missing === true)
+    : pocket.rate_missing === true;
   const totalPositionsValue = rateMissing
     ? null
     : positions

@@ -79,8 +79,10 @@ class PortfolioService:
     ) -> list[PortfolioSummaryResponse]:
         """The owner's valued portfolios, newest first; `name` filters."""
         portfolios = self._repo.list_by_owner(owner_id, name=name)
-        fx_rates = self._fx.build(
-            {portfolio.base_currency_id for portfolio in portfolios}
+        fx_rates = (
+            self._fx.build({portfolio.base_currency_id for portfolio in portfolios})
+            if portfolios
+            else {}
         )
         summaries = []
         for portfolio in portfolios:

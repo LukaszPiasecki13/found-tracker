@@ -57,7 +57,11 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
   const assetCurrencyCode = selectedAsset?.currency.code;
   const pocketCurrencyCode = pocket?.base_currency.code;
   const needsRate = !!assetCurrencyCode && !!pocketCurrencyCode && assetCurrencyCode !== pocketCurrencyCode;
-  const { data: fxQuote, isError: isFxRateUnavailable } = useFxRate(
+  const {
+    data: fxQuote,
+    isError: isFxRateUnavailable,
+    isLoading: isFxRateLoading,
+  } = useFxRate(
     needsRate ? assetCurrencyCode : undefined,
     needsRate ? pocketCurrencyCode : undefined
   );
@@ -67,6 +71,10 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
       setFxRate('1');
     } else if (fxQuote) {
       setFxRate(fxQuote.rate.toString());
+    } else {
+      // No quote (loading or unknown): never keep the previous asset's rate or a silent 1;
+      // the empty required field forces a deliberate manual entry.
+      setFxRate('');
     }
   }, [needsRate, fxQuote]);
 
@@ -385,7 +393,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
           <Button
             type="submit"
             variant="contained"
-            disabled={isProcessing || !selectedAsset || !quantity || !price}
+            disabled={isProcessing || isFxRateLoading || !selectedAsset || !quantity || !price}
           >
             {isProcessing ? <CircularProgress size={24} /> : 'Kup'}
           </Button>
