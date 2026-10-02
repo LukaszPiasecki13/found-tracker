@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { PortfolioOverview } from "../components/portfolio-overview";
 import PocketsList from "../components/PocketsList";
-import { Box, Typography, Divider } from "@mui/material";
+import { Alert, Box, Typography, Divider } from "@mui/material";
 import { usePockets } from "../hooks/usePockets";
 
 export default function DashboardPage() {
@@ -23,11 +23,21 @@ export default function DashboardPage() {
     };
   }, [pockets]);
 
+  // A portfolio with a position lacking a currency rate has no profit figure (null): its
+  // profit is left out of the sum, so say so instead of showing a silently lower total.
+  const hasUnvaluedPocket = pockets?.some((pocket) => pocket.rate_missing === true) ?? false;
+
   return (
     <Box>
       <Typography variant="h4" component="h1" gutterBottom>
         Dashboard
       </Typography>
+
+      {hasUnvaluedPocket && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Część portfeli ma pozycje bez kursu waluty — ich wynik nie jest wliczony do sumy zysku.
+        </Alert>
+      )}
       
       <PortfolioOverview
         totalValue={totalMetrics.totalValue}

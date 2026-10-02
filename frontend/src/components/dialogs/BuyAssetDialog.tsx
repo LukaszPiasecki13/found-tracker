@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import dayjs from 'dayjs';
 import { useCreateOperation, useSearchAssets } from '../../hooks/useOperations';
+import { useFxRate } from '../../hooks/useFxRate';
 import { usePocket } from '../../hooks/usePockets';
 import { operationService } from '../../services/operationService';
 import type { Asset } from '../../types/api';
@@ -51,22 +52,31 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
   const { data: searchResults, isLoading: searchLoading } = useSearchAssets(debouncedSearch);
   const createOperationMutation = useCreateOperation();
 
-  // Check if currencies are different and update FX rate
+  // Prefill the rate with the real cross rate (asset currency -> portfolio currency); when it
+  // is unknown the field stays editable and the user types the rate themselves.
+  const assetCurrencyCode = selectedAsset?.currency.code;
+  const pocketCurrencyCode = pocket?.base_currency.code;
+  const needsRate = !!assetCurrencyCode && !!pocketCurrencyCode && assetCurrencyCode !== pocketCurrencyCode;
+  const {
+    data: fxQuote,
+    isError: isFxRateUnavailable,
+    isLoading: isFxRateLoading,
+  } = useFxRate(
+    needsRate ? assetCurrencyCode : undefined,
+    needsRate ? pocketCurrencyCode : undefined
+  );
+
   useEffect(() => {
-    if (selectedAsset && pocket) {
-      const assetCurrency = selectedAsset.currency.code;
-      const pocketCurrency = pocket.base_currency.code;
-      
-      if (assetCurrency !== pocketCurrency) {
-        // Get exchange rate from asset currency
-        // If asset has exchange_rate, use it, otherwise default to 1
-        const rate = selectedAsset.currency.exchange_rate || 1;
-        setFxRate(rate.toString());
-      } else {
-        setFxRate('1');
-      }
+    if (!needsRate) {
+      setFxRate('1');
+    } else if (fxQuote) {
+      setFxRate(fxQuote.rate.toString());
+    } else {
+      // No quote (loading or unknown): never keep the previous asset's rate or a silent 1;
+      // the empty required field forces a deliberate manual entry.
+      setFxRate('');
     }
-  }, [selectedAsset, pocket]);
+  }, [needsRate, fxQuote]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -260,7 +270,11 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                       fullWidth
                       disabled={isProcessing}
                       inputProps={{ step: '0.0001', min: '0' }}
-                      helperText="Podaj aktualny kurs wymiany waluty aktywa do waluty portfela"
+                      helperText={
+                        isFxRateUnavailable
+                          ? 'Brak kursu w systemie — wpisz go ręcznie'
+                          : 'Podaj aktualny kurs wymiany waluty aktywa do waluty portfela'
+                      }
                     />
                   </>
                 )}
@@ -379,7 +393,7 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
           <Button
             type="submit"
             variant="contained"
-            disabled={isProcessing || !selectedAsset || !quantity || !price}
+            disabled={isProcessing || isFxRateLoading || !selectedAsset || !quantity || !price}
           >
             {isProcessing ? <CircularProgress size={24} /> : 'Kup'}
           </Button>
