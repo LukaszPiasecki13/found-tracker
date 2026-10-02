@@ -17,7 +17,7 @@ Uzupełnia [`07_schemat_danych_docelowy.md`](./07_schemat_danych_docelowy.md) (k
 | Moduł | Tabele | Kroki |
 |---|---|---|
 | `security` | `security_api_token` | E10.4 |
-| `portfolios` (import, D10) | `portfolios_import_file`, `portfolios_import_batch`, `portfolios_import_row`, `portfolios_import_override`, `portfolios_import_template` | E4.1, E4.2, E4.2a, E4.3, E4.4, E10.3 |
+| `portfolios` (import, D10) | `portfolios_import_batch`, `portfolios_import_row`, `portfolios_import_override`, `portfolios_import_template` | E4.1, E4.2, E4.2a, E4.3, E4.4, E10.3 |
 | `portfolios` (limity) | `portfolios_account_limit` | E5.6 |
 | `taxes` | `taxes_loss`, `taxes_loss_use`, `taxes_lot_attribute`, `taxes_account_setting`, `taxes_year_parameter`, `taxes_report_snapshot` | E6.1–E6.7 |
 | `planning` | `planning_model_portfolio`, `planning_model_target`, `planning_goal`, `planning_fire_scenario`, `planning_recurring_template` | E9.1–E9.6 |
@@ -29,15 +29,15 @@ FK do tabel innego modułu jest dozwolony (jak dziś `portfolios_operation.asset
 
 | Moduł | Zależy od (przez serwisy) | Nie może zależeć od |
 |---|---|---|
-| `core_data` | — (waluta w ustawieniach jako kod, doc 07 sekcja 3.2) | wszystkich pozostałych |
-| `security` | `core_data` (jak dziś, `security/services/auth.py:2`) | pozostałych |
+| `core_data` | — (waluta w ustawieniach jako kod, doc 07 sekcja 3.2); **dług:** `core_data/services/users.py:7` importuje `security/services/password`, a `security/services/auth.py:2` importuje `core_data` — cykl do usunięcia (hash hasła do `core/` albo wstrzyknięcie), zanim powstaną tokeny API (E10.4) | wszystkich pozostałych |
+| `security` | `core_data` (`security/services/auth.py:2`) | pozostałych |
 | `assets` | — | `portfolios` i dalszych |
 | `portfolios` | `assets`, `core_data` | `taxes`, `planning`, `notifications` |
 | `taxes` | `portfolios`, `assets` | `planning`, `notifications` |
 | `planning` | `portfolios`, `taxes`, `assets` | `notifications` |
-| `notifications` | `portfolios`, `assets`, `planning`, `taxes` | — |
+| `notifications` | `portfolios`, `assets`, `planning` (przez port; alert odchylenia E9.1) | `taxes` |
 
-Graf jest acykliczny. Konsekwencja: limity IKE/IKZE (E5.6) leżą w `portfolios`, nie w `taxes` (inaczej `portfolios → taxes` zamknęłoby cykl z `taxes → portfolios`).
+Graf docelowy jest acykliczny (po usunięciu długu `core_data` ↔ `security`). Konsekwencja: limity IKE/IKZE (E5.6) leżą w `portfolios`, nie w `taxes` (inaczej `portfolios → taxes` zamknęłoby cykl z `taxes → portfolios`).
 
 ## 3. Moduł `security` — tokeny API (E10.4)
 
@@ -62,22 +62,11 @@ Indeksy: UNIQUE `(token_hash)`; `(owner_id, revoked_at)`. **[propozycja]** Jawny
 
 ## 4. Moduł `portfolios` — Paczki importu (E4)
 
-Parsery plików to adaptery w `infrastructure/` (D10); port importu w `core/` (do ADR). Tabele pochodzą z potoku E4.1: plik → wiersze pośrednie → szkic → zatwierdzenie → cofnięcie. Odczyt i zapis wyłącznie przez serwis importu w `portfolios`; rozpoznanie waloru przez serwis `assets` (ISIN, ticker + `mic`); IMAP (E10.3) tworzy szkic przez ten sam serwis.
+Parsery plików to adaptery w `infrastructure/` (D10); port importu w `core/` ([ADR-0018](../adr/0018-architektura-importu.md)). Potok E4.1: plik → wiersze pośrednie → zatwierdzenie → cofnięcie. Odczyt i zapis wyłącznie przez serwis importu w `portfolios`; rozpoznanie waloru przez serwis `assets` (ISIN, ticker + `mic`). Szkic z e-maila (IMAP, E10.3) to Operacja `status='draft'` (6.4), nie wiersz importu.
 
-### 4.1 `portfolios_import_file` — surowy plik
+### 4.1 Plik importu — kolumny w Paczce
 
-| Kolumna | Typ | Null | Uwagi |
-|---|---|---|---|
-| `id` | `BigInteger` | nie | PK |
-| `owner_id` | `BigInteger` | nie | FK `users.id` |
-| `filename` | `String(255)` | nie | nazwa oryginalna |
-| `sha256` | `String(64)` | nie | hash treści; indeks `(owner_id, sha256)` — **nie** UNIQUE: ten sam plik wolno wgrać ponownie, dedupe robi się na wierszach (E4.1: „ponowny import = 0 nowych operacji”) |
-| `size_bytes` | `Integer` | nie | `CHECK <= 10485760` **[propozycja]** limit 10 MB |
-| `encoding` | `String(20)` | tak | wykryte (UTF-8, cp1250; E4.2) |
-| `content` | `LargeBinary` | nie | surowa treść; kolumna ładowana leniwie (`deferred`) **[propozycja]** — plik w bazie, żeby kopia (E4.5, E11.3) obejmowała wszystko |
-| `uploaded_at` | `DateTime(tz)` | nie | `now()` |
-
-Pliki brokerskie to dane finansowe użytkownika — w repo nie trafiają nigdy; testy używają plików zanonimizowanych (E4.3).
+Osobnej tabeli pliku nie ma (dawna `portfolios_import_file`): `filename`, `sha256`, `size_bytes`, `encoding`, `content` leżą w `portfolios_import_batch` (4.2). Limit 10 MB (`IMPORT_FILE_TOO_LARGE`); ten sam plik (`sha256`) nie tworzy drugiej Paczki.
 
 ### 4.2 `portfolios_import_batch` — **Paczka importu**
 
@@ -86,60 +75,63 @@ Pliki brokerskie to dane finansowe użytkownika — w repo nie trafiają nigdy; 
 | `id` | `BigInteger` | nie | — | PK; cel FK `portfolios_operation.import_batch_id` (doc 07, 5.4) — `ON DELETE RESTRICT` |
 | `owner_id` | `BigInteger` | nie | — | FK `users.id` |
 | `portfolio_id` | `BigInteger` | nie | — | FK `portfolios_portfolio.id` |
-| `file_id` | `BigInteger` | tak | `NULL` | FK `portfolios_import_file.id`; `NULL` dla paczki bez pliku (wklejka) |
 | `template_id` | `BigInteger` | tak | `NULL` | FK `portfolios_import_template.id` ON DELETE SET NULL |
-| `source` | `String(30)` | nie | — | kod parsera: `csv`, `myfund`, `xtb`, `mbank`, `ibkr`, `degiro`, `trading212`, `revolut`… |
+| `parser_id` | `String(40)` | nie | — | kod parsera: `csv`, `myfund`, `xtb`, `mbank`, `ibkr`, `degiro`, `trading212`, `revolut`… |
+| `filename` | `String(255)` | nie | — | nazwa oryginalna (wklejka: nazwa nadana) |
+| `sha256` | `String(64)` | nie | — | hash treści; **UNIQUE `(owner_id, sha256)`**: ponowny plik zwraca istniejącą Paczkę (0 nowych Operacji, E4.1) |
+| `size_bytes` | `Integer` | nie | — | `CHECK <= 10485760` **[propozycja]** limit 10 MB |
+| `encoding` | `String(20)` | tak | `NULL` | wykryte (UTF-8, cp1250; E4.2) |
+| `content` | `LargeBinary` | nie | — | surowa treść, `deferred` **[propozycja]** — plik w bazie, żeby kopia (E4.5, E11.3) obejmowała wszystko; w repo nigdy (testy: pliki zanonimizowane, E4.3) |
 | `status` | `String(10)` | nie | `'draft'` | `draft`, `committed`, `reverted`; `CHECK` |
 | `created_at` / `committed_at` / `reverted_at` | `DateTime(tz)` | nie / tak / tak | `now()` / `NULL` / `NULL` | — |
 
-Indeksy: `(owner_id, status)`, `(portfolio_id, created_at DESC)`, `(file_id)`. **Cofnięcie (D15):** serwis usuwa Operacje paczki, chyba że któraś ma `edited_at IS NOT NULL` — wtedy błąd z listą id (kod do kontraktu API); po cofnięciu `status='reverted'`, wiersze zostają (do ponownego zatwierdzenia). Zatwierdzenie = rdzeń `record_many` bez commitu + jeden `rebuild` ([ADR-0008](../adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md); dziś `_record` commituje — `portfolios/services/operations.py:99-100`).
+Indeksy: `(owner_id, status)`, `(portfolio_id, created_at DESC)`. **Cofnięcie (D15):** serwis usuwa Operacje Paczki, chyba że któraś ma `edited_at IS NOT NULL` — wtedy 409 `IMPORT_BATCH_HAS_EDITS` z listą id; po cofnięciu `status='reverted'`, wiersze zostają (do ponownego zatwierdzenia). Zatwierdzenie = rdzeń `record_many` bez commitu + jeden `rebuild` ([ADR-0008](../adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md); dziś `_record` commituje — `portfolios/services/operations.py:99-100`).
 
-### 4.3 `portfolios_import_row` — wiersz pośredni
+### 4.3 `portfolios_import_row` — wiersz pośredni (odpowiednik `ParsedRow`)
 
 | Kolumna | Typ | Null | Uwagi |
 |---|---|---|---|
 | `id` | `BigInteger` | nie | PK |
 | `batch_id` | `BigInteger` | nie | FK `portfolios_import_batch.id` ON DELETE CASCADE |
 | `row_no` | `Integer` | nie | numer w pliku; UNIQUE `(batch_id, row_no)` |
-| `raw_label` | `String(200)` | tak | **surowa etykieta typu** z pliku (np. „Kupno”, „Dividend”) — wejście mapowania na `operation_type` |
-| `raw_data` | `JSONB` | nie | komórki wiersza bez zmian (podgląd, diagnostyka) |
-| `fingerprint` | `String(64)` | nie | hash `(source, external_ref` albo `data+ISIN+ilość+kwota)`; klucz nadpisań i deduplikacji |
-| `row_status` | `String(12)` | nie | `new`, `duplicate`, `unrecognized`, `error`, `approved`; `CHECK` (E4.1) |
-| `error_code` | `String(40)` | tak | kod walidacji (waluta, brutto ≠ ilość × cena ± prowizja, data) |
-| `error_detail` | `String(200)` | tak | bez danych osobowych |
-| `trade_date` | `Date` | tak | wartości po parsowaniu i po nałożeniu nadpisań: |
+| `raw_label` | `String(200)` | tak | **surowa etykieta typu** z pliku (np. „Kupno”) — wejście mapowania na `operation_type` |
+| `payload` | `JSONB` | nie | komórki wiersza bez zmian (podgląd, diagnostyka) |
+| `row_status` | `String(12)` | nie | `ok`, `duplicate`, `unrecognized`, `error`, `skip`; `CHECK` (E4.1); `skip` = wiersz pominięty (duplikat odwrócony, nadpisanie, decyzja użytkownika) |
+| `resolution` | `String(12)` | tak | **[propozycja]** po zatwierdzeniu: `created` (powstała Operacja), `skipped`; `NULL` w szkicu |
+| `error_code` / `error_detail` | `String(40)` / `String(200)` | tak | kod walidacji (waluta, brutto ≠ ilość × cena ± prowizja, data); bez danych osobowych |
+| `dedup_key` | `String(120)` | nie | hash (`operation_day`, `isin` lub `asset_id`, ilość, kwota); gdy jest `external_ref`, klucz = `external_ref` |
+| `match_key` | `String(120)` | nie | klucz nadpisań (4.4): `external_ref` albo `dedup_key` |
+| `trade_date`, `settlement_date` | `Date` | tak | wartości po parsowaniu i nałożeniu nadpisań |
 | `operation_type` | `String(20)` | tak | wartość `OperationType` albo `NULL` przy `unrecognized` |
 | `asset_id` | `BigInteger` | tak | FK `assets_asset.id`; `NULL` = nierozpoznany walor |
 | `isin`, `ticker` | `String(12)`, `String(20)` | tak | rozpoznawanie waloru (E4.1) |
-| `quantity`, `price` | `Numeric(18,9)` | tak | — |
+| `quantity`, `price`, `fx_rate` | `Numeric(18,9)` | tak | `fx_rate` = kurs brokera z pliku |
 | `amount`, `fee` | `Numeric(18,2)` | tak | — |
 | `currency_code` | `String(3)` | tak | — |
-| `external_ref` | `String(100)` | tak | ID z pliku (np. Trading212) |
-| `duplicate_of_operation_id` | `BigInteger` | tak | FK `portfolios_operation.id` ON DELETE SET NULL |
-| `operation_id` | `BigInteger` | tak | FK `portfolios_operation.id` ON DELETE SET NULL; wypełniane przy zatwierdzeniu |
+| `external_ref` | `String(120)` | tak | ID z pliku (np. Trading212) |
+| `duplicate_of_operation_id` / `operation_id` | `BigInteger` | tak | FK `portfolios_operation.id` ON DELETE SET NULL; `operation_id` wypełniane przy zatwierdzeniu |
 | `is_overridden` | `Boolean` | nie (`false`) | wiersz zmieniony przez użytkownika lub nałożone nadpisanie |
 
-Indeksy: `(batch_id, row_status)` (filtry duplikat/nierozpoznany/błąd, paginacja do 2 000 wierszy), `(fingerprint)`. Duplikaty: `external_ref` w tej samej Operacji (UNIQUE częściowy `(portfolio_id, external_ref)`, doc 07 5.4) albo zgodność `(data, ISIN, ilość, kwota)`.
+Indeksy: `(batch_id, row_status)` (filtr `row_status`, paginacja `limit`/`offset`, do 2 000 wierszy), `(match_key)`. Duplikaty: `external_ref` w tej samej Operacji (UNIQUE częściowy `(portfolio_id, external_ref)`, doc 07 5.4) albo zgodność `dedup_key`.
 
 ### 4.4 `portfolios_import_override` — nadpisania użytkownika przy re-imporcie
 
-Poprawki ręczne (zmiana typu, przypisanie waloru, pominięcie wiersza) przeżywają cofnięcie paczki i ponowny import (E4.1). To wiedza użytkownika, więc nie jest czyszczona z paczką.
+Poprawki ręczne (zmiana typu, przypisanie waloru, pominięcie wiersza) przeżywają cofnięcie Paczki i ponowny import (E4.1). To wiedza użytkownika, więc nie jest czyszczona z Paczką. Jeden wiersz = jedno pole.
 
 | Kolumna | Typ | Null | Uwagi |
 |---|---|---|---|
 | `id` | `BigInteger` | nie | PK |
 | `portfolio_id` | `BigInteger` | nie | FK CASCADE |
-| `source` | `String(30)` | nie | kod parsera |
-| `fingerprint` | `String(64)` | nie | jak w wierszu |
-| `overrides` | `JSONB` | nie | pola → wartości, np. `{"operation_type": "fee", "asset_id": 12}`; klucze z białej listy (walidacja w serwisie) |
-| `skip` | `Boolean` | nie (`false`) | pomiń wiersz |
+| `match_key` | `String(120)` | nie | `external_ref` albo `dedup_key` wiersza |
+| `field` | `String(40)` | nie | pole z białej listy (`operation_type`, `asset_id`, `skip`…; walidacja w serwisie) |
+| `value` | `String(255)` | nie | wartość jako tekst (`skip` = `true`) |
 | `updated_at` | `DateTime(tz)` | nie | `now()` |
 
-UNIQUE `(portfolio_id, source, fingerprint)`. Kolejność: parser → nadpisania → rozpoznanie waloru → walidacja → duplikaty.
+UNIQUE `(portfolio_id, match_key, field)`. Kolejność: parser → nadpisania → rozpoznanie waloru → walidacja → duplikaty. Zaksięgowana Operacja nigdy nie jest nadpisywana: różnice pokazuje podgląd (`CHANGED_AT_SOURCE`), domyślnie `skip`.
 
 ### 4.5 `portfolios_import_template` — zapisane mapowania CSV (E4.2)
 
-`id` PK; `owner_id` FK; `name` `String(100)`; `source` `String(30)`; `mapping` `JSONB` (kolumny, separator, przecinek dziesiętny, kodowanie, format daty); `created_at`. UNIQUE `(owner_id, name)`.
+`id` PK; `owner_id` FK; `name` `String(100)`; `parser_id` `String(40)`; `mapping` `JSONB` (kolumny, separator, przecinek dziesiętny, kodowanie, format daty); `created_at`. UNIQUE `(owner_id, name)`.
 
 ### 4.6 `portfolios_account_limit` — limity IKE/IKZE (E5.6)
 
@@ -150,7 +142,7 @@ Konfiguracja roczna, dane globalne (D14); ładowana komendą CLI, nie na sztywno
 | `id` | `BigInteger` | nie | PK |
 | `year` | `SmallInteger` | nie | — |
 | `account_type` | `String(10)` | nie | `CHECK IN ('ike','ikze')` |
-| `variant` | `String(16)` | nie (`'standard'`) | `standard`, `self_employed` (dla IKZE dwie wartości w dowodzie, [podatki](../../research/04_rynek_pl_podatki_i_brokerzy.md)) |
+| `variant` | `String(16)` | nie (`'regular'`) | `regular`, `self_employed` (dla IKZE dwie wartości w dowodzie, [podatki](../../research/04_rynek_pl_podatki_i_brokerzy.md)) |
 | `limit_amount` | `Numeric(18,2)` | nie | `CHECK > 0`; wartości z dowodu, nie z pamięci |
 
 UNIQUE `(year, account_type, variant)`. Czyta tylko `portfolios` (wpłaty za rok z Operacji `deposit`/przelewów); wybór wariantu IKZE per Portfel — otwarty punkt.
@@ -181,18 +173,18 @@ UNIQUE `(owner_id, loss_year, pool)`; indeks `(owner_id, pool, loss_year)`. Stra
 
 ### 5.2 `taxes_lot_attribute` — flagi Partii (E6.1)
 
-Odpowiedź na „gdzie leżą ipo_relief, gift, inheritance”: **w `taxes`, kluczowane `open_operation_id`**, nie w `portfolios_lot`. Powód: `portfolios_lot` jest przebudowywana (`id` niestabilne), a flagi to dane wpisane przez użytkownika; `portfolios_operation.id` jest stabilne. `portfolios` nie czyta tej tabeli (kierunek `taxes → portfolios`); `taxes` łączy zużycie Partii z atrybutami po `open_operation_id`.
+Odpowiedź na „gdzie leżą ipo_relief, gift, inheritance”: **w `taxes`, kluczowane `origin_operation_id`** (pierwotny zakup), nie w `portfolios_lot`. Powód: `portfolios_lot` jest przebudowywana (`id` niestabilne), a flagi to dane wpisane przez użytkownika; `portfolios_operation.id` jest stabilne. `portfolios` nie czyta tej tabeli (kierunek `taxes → portfolios`); `taxes` łączy zużycie Partii (serwis `portfolios` zwraca `origin_operation_id`) z atrybutami po tym kluczu.
 
 | Kolumna | Typ | Null | Domyślne | Uwagi |
 |---|---|---|---|---|
-| `open_operation_id` | `BigInteger` | nie | — | PK; FK `portfolios_operation.id` ON DELETE CASCADE |
+| `origin_operation_id` | `BigInteger` | nie | — | PK; FK `portfolios_operation.id` ON DELETE CASCADE |
 | `acquisition_kind` | `String(12)` | nie | `'purchase'` | `purchase`, `gift`, `inheritance`; `CHECK` |
 | `ipo_relief` | `Boolean` | nie | `false` | ulga IPO (art. 21 ust. 1 pkt 105a) |
 | `ipo_admission_date` | `Date` | tak | `NULL` | początek 3-letniego biegu; wymagana, gdy `ipo_relief` (`CHECK`) |
 | `cost_override` | `Numeric(18,2)` | tak | `NULL` | PLN; darowizna: `0` wg reguły z dowodu, spadek: koszt spadkodawcy; `NULL` = koszt z Partii |
 | `updated_at` | `DateTime(tz)` | nie | `now()` | — |
 
-Przelew papierów przenosi Partię z jej `open_operation_id`, więc flagi „podążają” za Partią (E2.3); przy `split` (nowa Operacja otwierająca) serwis `taxes` odczytuje atrybut po łańcuchu Operacji — mechanizm do ADR (otwarty punkt).
+`origin_operation_id` jest niezmienny przy przelewie papierów i splicie (doc 07, 5.6), więc flagi „podążają” za Partią bez dodatkowego mechanizmu (E2.3, E8.1); wymiany (`symbol_change`, `spin_off`) — otwarty punkt 6.
 
 ### 5.3 `taxes_account_setting` — ustawienia podatkowe rachunku (E6.2)
 
@@ -228,7 +220,7 @@ Wiersz tworzy się leniwie; rachunki IKE/IKZE/PPK/PPE/OIPE są wyłączone z rap
 | `is_year_closed` | `Boolean` | nie (`false`) | `true` = zamknięcie roku: strata roku przechodzi do `taxes_loss` (`source='year_close'`) |
 | `created_at` | `DateTime(tz)` | nie | `now()` |
 
-Indeks `(owner_id, tax_year, created_at DESC)`. Czytają: `taxes` (własne), `planning` (szacunek podatku przy rebalancingu, E9.2 — przez serwis `taxes`), `notifications` (E10.2 — bez).
+Indeks `(owner_id, tax_year, created_at DESC)`. Czytają: `taxes` (własne), `planning` (szacunek podatku przy rebalancingu, E9.2 — przez serwis `taxes`), `notifications` — nie (zależność usunięta, sekcja 2).
 
 ## 6. Moduł `planning` (E9)
 
@@ -279,7 +271,7 @@ Unikalność celu: trzy indeksy częściowe `UNIQUE (model_id, <kolumna>) WHERE 
 | `operation_type` | `String(20)` | nie | np. `deposit` (wpłata na IKE) |
 | `asset_id` | `BigInteger` | tak | FK `assets_asset.id` |
 | `amount`, `fee` | `Numeric(18,2)` | tak / nie (`0`) | — |
-| `currency_id` | `BigInteger` | tak | FK; `NULL` wg reguły doc 07 5.4 |
+| `currency_id` | `BigInteger` | tak | FK; `NULL` = domyślna przy generowaniu: serwis wpisuje do szkicu **jawnie** walutę waloru (bez waloru — bazową Portfela), doc 07 5.4 |
 | `cycle` | `String(10)` | nie | `weekly`, `monthly`, `quarterly`, `yearly` |
 | `day_of_cycle` | `SmallInteger` | tak | dzień miesiąca (1–31) lub tygodnia |
 | `weekend_rule` | `String(10)` | nie (`'next'`) | `next`, `previous`, `keep` — dzień wolny |
@@ -287,7 +279,7 @@ Unikalność celu: trzy indeksy częściowe `UNIQUE (model_id, <kolumna>) WHERE 
 | `last_generated_on` | `Date` | tak | granica generowania propozycji |
 | `is_active` | `Boolean` | nie (`true`) | — |
 
-**[propozycja]** Propozycja to Operacja `status='draft'` utworzona przez serwis `portfolios` z `external_ref = 'recurring:<template_id>:<data>'` — UNIQUE częściowy `(portfolio_id, external_ref)` (doc 07 5.4) daje idempotencję generowania; akceptacja zmienia status na `posted`. Ten sam mechanizm dla propozycji dywidend i splitów (E8.5) i szkiców z e-maila (E10.3). Generuje CLI (`planning/entrypoints.py`). Indeks `(is_active, starts_on)`.
+**[propozycja]** Propozycja to Operacja `status='draft'` utworzona przez serwis `portfolios` z `external_ref = 'recurring:<template_id>:<data>'` — UNIQUE częściowy `(portfolio_id, external_ref)` (doc 07 5.4) daje idempotencję generowania; akceptacja zmienia status na `posted`. Ten sam mechanizm dla propozycji dywidend i splitów (E8.5) — **bez osobnej tabeli zdarzeń** — i szkiców z e-maila (E10.3). UI: widok `/operations?status=draft` z akcjami `accept`/`void`. Generuje CLI (`planning/entrypoints.py`). Indeks `(is_active, starts_on)`.
 
 ## 7. Moduł `notifications` (E10)
 
@@ -353,28 +345,39 @@ Indeksy: `(owner_id, created_at DESC)`, `(rule_id, created_at DESC)`. Retencja l
 | Tabela | Zapisuje (serwis) | Czyta spoza modułu (przez serwis) |
 |---|---|---|
 | `security_api_token` | `security` | — |
-| `portfolios_import_*` | `portfolios` (serwis importu) | `notifications`/IMAP — tylko tworzenie szkicu |
+| `portfolios_import_*` | `portfolios` (serwis importu) | — (IMAP tworzy Operację `draft` przez serwis `portfolios`) |
 | `portfolios_account_limit` | `portfolios` (CLI) | — |
 | `taxes_loss*`, `taxes_account_setting`, `taxes_year_parameter`, `taxes_report_snapshot` | `taxes` | `planning` (szacunek podatku) |
 | `taxes_lot_attribute` | `taxes` | — (FK do `portfolios_operation`, bez odczytu przez `portfolios`) |
-| `planning_*` | `planning` | `notifications` (odchylenie od wzorca) |
+| `planning_*` | `planning` | `notifications` (odchylenie od wzorca, przez port) |
 | `notifications_*` | `notifications` | — |
 
 ## Otwarte punkty
 
 | # | Punkt | Blokuje |
 |---|---|---|
-| 1 | ADR kierunków modułów (sekcja 2: `taxes`, `planning`, `notifications`) i portu importu w `core/` | E4.1, E6, E9, E10 |
+| 1 | ADR kierunków modułów (sekcja 2: `taxes`, `planning`, `notifications`, dług `core_data` ↔ `security`) i portu importu w `core/` | E4.1, E6, E9, E10 |
 | 2 | **[propozycja]** Hash tokenów API SHA-256 + pokazanie jawnego tokenu raz; throttling `last_used_at` | E10.4 |
-| 3 | **[propozycja]** Plik importu w bazie (`LargeBinary`, limit 10 MB) zamiast dysku | E4.1, E11.3 |
-| 4 | **[propozycja]** Szkic importu tylko w `portfolios_import_row`; Operacja `draft` tylko dla propozycji (E8.5, E9.6, E10.3) | E4.1 |
-| 5 | **[propozycja]** Nadpisania po `fingerprint`; zakres „białej listy” pól nadpisań | E4.1 |
-| 6 | **[propozycja]** Flagi Partii w `taxes_lot_attribute` po `open_operation_id`; zachowanie flag przy `split`/wymianie (łańcuch Operacji) do ADR | E6.1, E8.1 |
+| 3 | **[propozycja]** Plik w Paczce (`LargeBinary`, limit 10 MB), UNIQUE `(owner_id, sha256)` — ponowny plik zwraca istniejącą Paczkę | E4.1, E11.3 |
+| 4 | **[propozycja]** Szkic importu w `portfolios_import_row`; Operacja `draft` dla propozycji (E8.5, E9.6, E10.3); `resolution` wiersza (`created`/`skipped`) | E4.1 |
+| 5 | **[propozycja]** Nadpisania po `match_key` + `field`; zakres „białej listy” pól | E4.1 |
+| 6 | **[propozycja]** Flagi Partii w `taxes_lot_attribute` po `origin_operation_id` (przelew i split ją zachowują); zachowanie flag przy wymianie (`symbol_change`, `spin_off`) do ADR | E6.1, E8.1 |
 | 7 | **[propozycja]** Raport roczny liczony na żądanie + migawka na żądanie; `year_close` tworzy straty roku | E6.2, E6.5 |
 | 8 | Czy pula c (art. 30a) może mieć przenoszoną stratę — plan i dowód milczą; `taxes_loss.pool` dopuszcza dziś tylko `a`,`b` | E6.1 |
 | 9 | **[propozycja]** Limity IKE/IKZE w `portfolios_account_limit` (nie `taxes`); wybór wariantu IKZE per Portfel nieustalony; wartości z dowodu | E5.6 |
 | 10 | **[propozycja]** Propozycje cykliczne jako Operacje `draft` z `external_ref` | E9.6 |
 | 11 | **[propozycja]** Sekrety kanałów tylko w zmiennych środowiskowych (`secret_ref`); wybór kanałów i IMAP — ADR | E10.1–E10.3 |
 | 12 | **[propozycja]** `model_deviation` jako typ reguły alertu; retencja logu dostarczeń | E9.1, E10.1 |
-| 13 | Format eksportu myfund i pliki brokerów (XTB, mBank, IBKR, DEGIRO, Trading212, Revolut) — **brak próbek od właściciela**; kolumny `import_row` są wspólnym mianownikiem i mogą wymagać rozszerzenia po obejrzeniu plików; PIT-8C do testów E6.2 | E4.2a, E4.3, E6.2 |
+| 13 | Format eksportu myfund i pliki brokerów (XTB, mBank, IBKR, DEGIRO, Trading212, Revolut) — **brak próbek od właściciela**; kolumny `portfolios_import_row` są wspólnym mianownikiem i mogą wymagać rozszerzenia po obejrzeniu plików; PIT-8C do testów E6.2 | E4.2a, E4.3, E6.2 |
 | 14 | Kontrakty API (ścieżki, koperty, kody błędów) — osobny dokument | wszystkie |
+
+## Zmiany względem poprzedniej wersji
+
+| Zmiana | Źródło |
+|---|---|
+| Import wg kanonu: plik w `portfolios_import_batch` (`parser_id`, `sha256` UNIQUE → istniejąca Paczka), bez `portfolios_import_file` | B |
+| `portfolios_import_row`: `payload`, `row_status` z `skip`, `dedup_key`, `match_key`, `resolution`, `fx_rate`, `settlement_date`, `external_ref` `String(120)`; nadpisania jako `match_key`/`field`/`value` | B |
+| Błąd cofnięcia `IMPORT_BATCH_HAS_EDITS`; paginacja `limit`/`offset` z filtrem `row_status` | B, C |
+| Zależności: `planning→assets`, `notifications→planning`, usunięte `notifications→taxes`; dług `core_data` ↔ `security` | C |
+| `taxes_lot_attribute` po `origin_operation_id`; `variant` `regular` | A2, A8 |
+| Szkice jako Operacje `draft` (dywidendy, splity, cykliczne, e-mail), jawne `currency_id` szablonu | C, A4 |

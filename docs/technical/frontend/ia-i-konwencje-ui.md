@@ -42,12 +42,13 @@ Zasada: **URL jest źródłem prawdy o zakresie** (Portfel / Grupa / „Wszystki
     income                      Dywidendy i odsetki                                      E3.6
     closed                      Zamknięte pozycje                                        E3.2
     risk                        Ryzyko                                                   E7
+    calendar                    Kalendarz dywidend i wykupów (zakres)                    E8.6, E5.2
 /groups/:id                     Grupa portfeli — te same zakładki bez „operations"      E2.1
 /groups/all                     „Wszystkie portfele" (wirtualna Grupa) [propozycja]
 /assets/:id                     Widok waloru (opcjonalnie ?portfolio=<id>)               E3.8
-/operations                     Historia operacji ze wszystkich Portfeli                 E2.7
+/operations                     Historia operacji ze wszystkich Portfeli; ?status=draft = szkice do akceptacji   E2.7, E8.5
 /compare                        Porównanie Portfeli na TWR                               E3.5
-/calendar                       Dywidendy: kalendarz i prognoza; wykupy obligacji        E8.6, E5.2
+/groups/all/calendar            Kalendarz globalny: dywidendy, prognoza, wykupy (nie osobna trasa `/calendar`)   E8.6, E5.2
 /bonds                          Obligacje skarbowe (wycena z listów emisyjnych)          E5.1
 /import                         Lista szkiców i paczek importu
 /import/new, /import/:batchId   Kreator importu                                          E4.1-E4.3
@@ -103,7 +104,7 @@ Dziś 8 niezależnych `Intl.NumberFormat`: 4 walutowe (`PositionsTable.tsx:39`, 
 | `formatPrice(v, currency)` | min. 2, maks. 4 miejsca | j.w. |
 | `formatRate(v)` | kurs walutowy: 4–6 miejsc [propozycja] | `fx_rate` `Numeric(18, 9)` |
 | `formatPercent(v)` | 2 miejsca, **jawny znak** (+/−); `null` → „—” (np. annualizacja < 365 dni, E3.1) | dziś `toFixed(2)` bez spójnego znaku |
-| `formatDate(d)` | data kalendarzowa `DD.MM.YYYY` (jak `OperationsTable.tsx:74`); znaczniki czasu (`created_at`) z `timeZone: 'Europe/Warsaw'` (D13; docelowo strefa z ustawień E0.9) | wykresy: `new Date(label)` (`LineChartCard.tsx:82`) |
+| `formatDate(d)` | data kalendarzowa `DD.MM.YYYY` (jak `OperationsTable.tsx:74`); znaczniki czasu (`created_at`) z `timeZone: 'Europe/Warsaw'` (stała, D13, ADR-0019; bez ustawienia strefy) | wykresy: `new Date(label)` (`LineChartCard.tsx:82`) |
 | `formatCompact(v)` | skróty osi wykresu (k, M) | `LineChartCard.tsx:46-48` (kopie w `AreaChartCard.tsx`) |
 
 Wszystkie funkcje przyjmują `number | string | null | undefined` i zwracają „—” dla braku wartości (nie `0`). Kolejny powód centralizacji: tryb prywatności (E11.2) ukrywa kwoty jedną zmianą w `formatMoney`. Parsowanie dat bez czasu: `dayjs('YYYY-MM-DD')`, nie `new Date(...)` (ISO bez czasu jest parsowane jako UTC i w strefach na zachód od UTC pokazuje dzień wcześniej). Test jednostkowy dla każdej funkcji — pierwszy zestaw Vitest (E0.7).
@@ -162,7 +163,7 @@ Dziś `GET /portfolios/positions` odświeża kursy i ceny w żądaniu (`position
 | Element UI | Zachowanie |
 |---|---|
 | Kolumna/tooltip daty ceny | `price_date` przy każdej pozycji; `stale` → znacznik (2.4) |
-| Przycisk „Odśwież ceny” (Portfel, `/data`) | wywołuje jawną akcję odświeżenia (endpoint nowy — **konflikt z kryterium E1.4**, p. Otwarte); po sukcesie unieważnia klucze `portfolio`, `positions`, `performance`, `dashboard` |
+| Przycisk „Odśwież ceny” (Portfel, `/data`) | `POST /assets/refresh-prices` → **202, odświeżenie w tle** (wyjątek E1.4: żądanie nie woła dostawcy, ADR-0017); UI pokazuje „Odświeżanie zleczone”, po odświeżeniu (polling `price_date`) unieważnia klucze `portfolio`, `positions`, `performance`, `dashboard` |
 | Błąd dostawcy | `MARKET_DATA_UNAVAILABLE` (502, `core/market_data.py:82`) → „Dostawca notowań niedostępny; pokazuję ostatnie ceny” (stany: 2.5) |
 
 ### 2.7 Błędy API: mapowanie `code` → komunikat PL
@@ -178,17 +179,18 @@ Rozwiązanie: `lib/errors.ts` — `parseApiError(error)` → `{ status, code?, d
 | `INVALID_OPERATION`, `OPERATION_REQUIRES_ASSET`, `OPERATION_FORBIDS_ASSET` | 400 | „Operacja jest niezgodna z regułami Portfela.” / „Wybierz walor.” / „Ten typ nie dotyczy waloru.” | `domain/errors.py:16-38` |
 | `PORTFOLIO_NOT_FOUND`, `OPERATION_NOT_FOUND`, `ASSET_NOT_FOUND` | 404 | „Nie znaleziono Portfela / operacji / waloru.” | `portfolios/exceptions.py:19-61` |
 | `PORTFOLIO_ALREADY_EXISTS`, `ASSET_ALREADY_EXISTS` | 409 | „Taka nazwa/ticker już istnieje.” | `exceptions.py:36`, `assets/exceptions.py:62` |
-| `ASSET_IN_USE`, `CURRENCY_IN_USE` | 409 | „Nie można usunąć — jest używany; zarchiwizuj” (D15) | `assets/exceptions.py:89,106` |
+| `ASSET_HAS_HISTORY`, `CURRENCY_IN_USE` | 409 | „Nie można usunąć — ma historię / jest używana; zarchiwizuj” (D15; `ASSET_HAS_HISTORY` zastępuje dotychczasowy `ASSET_IN_USE`, `assets/exceptions.py:89`) | `assets/exceptions.py:89,106` |
 | `CONCURRENT_CHANGE` | 409 | „Dane zmieniły się równolegle — spróbuj ponownie.” | `portfolios/exceptions.py:116` |
 | `INVALID_DATE`, `INVALID_DATE_RANGE` | 400 | „Niepoprawna data / zakres dat.” | `exceptions.py:89,95` |
 | `MARKET_DATA_UNAVAILABLE` | 502 | „Dostawca notowań jest niedostępny.” | `core/market_data.py:82` |
 | `ASSET_NOT_FOUND_ON_PROVIDER` | 404 | „Dostawca nie zna tego tickera.” | `assets/exceptions.py:34` |
 | `INVALID_CREDENTIALS`, `INVALID_REFRESH_TOKEN` | 401 | „Błędny e-mail lub hasło.” / przekierowanie do logowania | `security/errors.py:25,32` |
 | `EMAIL_ALREADY_REGISTERED` | 409 | „Ten e-mail jest już zarejestrowany.” | `core_data/services/users.py:30` |
-| `IRR_UNDEFINED`, `IRR_AMBIGUOUS` | 4xx | „XIRR nieokreślony (brak przepływów o różnych znakach).” / „XIRR niejednoznaczny — pokazuję TWR.” | E3.1 (plan pisze małymi literami; ADR-0007 wymaga `UPPER_SNAKE`) |
-| `REGISTRATION_DISABLED` | 403 | „Rejestracja jest wyłączona.” | E0.6 — nazwa [propozycja] |
+| `IRR_UNDEFINED`, `IRR_AMBIGUOUS`, `PERIOD_SHORTER_THAN_ONE_YEAR` | **200 inline** (`reason` w metryce, nie błąd; mapowane przez `MetricLabel`) | „XIRR nieokreślony (brak przepływów o różnych znakach).” / „XIRR niejednoznaczny — pokazuję TWR.” / „< 1 roku, bez annualizacji” | E3.1 |
+| `REGISTRATION_DISABLED` | 403 | „Rejestracja jest wyłączona.” | E0.6 |
+| `REFERENCE_DATA_OWNER_ONLY`, `PORTFOLIO_CURRENCY_LOCKED`, `PORTFOLIO_ACCOUNT_TYPE_LOCKED` | 403 / 409 | „Tylko właściciel zmienia dane globalne.” / „Waluty i typu rachunku nie zmienisz, gdy są operacje.” | E0.6, E0.8; kody `UPPER_SNAKE` |
 
-Kody nowych kroków (blokada zmiany waluty Portfela E0.8, cofnięcie paczki z edycjami E4.1/D15, przelewy E2.3) są dopisywane do słownika w tym samym kroku, w którym backend je wprowadza (definicja ukończenia, pkt 5).
+Kody nowych kroków (cofnięcie paczki z edycjami `IMPORT_BATCH_HAS_EDITS` E4.1/D15, przelewy E2.3, `LOT_SELECTION_INVALID` E2.4) są dopisywane do słownika w tym samym kroku, w którym backend je wprowadza (definicja ukończenia, pkt 5).
 
 ### 2.8 Dostępność
 
@@ -243,6 +245,8 @@ Jeden `OperationFormDialog` (tryb: utwórz / edytuj) z konfiguracją pól per ty
 
 Walidacja klienta to **kształt i wygoda** (wymagane pola, liczba, zakresy kolumn `Numeric(18, 9)`/`(18, 2)`, `extra="forbid"` po stronie API), nie reguły księgi; autorytatywny jest backend (`INSUFFICIENT_CASH`, `INSUFFICIENT_QUANTITY`, 2.7). Podpowiedzi: sprzedaż > posiadana ilość i zakup > gotówka dają ostrzeżenie przed wysłaniem (nie blokadę — tryb automatycznych wpłat E2.2b); data w przyszłości = ostrzeżenie [propozycja]. Domyślny kurs z tego samego źródła co wycena (E0.1).
 
+**Szkice** (E8.5/E9.6/E10.3): propozycje to Operacje `status=draft`, widoczne w `/operations?status=draft` z akcjami „Akceptuj” (`POST …/accept`, opcjonalna korekta pól) i „Odrzuć” (`…/void`); licznik szkiców przy pozycji „Operacje”.
+
 **Podgląd skutku** („przed → po”): gotówka per waluta, ilość i średnia cena pozycji, zysk zrealizowany (E2.4). Źródłem jest endpoint dry-run `POST /portfolios/operations/preview` (nowy, ta sama walidacja i `PortfolioLedger` bez zapisu) [propozycja], wywoływany z opóźnieniem 300 ms; błędy księgi pokazują się w podglądzie jako komunikaty z 2.7. Edycja: ostrzeżenie „zmiana przebuduje pozycje od <data>” (przebudowa — E0.3/P3); typ, walor i Portfel w trybie edycji tylko do odczytu (`OperationUpdateRequest`, `schemas/operations.py:61-73`).
 
 ### 4.2 Kreator importu (E4.1–E4.3)
@@ -251,18 +255,18 @@ Desktop-only (1.4). Stan paczki: **szkic → zatwierdzona → cofnięta** (D15).
 
 | Krok | Ekran | Zachowanie | Endpoint (nowy) [propozycja] |
 |---|---|---|---|
-| 1. Plik | wybór parsera/źródła, Portfel docelowy, wgranie pliku | hash pliku → „ten plik już zaimportowano” (idempotencja, E4.1) | `POST /portfolios/imports` |
+| 1. Plik | wybór parsera/źródła, Portfel docelowy, wgranie pliku | `sha256` pliku → „ten plik już zaimportowano” (backend zwraca istniejącą paczkę, E4.1) | `POST /portfolios/imports` |
 | 2. Mapowanie | tylko CSV/XLSX (E4.2): kolumny, separator, przecinek dziesiętny, kodowanie (UTF-8, cp1250), format daty; zapis szablonu | podgląd 10 pierwszych wierszy na żywo | `PUT /portfolios/imports/{id}/mapping` |
-| 3. Podgląd i naprawa | tabela wierszy z surową etykietą; filtry: wszystkie / poprawne / **duplikat** / **nierozpoznany walor** / **błąd**; liczniki | edycja wiersza (typ, walor, ilość, cena, waluta, kurs) w panelu bocznym; rozpoznanie waloru (ISIN, ticker + giełda); walidacja brutto = ilość × cena ± prowizja; wiersz poprawiony ręcznie oznaczony | `GET …/{id}/rows`, `PATCH …/{id}/rows/{row}` |
+| 3. Podgląd i naprawa | tabela wierszy z surową etykietą; filtry `row_status`: wszystkie / `ok` / **`duplicate`** / **`unrecognized`** / **`error`** / `skip`; liczniki; wiersz pomijany = `skip` | edycja wiersza (typ, walor, ilość, cena, waluta, kurs) w panelu bocznym; rozpoznanie waloru (ISIN, ticker + giełda); walidacja brutto = ilość × cena ± prowizja; wiersz poprawiony ręcznie oznaczony | `GET …/{id}/rows`, `PATCH …/{id}/rows/{row}` |
 | 4. Szkic trwały | automatyczny zapis na serwerze | powrót pod `/import/:batchId` po zamknięciu karty | j.w. |
 | 5. Zatwierdzenie | podsumowanie: liczba operacji, pominięte duplikaty, skutek (gotówka/pozycje) | jedna transakcja i jeden `rebuild` (ADR-0008, E4.1) | `POST …/{id}/commit` |
 | 6. Cofnięcie | lista paczek `/import`, akcja „Cofnij” z potwierdzeniem | blokada z listą operacji, jeśli któraś była edytowana (D15) | `POST …/{id}/revert` |
 
-**Paginacja 2000 wierszy:** paginacja **po stronie serwera** (koperta jak w E2.7: `items`, `total`, `page`, `page_size`; filtr `status`), 100–200 wierszy na stronę; bez wirtualizacji (brak nowej zależności) [propozycja]. Filtry i strona są w URL (query), by odświeżenie karty nie gubiło widoku. Kryterium E4.1: 2000 wierszy < 10 s dotyczy zatwierdzenia, nie renderu.
+**Paginacja 2000 wierszy:** paginacja **po stronie serwera** (koperta jak w E2.7: `items`, `total`, `limit`, `offset`; filtr `row_status`), 100–200 wierszy na stronę; bez wirtualizacji (brak nowej zależności) [propozycja]. Filtry i strona są w URL (query), by odświeżenie karty nie gubiło widoku. Kryterium E4.1: 2000 wierszy < 10 s dotyczy zatwierdzenia, nie renderu.
 
 ### 4.3 Ustawienia (E0.9)
 
-Formularz sekcyjny z jednym przyciskiem „Zapisz” i stanem „niezapisane zmiany” (bez autozapisu) [propozycja]. Pola: waluta wyświetlania (domyślnie PLN), strefa czasowa (Europe/Warsaw), próg nieaktualnej ceny (dni), stopa wolna od ryzyka (E7.2). Kolejne sekcje dopisywane przez kroki: progi kondycji (E7.6), tryb prywatności (E11.2; ustawienie przeglądarki, nie serwera), token API (E10.4), alerty (E10.1). Zmiana waluty wyświetlania unieważnia klucze kokpitu i wyników. Endpointy: `GET/PUT /settings` [propozycja], pola wg kontraktu API.
+Formularz sekcyjny z jednym przyciskiem „Zapisz” i stanem „niezapisane zmiany” (bez autozapisu) [propozycja]. Pola: waluta wyświetlania (domyślnie PLN), próg nieaktualnej ceny (dni), stopa wolna od ryzyka (E7.2); strefa czasowa jest stała (Europe/Warsaw, ADR-0019), bez pola. Kolejne sekcje dopisywane przez kroki: progi kondycji (`condition_thresholds`, E7.6), tryb prywatności (E11.2; ustawienie przeglądarki, nie serwera), token API (E10.4), alerty (E10.1). Zmiana waluty wyświetlania unieważnia klucze kokpitu i wyników. Endpointy: `GET/PUT /settings` [propozycja], pola wg kontraktu API.
 
 ## 5. Infrastruktura frontendu
 
@@ -295,7 +299,7 @@ Plan już to przyjmuje (E0.7, E11.6: „runner wprowadzony w E0.7”). Dziś: sk
 | Komponenty/strony | `PocketsList` → `PortfoliosList`; `AddPocketDialog` → `AddPortfolioDialog`; `PocketDetailsPage` → `PortfolioPage`; `PocketHistoryPage` → zakładka `operations`; `PocketChartsPage` → zakładka `performance`; `PocketComparisonPage` → `ComparePage` |
 | Trasy | `/portfolios/:id` itd. (1.2), przekierowania (1.5) |
 
-Backend adresuje dziś Portfel **nazwą** (`portfolio_name`: `operations.py:29`, `positions.py:28`; `portfolioName`: `schemas/metrics.py:16`), ale `GET /portfolios/{id}` istnieje i zwraca Portfel z pozycjami (`PortfolioDetailResponse`, `schemas/portfolios.py`). Dlatego E0.10 da się zrobić **bez zmian backendu**: trasa po `id`, strona pobiera Portfel po `id` (`pocketService.ts:10-13`) i przekazuje `portfolio.name` do endpointów po nazwie; nazwa może się zmienić bez psucia linku. Parametry `portfolio_id` w tych endpointach wprowadza kontrakt API (nowe ekrany E2.7/E3 już po `id`).
+Backend adresuje dziś Portfel **nazwą** (`portfolio_name`: `operations.py:29`, `positions.py:28`; `portfolioName`: `schemas/metrics.py:16`), ale `GET /portfolios/{id}` istnieje i zwraca Portfel z pozycjami (`PortfolioDetailResponse`, `schemas/portfolios.py`). Dlatego E0.10 wymaga w backendzie pola `portfolio_id` w odpowiedziach pozycji i operacji (dziś frontend wysyła `portfolio_name`: `positionService.ts:7`, `operationService.ts:7`, `schemas/positions.py:43`); trasa po `id`, strona pobiera Portfel po `id` (`pocketService.ts:10-13`), a endpointy po nazwie działają równolegle (kontrakt API 1.1). **Wyjątek od kryterium E0.10** („brak słowa Pocket w `frontend/src`”): plik przekierowań `LegacyPortfolioRedirect` i alias `pocket_value_vector` (usuwany w E3.5).
 
 Kolejność [propozycja]: (1) naprawa startu (5.6), (2) E0.10 (rename), (3) reszta E0.7 (`lib/format.ts`, Vitest, nawigacja, dialogi) — E0.7 dotyka tych samych plików, więc rename najpierw; nowe pliki od początku nazywamy `Portfolio*`.
 
@@ -320,13 +324,13 @@ Legenda endpointów: **ist.** = istnieje w `backend/app/modules/*/api`; **nowy**
 | Ekran (trasa) | Komponenty | Endpointy | Kroki |
 |---|---|---|---|
 | Kokpit (`/`) | `DashboardPage`, `PortfoliosList`, `PortfolioOverview`, `MiniLineChart`, `SignedValue`, `MetricLabel` | ist. `GET /portfolios/`; nowy: agregat kokpitu (wartość w walucie wyświetlania, zmiana dzienna, TWR YTD/1Y, wygrani/przegrani) | E0.9, E3.4 |
-| Portfel — pozycje (`/portfolios/:id`) | `PortfolioPage`, `PositionsTable`, `OperationFormDialog`, `StaleBanner`, przycisk „Odśwież ceny” | ist. `GET /portfolios/{id}`, `GET /portfolios/positions`; nowy: podgląd operacji, odświeżenie cen | E0.10, E0.7, E1.4, E1.7 |
+| Portfel — pozycje (`/portfolios/:id`) | `PortfolioPage`, `PositionsTable`, `OperationFormDialog`, `StaleBanner`, przycisk „Odśwież ceny” | ist. `GET /portfolios/{id}`, `GET /portfolios/positions`; nowy: podgląd operacji, `POST /assets/refresh-prices` (202) | E0.10, E0.7, E1.4, E1.7 |
 | Grupa portfeli (`/groups/:id`) | `GroupPage` (zakładki jak Portfel), `GroupFormDialog` | nowy: CRUD Grup, agregaty zakresu | E2.1, E3.1 |
 | Widok waloru (`/assets/:id`) | `AssetPage`, `PriceChartWithMarkers`, `LotsTable`, `MetricLabel` | ist. `GET /assets/{id}`; nowy: historia cen, partie, operacje waloru | E1.1, E2.4, E3.8 |
 | Historia operacji (`/portfolios/:id/operations`, `/operations`) | `OperationsTable` (paginacja/filtry serwerowe), `OperationFormDialog` (edycja) | ist. `GET/PUT/DELETE /portfolios/operations…` (dziś goła lista bez paginacji, `operations.py:23-29`); nowy: koperta z paginacją i filtrami | E0.7, E2.7 |
 | Struktura (`…/allocation`) | `AllocationChart` (`PieChartCard`, `AreaChartCard` warstwowy), `MetricLabel` | nowy: alokacja wg Walorów, Klas, sektora, waluty, kraju, tagów | E3.3 |
 | Wyniki (`…/performance`, `/compare`) | `PerformancePage`, `LineChartCard`, `HeatmapGrid`, `DateRangePicker`, `MetricLabel` | ist. `GET /portfolios/portfolio-vectors` (dziś); nowy: `GET /portfolios/{id}/performance` (E3.1), szeregi benchmarków | E3.1, E3.5, E1.6 |
-| Dywidendy i kalendarz (`…/income`, `/calendar`) | `IncomeChart`, `CalendarTable`, `MetricLabel` | nowy: dochód pasywny, prognoza 12 mies. | E3.6, E8.6, E5.2 |
+| Dywidendy i kalendarz (`…/income`, `/groups/all/calendar`) | `IncomeChart`, `CalendarTable`, `MetricLabel` | nowy: dochód pasywny, prognoza 12 mies. | E3.6, E8.6, E5.2 |
 | Obligacje (`/bonds`) | `BondsTable`, `BondFormDialog` | nowy: wycena serii, kalendarz wykupów | E5.1, E5.2 |
 | Zamknięte pozycje (`…/closed`) | `ClosedPositionsTable`, `MetricLabel` | nowy: raport z partii | E3.2 |
 | Import — kreator (`/import/new`, `/import/:batchId`, `/import`) | `ImportWizard`, `ImportRowsTable`, `RowEditPanel`, `BatchList` | nowy: p. 4.2 | E4.1–E4.3 |
@@ -342,10 +346,10 @@ Legenda endpointów: **ist.** = istnieje w `backend/app/modules/*/api`; **nowy**
 
 | # | Co | Blokuje / kto |
 |---|---|---|
-| 1 | **Konflikt E1.4 a przycisk „Odśwież ceny”:** kryterium E1.4 zakazuje wołania dostawcy z żądań HTTP. Albo wyjątek dla jawnej akcji (zalecane: ograniczony zakres, limit czasu), albo UI tylko wyświetla `price_date`/`stale` i odsyła do CLI | decyzja właściciela; E1.4, 2.6 |
+| 1 | Przycisk „Odśwież ceny” = 202 + zadanie w tle (wyjątek E1.4 w ADR-0017); polling `price_date` zamiast natychmiastowego wyniku — do potwierdzenia UX | E1.4, 2.6 |
 | 2 | Kształt envelope i wartości `method`/`data_quality` (słownik 2.4 jest oczekiwany, nie zdefiniowany) oraz `DecimalString` | dokument kontraktu API, E3.1 |
-| 3 | Wielkość liter `code`: plan używa `irr_undefined`, ADR-0007 wymaga `UPPER_SNAKE` | poprawka planu albo ADR |
-| 4 | Kryterium E0.10 („brak Pocket w `frontend/src`”) koliduje z przekierowaniem `/pockets/:slug` — wyjątek dla pliku przekierowań | doprecyzowanie E0.10 |
+| 3 | Mapowanie nowych kodów (`UPPER_SNAKE`) w `ERROR_MESSAGES` rośnie z każdym krokiem backendu | każdy krok |
+| 4 | Wyjątek E0.10 (plik przekierowań, alias `pocket_value_vector`) zapisany w planie 03 | E0.10 |
 | 5 | Endpoint dry-run podglądu operacji i sekcja ustawień (`/settings`) | kontrakt API; E0.9, E2.3 |
 | 6 | Nawigacja mobilna (dolny pasek) wchodzi dopiero w E11.1 — do tego czasu hamburger | akceptacja kolejności |
 | 7 | Wybór narzędzia do generowania typów OpenAPI i skryptu zrzutu schematu (niezweryfikowane lokalnie) | E0.7 |
