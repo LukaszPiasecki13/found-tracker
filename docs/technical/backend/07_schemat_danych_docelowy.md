@@ -16,9 +16,9 @@ Stan dzisiejszy: [`02_core_data_module.md`](./02_core_data_module.md), [`04_asse
 
 | Moduł | Tabele istniejące (zmiany) | Tabele nowe | Kroki |
 |---|---|---|---|
-| `core_data` | `users` (+`is_owner`) | `core_data_user_settings` | E0.6, E0.9, D14 |
-| `assets` | `assets_asset`, `assets_currency`, `assets_assetclass` | `assets_price`, `assets_fx_rate`, `assets_listing`, `assets_rate_series`, `assets_rate_value`, `assets_watchlist`, `assets_tag`, `assets_asset_tag`, `assets_bond_series`, `assets_bond_rate_period` | E1.1–E1.9, E3.3, E5.1 |
-| `portfolios` | `portfolios_portfolio`, `portfolios_operation`, `portfolios_position` | `portfolios_group`, `portfolios_group_member`, `portfolios_commission_rule`, `portfolios_cash_balance`, `portfolios_auto_flow`, `portfolios_operation_tag`, `portfolios_lot`, `portfolios_lot_consumption`, `portfolios_daily`, `portfolios_position_daily` | E2.0–E2.7, E3.1–E3.8, E7.4, E5.1 |
+| `core_data` | `users` (+`is_owner`) | `core_data_user_settings` | E0.6, E0.9, E7.6, D14 |
+| `assets` | `assets_asset`, `assets_currency`, `assets_assetclass` | `assets_price`, `assets_fx_rate`, `assets_listing`, `assets_rate_series`, `assets_rate_value`, `assets_watchlist`, `assets_tag`, `assets_asset_tag`, `assets_bond_series`, `assets_bond_rate_period`, `assets_price_change`, `assets_market_holiday` | E1.1–E1.9, E3.3, E5.1 |
+| `portfolios` | `portfolios_portfolio`, `portfolios_operation`, `portfolios_position` | `portfolios_group`, `portfolios_group_member`, `portfolios_commission_rule`, `portfolios_cash_balance`, `portfolios_auto_flow`, `portfolios_operation_tag`, `portfolios_lot`, `portfolios_lot_consumption`, `portfolios_operation_lot_pick`, `portfolios_daily`, `portfolios_position_daily`, `portfolios_market_cursor` | E2.0–E2.7, E3.1–E3.8, E7.4, E5.1 |
 | `portfolios` (import), `security`, `taxes`, `planning`, `notifications` | — | patrz [doc 08](./08_schemat_danych_nowe_moduly.md) | E4, E6, E9, E10 |
 
 ## 2. Konwencje
@@ -26,11 +26,11 @@ Stan dzisiejszy: [`02_core_data_module.md`](./02_core_data_module.md), [`04_asse
 | Zasada | Reguła |
 |---|---|
 | Nazwy | tabele `<moduł>_<nazwa>` w liczbie pojedynczej jak dziś (`assets_asset`, `portfolios_operation`); wyjątek istniejący: `users` (bez zmiany nazwy — migracje tylko autogenerate) |
-| Typy | kwoty `Numeric(18,2)`; ceny, ilości, kursy, współczynniki `Numeric(18,9)`; `twr_index` `Numeric(24,12)`; daty zdarzeń `Date`; momenty `DateTime(timezone=True)` ([ADR-0010](../adr/0010-decimal-i-precyzja-pieniedzy.md)) |
+| Typy | kwoty `Numeric(18,2)`; saldo gotówki i cache Portfela `Numeric(18,3)`; ceny, ilości, kursy, współczynniki `Numeric(18,9)`; wskazanie Partii `Numeric(28,10)`; `twr_index` `Numeric(24,12)`; daty zdarzeń `Date`; momenty `DateTime(timezone=True)` ([ADR-0010](../adr/0010-decimal-i-precyzja-pieniedzy.md)) |
 | Klucze | `id BigInteger` PK; FK jak w kodzie; `owner_id` → `users.id` w danych osobistych (portfel, grupa, lista obserwowanych, ustawienia); dane referencyjne (walory, ceny, tagi, serie) są globalne w instancji (D14) |
-| Dane pochodne | tabele przebudowywane z Operacji (`portfolios_position`, `_lot`, `_lot_consumption`, `_cash_balance`, `_auto_flow`, `_daily`, `_position_daily`) **nie są celem FK z tabel z danymi użytkownika** — ich `id` nie są stabilne po `rebuild`; odwołania idą do `portfolios_operation.id` (P3, D16) |
+| Dane pochodne | tabele przebudowywane z Operacji (`portfolios_lot`, `_lot_consumption`, `_cash_balance`, `_auto_flow`, `_daily`, `_position_daily`; `portfolios_position` aktualizowana w miejscu) **nie są celem FK z tabel z danymi użytkownika** — ich `id` nie są stabilne po `rebuild`; odwołania idą do `portfolios_operation.id` (P3, D16) |
 | Migracje | wyłącznie `alembic revision --autogenerate`; nowa kolumna `nullable` albo z `server_default`; zaostrzenie do `NOT NULL` dopiero w osobnej migracji po `rebuild-all` (sekcja 7); nowy model w `infrastructure/sql/models_registry.py` |
-| Wartości wyliczeniowe | `String(n)` + `CheckConstraint` (nie `Enum` PG — dodanie wartości wymagałoby ręcznej migracji) |
+| Wartości wyliczeniowe | `String(n)`, nie `Enum` PG. `CheckConstraint` **tylko w nowych tabelach**; na istniejących (`portfolios_operation`, `portfolios_portfolio`, `assets_asset`) walidacja w serwisie — autogenerate nie generuje CHECK dla istniejących tabel |
 | Granice modułów | FK między modułami wolno (tak jest dziś: `portfolios_operation.asset_id`); **odczyt i zapis wyłącznie przez serwisy** ([ADR-0006](../adr/0006-cross-module-wylacznie-przez-serwisy.md)) |
 
 ## 3. Moduł `core_data`
@@ -42,7 +42,7 @@ Stan dzisiejszy: [`02_core_data_module.md`](./02_core_data_module.md), [`04_asse
 | `id`, `email` `String(254)` unikalny, `password_hash` `String(128)`, `is_active` | jak w kodzie | bez zmian | — | — | — |
 | `is_owner` | brak | `Boolean` — właściciel instancji; tylko on zapisuje dane globalne (walory, ceny ręczne, tagi, serie) | nie | `server_default false` | D14, E0.6 |
 
-[propozycja] Istniejące konto dostaje `is_owner=true` komendą CLI z `core_data/entrypoints.py` (E0.6 „pierwsze konto z CLI”), nie w migracji (zakaz ręcznej edycji). Do czasu wykonania komendy zapisy globalne są odrzucane kodem `OWNER_REQUIRED`.
+[propozycja] Istniejące konto dostaje `is_owner=true` komendą CLI z `core_data/entrypoints.py` (E0.6 „pierwsze konto z CLI”), nie w migracji (zakaz ręcznej edycji). Do czasu wykonania komendy zapisy globalne są odrzucane kodem `REFERENCE_DATA_OWNER_ONLY`.
 
 ### 3.2 `core_data_user_settings` (nowa, E0.9)
 
@@ -53,12 +53,12 @@ Jeden wiersz na użytkownika. Waluta jest zapisana jako **kod**, nie FK — `cor
 | `id` | `BigInteger` | nie | — | PK | — |
 | `user_id` | `BigInteger` | nie | — | FK `users.id`, UNIQUE | E0.9 |
 | `display_currency_code` | `String(3)` | nie | `'PLN'` | walidacja istnienia w `assets_currency` w serwisie kontraktu | E0.9, E3.4 |
-| `timezone` | `String(40)` | nie | `'Europe/Warsaw'` | nazwa IANA, walidowana w serwisie | E0.9, D13 |
 | `stale_price_days` | `SmallInteger` | nie | `7` | `CHECK >= 1` | E0.9, E1.7 |
+| `condition_thresholds` | `JSONB` | tak | `NULL` (= progi domyślne z kodu) | progi kondycji portfela (E7.6); klucze walidowane w serwisie | E7.6 |
 | `risk_free_series_code` | `String(40)` | tak | `NULL` (= stopa referencyjna NBP) | kod z `assets_rate_series.code`, bez FK | E7.2 |
 | `updated_at` | `DateTime(tz)` | nie | `now()` | — | — |
 
-Wiersz tworzy się leniwie przy pierwszym `GET`.
+Wiersz tworzy się leniwie przy pierwszym `GET`. Strefa czasowa jest stała (Europe/Warsaw, [ADR-0019](../adr/0019-migracje-danych-i-kolumny-dat.md)) — brak kolumny `timezone` (E0.9).
 
 ## 4. Moduł `assets`
 
@@ -66,36 +66,34 @@ Wiersz tworzy się leniwie przy pierwszym `GET`.
 
 | Kolumna | Dziś | Docelowo | Null | Domyślne | Klucz | Źródło |
 |---|---|---|---|---|---|---|
-| `id`, `ticker` `String(20)` UNIQUE+index, `name` `String(100)`, `currency_id`, `sector` `String(100)`, `exchange` `String(50)`, `updated_at` | jak w kodzie | bez zmian; `exchange` zostaje tekstem wolnym (tylko wyświetlanie), logika „giełda zagraniczna” (E0.8) opiera się na `mic`/`country` | — | — | — | E1.3 |
+| `id`, `ticker` `String(20)` UNIQUE+index, `name` `String(100)`, `currency_id`, `sector` `String(100)`, `exchange` `String(50)`, `updated_at` | jak w kodzie | bez zmian; `exchange` zostaje tekstem wolnym (tylko wyświetlanie), logika „giełda zagraniczna” (E0.8) opiera się na `mic`/`country`; `ticker` z sufiksem giełdy (`.WA`) jest symbolem u dostawcy (E0.5) | — | — | — | E1.3 |
 | `asset_class_id` | NOT NULL FK `assets_assetclass` | bez zmian (**[propozycja]** relacja do `asset_type` niżej) | nie | — | FK | E3.3 |
 | `current_price` | `Numeric(18,9)` NOT NULL, default 0 | **pochodna** (cache ostatniej ceny z `assets_price`) — patrz sekcja 6 | nie | `0` | — | E1.1, E1.4 |
 | `isin` | brak | `String(12)` | tak | `NULL` | UNIQUE (wiele `NULL` dozwolone w PG) | E1.3, E4.1 |
 | `mic` | brak | `String(4)` — kod giełdy ISO 10383 | tak | `NULL` | — | E1.3 |
 | `country` | brak | `String(2)` — ISO 3166 kraj emitenta | tak | `NULL` | — | E1.3, E3.3 |
-| `asset_type` | brak | `String(20)`: `stock`, `etf`, `fund`, `treasury_bond`, `bond`, `crypto`, `currency`, `commodity`, `deposit`, `user_asset` | nie | `'user_asset'` | `CHECK` na zbiór | E1.3 |
+| `asset_type` | brak | `String(20)`: `stock`, `etf`, `fund`, `treasury_bond`, `bond`, `crypto`, `currency`, `commodity`, `deposit`, `user_asset` | nie | `'user_asset'` | zbiór walidowany w serwisie | E1.3 |
 | `archived_at` | brak | `DateTime(tz)` — walor z historią cen lub operacjami tylko archiwizowany | tak | `NULL` | indeks częściowy `WHERE archived_at IS NULL` | D15 |
-| `last_price_change_at` | brak | `Date` — **data najstarszej ceny zmienionej** od ostatniego potwierdzenia przez konsumenta (sekcja 4.3) | tak | `NULL` | — | D7, E2.5 |
-| `provider_symbol` | brak | tymczasowe `String(40)` z E0.5; po E1.2 CLI kopiuje do `assets_listing` i kolumna znika (autogenerate) | tak | `NULL` | — | E0.5, E1.2 |
 
 **[propozycja] `asset_type` ↔ `assets_assetclass`.** Dwie osie, dwa cele:
 
 | Oś | Kto ją ustala | Do czego służy | Zbiór |
 |---|---|---|---|
-| `asset_type` (kolumna) | system / import | zachowanie: wycena (obligacja per partia, lokata), dostawca, domyślna prowizja, podatek | zamknięty (`CHECK`) |
+| `asset_type` (kolumna) | system / import | zachowanie: wycena (obligacja per partia, lokata), dostawca, domyślna prowizja, podatek | zamknięty (serwis) |
 | Klasa waloru (`assets_assetclass`, CRUD w API — `name` `String(20)` UNIQUE, `asset_classes.py:15-16`) | użytkownik | alokacja „wg Klas” (E3.3, E9.1), kolor/etykieta | otwarty, dziś |
 
 Powód: Klasa jest już publicznym słownikiem z CRUD; zamiana jej w stały enum łamie API i dane. `asset_type` bez FK do Klasy; przy tworzeniu waloru serwis podpowiada Klasę z `asset_type` (mapowanie w konfiguracji, nie w schemacie). Alternatywa odrzucona: `asset_type` jako kolumna `assets_assetclass.kind` — jedna Klasa musiałaby mieć jeden typ, a użytkownicy grupują np. „ETF-y i fundusze” razem.
 
-Indeksy: istniejące `ix_assets_asset_id`, `ix_assets_asset_ticker` (UNIQUE) — `ticker` zostaje globalnie unikalny **[propozycja]**; ten sam symbol na dwóch giełdach rozróżnia się sufiksem tickera (np. `.WA`, E0.5), a nie kluczem złożonym. Nowe: `(asset_type)`, `(isin)` UNIQUE, `(last_price_change_at) WHERE last_price_change_at IS NOT NULL`.
+Indeksy: istniejące `ix_assets_asset_id`, `ix_assets_asset_ticker` (UNIQUE) — `ticker` zostaje globalnie unikalny **[propozycja]**; ten sam symbol na dwóch giełdach rozróżnia się sufiksem tickera (np. `.WA`, E0.5), a nie kluczem złożonym. Nowe: `(asset_type)`, `(isin)` UNIQUE. `assets_listing` (4.5) powstaje w E1.2 z istniejących tickerów — symbol dostawcy nie ma osobnej kolumny w Walorze.
 
 ### 4.2 `assets_currency` i `assets_assetclass` (istnieją)
 
 | Tabela.kolumna | Dziś | Docelowo | Źródło |
 |---|---|---|---|
-| `assets_currency.exchange_rate` `Numeric(18,9)` NOT NULL default 1 | kurs względem waluty systemowej (USD) | **pochodna**, sekcja 6 | E0.1, E1.1 |
+| `assets_currency.exchange_rate` `Numeric(18,9)` NOT NULL default 1 | USD za 1 jednostkę waluty (`assets/services/market_data.py:109`) | **pochodna**, sekcja 6 | E0.1, E1.1 |
 | `assets_currency.base_currency_id` FK self, nullable | tylko CRUD, nie używana w wycenie (`assets/services/currencies.py:44-67`) | **wygaszana**, sekcja 6 | E1.1 |
 
-### 4.3 `assets_price` (nowa, E1.1, D7)
+### 4.3 `assets_price` i `assets_price_change` (nowe, E1.1, D7, [ADR-0016](../adr/0016-snapshoty-dzienne-i-przebudowa.md))
 
 Ceny zamknięcia **nieskorygowane** (splity są Operacjami, E8.1).
 
@@ -114,7 +112,16 @@ Ograniczenie: UNIQUE `(asset_id, price_date, source)`. Indeks: `(asset_id, price
 
 **Pierwszeństwo źródeł [propozycja]** (luka E1.2): `manual` zawsze wygrywa (E1.5); pozostałe wg `assets_listing.priority` rosnąco. Wiersze różnych źródeł współistnieją; `find_close(asset, date)` wybiera jeden i zwraca `source`, `is_synthetic`, flagę forward-fill (E1.1, E1.7). Forward-fill liczy się przy odczycie — nie zapisuje.
 
-**`last_price_change_at` (D7, E2.5) — semantyka [propozycja].** Zapis do `assets_price` o dacie `d` **starszej od najnowszej istniejącej** (korekta historii, wpis ręczny wstecz) ustawia `assets_asset.last_price_change_at = LEAST(current, d)`; dopisanie ceny po najnowszej dacie nie zmienia znacznika. Konsument (`portfolios/entrypoints.py`) czyta znacznik przez serwis `assets`, unieważnia snapshoty portfeli posiadających walor od tej daty, a po przeliczeniu wywołuje serwis „potwierdź” z warunkiem `WHERE last_price_change_at = :odczytana` (compare-and-set → `NULL`). Zmiana w trakcie przeliczenia zostaje, bo nie zgadza się z odczytaną wartością. Znacznik jest **per walor**, nie globalny. Analogiczny znacznik kursów: `assets_currency.fx_changed_from` `Date` null (ta sama semantyka, **[propozycja]**; dla unieważnienia po zmianie `assets_fx_rate`).
+**Dziennik zmian `assets_price_change` (D7, E2.5, ADR-0016).** Serwis `assets` zapisuje wiersz **w tej samej transakcji** co korektę historii: zapis do `assets_price`/`assets_fx_rate` o dacie starszej od najnowszej w serii albo zmianę istniejącej wartości (dopisanie nowego dnia nie wpisuje nic). Znacznik jest per walor i per para walut, nie globalny; konsument (`portfolios`) czyta dziennik przez serwis `assets` po kursorze (5.13).
+
+| Kolumna | Typ | Null | Uwagi |
+|---|---|---|---|
+| `id` | `BigInteger` | nie | PK; rosnący — kursor wskazuje ostatnio przeliczony |
+| `kind` | `String(5)` | nie | `price` albo `fx`; `CHECK` |
+| `asset_id` | `BigInteger` | tak | FK `assets_asset.id`; dla `price` |
+| `from_currency_id`, `to_currency_id` | `BigInteger` | tak | FK `assets_currency.id`; dla `fx`; `CHECK` zgodny z `kind` |
+| `changed_from` | `Date` | nie | data najstarszej zmiany |
+| `recorded_at` | `DateTime(tz)` | nie | `now()` |
 
 ### 4.4 `assets_fx_rate` (nowa, E1.1, D5)
 
@@ -128,8 +135,9 @@ Ograniczenie: UNIQUE `(asset_id, price_date, source)`. Indeks: `(asset_id, price
 | `source` | `String(20)` | nie | — | `nbp`, `yahoo`, `manual` |
 | `table_no` | `String(32)` | tak | `NULL` | numer tabeli NBP (np. `187/A/NBP/2026`) — wymagany dla `source='nbp'` (kurs podatkowy) |
 | `is_synthetic` | `Boolean` | nie | `false` | — |
+| `fetched_at` | `DateTime(tz)` | nie | `now()` | — |
 
-UNIQUE `(from_currency_id, to_currency_id, rate_date, source)`; indeks `(from_currency_id, to_currency_id, rate_date DESC)`. **[propozycja]** Pary: przechowujemy tylko pary notowane u źródła (NBP: waluta → PLN); kursy krzyżowe (USD→EUR) liczy serwis przy odczycie przez PLN (luka E1.1 „które pary”). Trzy kursy z D5: brokera = `portfolios_operation.fx_rate`, wyceny = ta tabela, podatkowy = `fx_rate_tax` Operacji (kopiowany z tej tabeli z `table_no`).
+UNIQUE `(from_currency_id, to_currency_id, rate_date, source)`; indeks `(from_currency_id, to_currency_id, rate_date DESC)`. **[propozycja]** Pary: przechowujemy tylko pary notowane u źródła (NBP: waluta → PLN). Serwis `assets` zwraca wyłącznie kursy bezpośrednie i odwrotne; **kurs krzyżowy składa `portfolios`** (`FxMapBuilder`): mapa `{(currency_id_z, currency_id_do): Decimal}` = rate[z]/rate[do]. Brak kursu w historii/cache = `RATE_MISSING`. Trzy kursy z D5: brokera = `portfolios_operation.fx_rate`, wyceny = ta tabela, podatkowy = `fx_rate_tax` Operacji (kopiowany z tej tabeli z `table_no`).
 
 ### 4.5 `assets_listing` (nowa, E1.2)
 
@@ -146,7 +154,7 @@ Symbol waloru u dostawcy i priorytet źródeł.
 | `last_success_at` / `last_error_at` | `DateTime(tz)` | tak | `NULL` | panel „Dane” (E1.7) |
 | `last_error` | `String(200)` | tak | `NULL` | skrót błędu dostawcy, bez danych wrażliwych |
 
-UNIQUE `(asset_id, provider)` i `(provider, symbol)`.
+UNIQUE `(asset_id, provider)` i `(provider, symbol)`. CLI E1.2 tworzy wiersze z istniejących tickerów (np. `PKN.WA`).
 
 ### 4.6 `assets_rate_series` + `assets_rate_value` (nowe, E1.6)
 
@@ -189,19 +197,19 @@ Seria = Walor (`asset_type='treasury_bond'`, `ticker` = symbol serii, np. `EDO10
 | `assets_bond_series` | `id` PK; `asset_id` FK UNIQUE | — | nie | jeden Walor = jedna seria |
 | | `bond_type` | `String(4)` | nie | `OTS`, `ROR`, `DOR`, `TOS`, `COI`, `EDO`, `ROS`, `ROD`; `CHECK` |
 | | `sale_start`, `sale_end` | `Date` | nie | okno sprzedaży oferty (data emisji, E5.1) |
-| | `nominal` | `Numeric(18,2)` | nie | domyślnie `100.00` |
-| | `term_months` | `SmallInteger` | nie | termin wykupu liczony od zakupu |
-| | `first_rate` | `Numeric(9,6)` | nie | stopa 1. okresu z listu emisyjnego (ułamek: `0.0535`) |
-| | `margin` | `Numeric(9,6)` | tak | marża od okresu 2 (COI/EDO/ROS/ROD) |
-| | `early_redemption_fee` | `Numeric(18,2)` | nie | opłata za wykup przedterminowy wg listu serii (zmienia się w czasie — wartość dotyczy tej serii) |
-| | `payout_mode` | `String(12)` | nie | `at_maturity`, `annual`, `monthly`, `capitalized`; `CHECK` |
-| | `issue_letter_ref` | `String(60)` | tak | numer/odnośnik listu emisyjnego (źródło faktów) |
+| | `nominal` / `term_months` | `Numeric(18,2)` / `SmallInteger` | nie | domyślnie `100.00`; termin wykupu liczony od zakupu |
+| | `first_rate` / `margin` | `Numeric(9,6)` | nie / tak | stopa 1. okresu z listu emisyjnego (ułamek: `0.0535`) / marża od okresu 2 (COI/EDO/ROS/ROD) |
+| | `early_redemption_fee` | `Numeric(18,2)` | nie | opłata za wykup przedterminowy wg listu serii |
+| | `payout_mode` / `issue_letter_ref` | `String(12)` / `String(60)` | nie / tak | `at_maturity`, `annual`, `monthly`, `capitalized` (`CHECK`) / odnośnik listu emisyjnego |
 | `assets_bond_rate_period` | `id` PK; `series_id` FK CASCADE; `period_no` `SmallInteger` | — | nie | UNIQUE `(series_id, period_no)` |
 | | `rate` | `Numeric(9,6)` | nie | **ogłoszona stopa okresu — fakt**, nie liczona z CPI (E5.1) |
-| | `announced_on` | `Date` | tak | — |
-| | `source_ref` | `String(200)` | tak | URL lub list; bez tego stopa nie przechodzi walidacji ręcznej |
+| | `announced_on` / `source_ref` | `Date` / `String(200)` | tak | data ogłoszenia / URL lub list; bez źródła stopa nie przechodzi walidacji ręcznej |
 
 Numer okresu liczy się od dnia zakupu Partii (okres k = k-ty rok od zakupu), więc stopa okresu jest wspólna dla całej serii niezależnie od dnia zakupu — **[propozycja]**, zgodnie z „ogłoszona stopa… nie ulega zmianie” z dowodu. Dla ROR/DOR (okresy krótsze niż rok) `period_no` oznacza kolejny okres od zakupu w tej samej tabeli; reguła dat okresu per typ jest w kodzie domeny. **Ładowanie** [propozycja]: stopy wprowadza się komendą CLI z pliku CSV lub ręcznie (źródło to strona serwisu, bez API); Tabele odsetkowe (PDF) to **wyrocznia testów** (fixture'y), nie dane runtime.
+
+### 4.10 `assets_market_holiday` (nowa, E1.9)
+
+Dni wolne giełd — kalendarz sesji (rozrachunek D12, statystyki E7.1, wypełnianie cen). Dane globalne (D14); ładowane komendą CLI. PK `(mic, holiday_date)`: `mic` `String(4)` (jak `assets_asset.mic`), `holiday_date` `Date`, `name` `String(100)` null. Weekendy wynikają z kodu, nie z tabeli.
 
 ## 5. Moduł `portfolios`
 
@@ -209,17 +217,17 @@ Numer okresu liczy się od dnia zakupu Partii (okres k = k-ty rok od zakupu), wi
 
 | Kolumna | Dziś | Docelowo | Null | Domyślne | Klucz | Źródło |
 |---|---|---|---|---|---|---|
-| `id`, `owner_id` FK, `name` `String(100)`, `base_currency_id` FK, `is_active`, `created_at`, `updated_at` | jak w kodzie; UNIQUE `(owner_id, name)` (`unique_portfolio_per_user`) | bez zmian; zmiana `base_currency_id` zablokowana przy istniejących Operacjach | — | — | — | E0.8 |
+| `id`, `owner_id` FK, `name` `String(100)`, `base_currency_id` FK, `is_active`, `created_at`, `updated_at` | jak w kodzie; UNIQUE `(owner_id, name)` (`unique_portfolio_per_user`) | bez zmian; zmiana `base_currency_id` lub `account_type` przy istniejących Operacjach: 409 `PORTFOLIO_CURRENCY_LOCKED` / `PORTFOLIO_ACCOUNT_TYPE_LOCKED` | — | — | — | E0.8 |
 | `cash_balance` | `Numeric(18,3)` NOT NULL | **pochodna** (cache salda w walucie bazowej Portfela) — sekcja 6 | nie | `0` | — | E2.2 |
 | `total_deposited` | `Numeric(18,3)` NOT NULL | **pochodna** — sekcja 6 | nie | `0` | — | E2.2 |
-| `account_type` | brak | `String(10)`: `standard`, `ike`, `ikze`, `ppk`, `ppe`, `oipe` (**Typ rachunku**, D1) | nie | `'standard'` | `CHECK` | E2.1, D1 |
+| `account_type` | brak | `String(10)`: `regular`, `ike`, `ikze`, `ppk`, `ppe`, `oipe` (**Typ rachunku**, D1) | nie | `'regular'` | walidacja w serwisie | E2.1, D1 |
 | `broker` | brak | `String(60)` | tak | `NULL` | — | E2.1 |
-| `tax_date_basis` | brak | `String(10)`: `settlement` albo `trade` — data zdarzenia podatkowego per rachunek (D12) | nie | `'settlement'` | `CHECK` | D12 |
-| `settlement_lag_days` | brak | `SmallInteger` — przesunięcie rozrachunku w dniach sesyjnych; `NULL` = domyślne rynku z kalendarza (T+2, E1.9) | tak | `NULL` | `CHECK >= 0` | D12, E1.9 |
-| `auto_deposit_mode` | brak | `String(10)`: `off`, `auto` — tryb automatycznych wpłat/wypłat | nie | `'off'` | `CHECK` | E2.2b |
-| `last_snapshot_date` | brak | `Date` — ostatni dzień, dla którego `portfolios_daily` jest ważne; unieważnienie cofa go do `dzień − 1` | tak | `NULL` | — | E2.5, E11.7 |
+| `tax_date_basis` | brak | `String(10)`: `settlement` albo `trade` — data zdarzenia podatkowego per rachunek (D12) | nie | `'settlement'` | serwis | D12 |
+| `settlement_lag_days` | brak | `SmallInteger` — przesunięcie rozrachunku w dniach sesyjnych; `NULL` = domyślne rynku z kalendarza (T+2, E1.9) | tak | `NULL` | serwis (`>= 0`) | D12, E1.9 |
+| `auto_funding` | brak | `Boolean` — automatyczne wpłaty/wypłaty (E2.2b, 5.8) | nie | `false` | — | E2.2b |
+| `dirty_from` | brak | `Date` — wiersze snapshotów `day ≥ dirty_from` są nieaktualne; `NULL` = aktualne ([ADR-0016](../adr/0016-snapshoty-dzienne-i-przebudowa.md)); wprowadzane w E2.0 | tak | `NULL` | — | E2.0, E2.5 |
 
-Istniejące wiersze: `account_type='standard'` z `server_default`, reszta `NULL`/domyślne (E2.1 „istniejące Portfele = zwykły”). Indeksy: UNIQUE `(owner_id, name)` bez zmian; `(owner_id, is_active)`.
+Istniejące wiersze: `account_type='regular'` z `server_default`, reszta `NULL`/domyślne (E2.1 „istniejące Portfele = zwykły”). Indeksy: UNIQUE `(owner_id, name)` bez zmian; `(owner_id, is_active)`.
 
 ### 5.2 `portfolios_commission_rule` (nowa, E2.1)
 
@@ -247,40 +255,44 @@ UNIQUE `(portfolio_id, asset_type)`.
 
 ### 5.4 `portfolios_operation` (istnieje: `models/operation.py:31-69`)
 
-Kolumny istniejące: `id`; `portfolio_id` FK NOT NULL; `asset_id` FK null; `operation_type` `String(20)`; `quantity`, `price` `(18,9)` default 0; `amount` `(18,2)` null; `fee` `(18,2)` default 0; `fx_rate` `(18,9)` default 1 (broker: waluta waloru → waluta Portfela, `ledger.py:170`); `notes` `Text` null; `operation_date` `DateTime(tz)` NOT NULL + index; `created_at`. Indeks `ix_operation_portfolio_date (portfolio_id, operation_date)`. Wszystkie zostają. Dodawane (D9; wszystkie `nullable` albo `server_default`):
+Kolumny istniejące: `id`; `portfolio_id` FK NOT NULL; `asset_id` FK null; `operation_type` `String(20)`; `quantity`, `price` `(18,9)` default 0; `amount` `(18,2)` null; `fee` `(18,2)` default 0; `fx_rate` `(18,9)` default 1 (broker: waluta waloru → waluta Portfela, `ledger.py:170`); `notes` `Text` null; `operation_date` `DateTime(tz)` NOT NULL + index; `created_at`. Wszystkie zostają. Dodawane (D9; wszystkie `nullable` albo `server_default`):
 
 | Kolumna | Typ | Null | Domyślne | Znaczenie | Źródło |
 |---|---|---|---|---|---|
 | `operation_day` | `Date` | tak (po backfillu → nie) | `NULL` | **dzień operacji w Europe/Warsaw**; kolejność i snapshoty liczone od niego | D13, E2.0 |
+| `sequence` | `Integer` | nie | `0` | numer w obrębie (Portfel, `operation_day`), nadawany automatycznie przy zapisie; backfill z kolejności `(operation_date, created_at, id)` zachowuje dzisiejszy porządek | D9, D13, E2.0 |
 | `settlement_date` | `Date` | tak | `NULL` | data rozrachunku; `NULL` = wylicz z `tax_date_basis`/lagu Portfela | D12, E2.3 |
-| `currency_id` | `BigInteger` FK `assets_currency.id` | tak | `NULL` | waluta `price`/`amount`/`fee`; **`NULL` = waluta waloru** (operacje z walorem) **lub waluta bazowa Portfela** (wpłata, wypłata, odsetki, opłata, podatek bez waloru) | D9, E2.2 |
+| `settlement_source` | `String(10)` | nie | `'default'` | `default`, `broker`, `manual` — skąd pochodzi data rozrachunku (serwis) | D12 |
+| `currency_id` | `BigInteger` FK `assets_currency.id` | tak | `NULL` | waluta `price`/`amount`/`fee`; **jawna dla każdego nowego wiersza**: API wypełnia walutą waloru, gdy klient jej nie poda; wpłata/wypłata/odsetki/opłata/podatek bez waloru — walutą bazową Portfela. `NULL` tylko do `rebuild-all` (sekcja 7), który wpisuje **walutę bazową Portfela** w istniejące wiersze (zachowuje dzisiejsze znaczenie `fx_rate` i salda); po backfillu `NULL` nie ma semantyki | D9, E2.2 |
 | `fx_rate_tax` | `Numeric(18,9)` | tak | `NULL` | **Kurs podatkowy**: NBP tabela A z ostatniego dnia roboczego przed datą zdarzenia podatkowego | D5, D12 |
-| `fx_tax_table_no` | `String(32)` | tak | `NULL` | numer tabeli NBP kursu podatkowego | D5 |
-| `fx_tax_date` | `Date` | tak | `NULL` | data notowania kursu podatkowego | D5 |
-| `counter_portfolio_id` | `BigInteger` FK `portfolios_portfolio.id` | tak | `NULL` | drugi Portfel **Przelewu** | D9, E2.3 |
-| `counter_amount` | `Numeric(18,2)` | tak | `NULL` | kwota po stronie przeciwnej (Przelew gotówki, Przewalutowanie) | D9 |
-| `counter_currency_id` | `BigInteger` FK | tak | `NULL` | waluta strony przeciwnej | D9 |
+| `fx_tax_table_no` / `fx_tax_date` | `String(32)` / `Date` | tak | `NULL` | numer tabeli NBP / data notowania kursu podatkowego | D5 |
+| `counter_portfolio_id` | `BigInteger` FK `portfolios_portfolio.id` **ON DELETE RESTRICT** | tak | `NULL` | Portfel docelowy **Przelewu** | D9, E2.3 |
+| `counter_amount` / `counter_currency_id` | `Numeric(18,2)` / `BigInteger` FK | tak | `NULL` | noga **przychodząca** (Przelew gotówki, Przewalutowanie); `amount` = noga wychodząca | D9 |
 | `counter_asset_id` | `BigInteger` FK `assets_asset.id` | tak | `NULL` | walor docelowy: zmiana tickera, zamiana serii, spin-off, prawa poboru | D9, E8.2–E8.4, E5.1 |
-| `ratio` | `Numeric(18,9)` | tak | `NULL` | przelicznik nowe:stare (split, scalenie, wymiana); `CHECK > 0` | D9, E8.1 |
+| `ratio` | `Numeric(18,9)` | tak | `NULL` | przelicznik nowe:stare (split, scalenie, wymiana); serwis wymaga `> 0` | D9, E8.1 |
 | `tax_deductible` | `Boolean` | nie | `false` | opłata (`fee`) jako koszt podatkowy | E2.3 |
-| `lot_ref_operation_id` | `BigInteger` FK `portfolios_operation.id` | tak | `NULL` | wskazanie Partii przy sprzedaży = Operacja otwierająca Partię (stabilne, w odróżnieniu od `portfolios_lot.id`) | D2, E2.4 |
-| `import_batch_id` | `BigInteger` FK | tak | `NULL` | paczka importu — tabela w [doc 08](./08_schemat_danych_nowe_moduly.md) | D9, E4.1 |
-| `external_ref` | `String(100)` | tak | `NULL` | identyfikator z pliku brokera (deduplikacja) | D9, E4.1 |
-| `status` | `String(10)` | nie | `'posted'` | `posted`, `draft`, `void` (zaksięgowana/szkic/unieważniona); księga czyta tylko `posted` | D9 |
-| `sequence` | `Integer` | nie | `0` | kolejność w dniu; globalna kolejność księgi: `(operation_day, sequence, created_at, id)` | D9, D13 |
+| `import_batch_id` | `BigInteger` FK | tak | `NULL` | paczka importu — [doc 08](./08_schemat_danych_nowe_moduly.md) | D9, E4.1 |
+| `external_ref` | `String(120)` | tak | `NULL` | identyfikator z pliku brokera (deduplikacja) albo klucz idempotencji szkicu | D9, E4.1 |
+| `status` | `String(10)` | nie | `'posted'` | `posted`, `draft`, `void` (serwis); księga czyta tylko `posted` | D9 |
 | `edited_at` | `DateTime(tz)` | tak | `NULL` | ręczna edycja po zapisie; cofnięcie paczki jest blokowane dla edytowanych (D15) | D15, E4.1 |
 
-**Nowe wartości `operation_type`** (dziś: `buy`, `sell`, `deposit`, `withdrawal`, `dividend` — `domain/enums.py:9-14`; kolumna `String(20)` wystarcza), **[propozycja]** nazwy: `interest`, `fee`, `tax`, `transfer` (z walorem = przelew papierów, bez = przelew gotówki), `fx_exchange` (**Przewalutowanie**), `adjustment`, `split`, `symbol_change`, `spin_off`, `redemption` (wykup i wykup przedterminowy obligacji; `fee` = opłata), `bond_switch`. Źródła: E2.2, E2.3, E8.1–E8.3, E5.1. Dodanie wartości do `CheckConstraint` na `operation_type` = zwykła migracja autogenerate.
+Wskazanie Partii przy sprzedaży leży w osobnej tabeli (5.12), nie w kolumnie.
 
-**Ograniczenia i indeksy:** `CHECK status IN ('posted','draft','void')`; `CHECK ratio IS NULL OR ratio > 0`; UNIQUE częściowy `(portfolio_id, external_ref) WHERE external_ref IS NOT NULL`. Indeksy: `(portfolio_id, operation_day, sequence, id)` (lista i `rebuild`, E2.7), `(counter_portfolio_id) WHERE counter_portfolio_id IS NOT NULL` (historia Portfela B czyta wiersze A), `(asset_id, operation_day)`, `(import_batch_id) WHERE import_batch_id IS NOT NULL`, `(status)` częściowy `WHERE status <> 'posted'`.
+**Klucz porządku księgi: `(operation_day, sequence, id)`** — jedyny; zastępuje `(operation_date, created_at, id)` z `repositories/operations.py:53-57`.
 
-**Przelewy [propozycja]** (BLOCKER z przeglądu): Przelew to **jeden wiersz** w Portfelu źródłowym A z `counter_portfolio_id=B`; księga B czyta go zapytaniem `portfolio_id = B OR counter_portfolio_id = B` jako wpływ. Przelew papierów przenosi Partie A→B z zachowaniem `acquired_on` i kosztu. Przebudowa obejmuje **spójną składową** Portfeli powiązanych przelewami; algorytm i unieważnianie — ADR techniczny (D9, D15), nie schemat.
+**Nowe wartości `operation_type`** (dziś: `buy`, `sell`, `deposit`, `withdrawal`, `dividend` — `domain/enums.py:9-14`; kolumna `String(20)` wystarcza; walidacja w serwisie), **[propozycja]** nazwy: `interest`, `fee`, `tax`, `transfer` (z walorem = przelew papierów, bez = przelew gotówki), `fx_exchange` (**Przewalutowanie**), `adjustment`, `split`, `symbol_change`, `spin_off`, `redemption` (wykup i wykup przedterminowy obligacji; `fee` = opłata), `bond_switch`. Źródła: E2.2, E2.3, E8.1–E8.3, E5.1.
 
-**`operation_day` vs `operation_date` (D13) [propozycja]:** `operation_date` zostaje `timestamptz` (chwila, z godziną z UI); typ **nie jest zmieniany** (zmiana timestamptz→date bez `USING` użyłaby strefy sesji DB, a ręczna edycja migracji jest zakazana — D16). `operation_day` to nowa kolumna `Date`, wypełniana przez `rebuild-all` konwersją `operation_date AT TIME ZONE 'Europe/Warsaw'`; od tej chwili logika (`metrics.py:74,148` liczy dziś dzień w UTC) czyta `operation_day`. Zaostrzenie do `NOT NULL` — migracja po backfillu. `fx_rate` istniejących wierszy: reguła reinterpretacji w ADR biznesowym D4 (nie tutaj).
+**`adjustment` [propozycja]:** korekta ilości (z walorem: `quantity` ze znakiem) albo gotówki (bez waloru: `amount` ze znakiem w `currency_id`); `notes` wymagane; nie jest przepływem zewnętrznym i nie zmienia `total_deposited`.
+
+**Indeksy** (autogenerate): UNIQUE częściowy `(portfolio_id, external_ref) WHERE external_ref IS NOT NULL`; `(portfolio_id, operation_day, sequence, id)` (lista i `rebuild`, E2.7); `(counter_portfolio_id) WHERE counter_portfolio_id IS NOT NULL`; `(asset_id, operation_day)`; `(import_batch_id) WHERE import_batch_id IS NOT NULL`; `(status) WHERE status <> 'posted'`. Istniejący `ix_operation_portfolio_date` zostaje.
+
+**Przelew = JEDEN wiersz [propozycja].** Portfel źródłowy A w `portfolio_id`, docelowy B w `counter_portfolio_id`; `amount` = noga wychodząca z A, `counter_*` = noga przychodząca do B (ta sama zasada dla `fx_exchange`). Repozytoria `list_by_portfolio`/`list_by_owner` zwracają wiersze, w których Portfel jest źródłem **lub** `counter_portfolio_id`; odpowiedź API ma `direction` `out`/`in` zależnie od Portfela, w którego kontekście czytamy. Przelew papierów przenosi Partie A→B z zachowaniem `acquired_on`, kosztu i `origin_operation_id` (5.6); przed E2.4 dostępny tylko przelew gotówki. **`total_deposited` się nie zmienia** (przelew wewnętrzny dla Grupy; metryki TWR klasyfikują przepływ wg zakresu — ADR biznesowy 0004). Przebudowa obejmuje **spójną składową** Portfeli powiązanych przelewami ([ADR-0016](../adr/0016-snapshoty-dzienne-i-przebudowa.md)); wiersz jest płaską Operacją ze `status`/`sequence` ([ADR-0020](../adr/0020-plaski-model-operacji.md)).
+
+**`operation_day` vs `operation_date` (D13) [propozycja]:** `operation_date` zostaje `timestamptz` (chwila, z godziną z UI); typ **nie jest zmieniany** (zmiana timestamptz→date bez `USING` użyłaby strefy sesji DB, a ręczna edycja migracji jest zakazana — D16). `operation_day` to nowa kolumna `Date`, wypełniana przez `rebuild-all` konwersją `operation_date AT TIME ZONE 'Europe/Warsaw'`; od tej chwili logika (`metrics.py:74,148` liczy dziś dzień w UTC) czyta `operation_day`. Zaostrzenie do `NOT NULL` — migracja po backfillu. Reinterpretacja `fx_rate` istniejących wierszy: ADR biznesowy 0003.
 
 ### 5.5 `portfolios_position` (istnieje: `models/position.py:26-70`)
 
-Kolumny bez zmian: `portfolio_id`, `asset_id`, `quantity` `(18,9)`, `average_buy_price` `(18,9)`, `average_fx_rate` `(18,9)`, `total_fees` `(18,2)`, `total_dividends` `(18,2)`, `opened_at`, `updated_at`; UNIQUE `unique_position_per_portfolio (portfolio_id, asset_id)`. Status docelowy: **agregat pochodny Partii** (suma `quantity_open`), z `average_buy_price` wyłącznie do prezentacji (D2). Wycena kosztu czyta Partie, nie średnią (dziś `quantity × average_buy_price` — `domain/valuation.py:53`).
+Kolumny bez zmian: `portfolio_id`, `asset_id`, `quantity` `(18,9)`, `average_buy_price` `(18,9)`, `average_fx_rate` `(18,9)`, `total_fees` `(18,2)`, `total_dividends` `(18,2)`, `opened_at`, `updated_at`; UNIQUE `unique_position_per_portfolio (portfolio_id, asset_id)`. `rebuild-all` aktualizuje Pozycje **w miejscu** (zachowuje `opened_at`), nie kasuje ich i nie odtwarza. Status docelowy: **agregat pochodny Partii** (suma `quantity_open`), z `average_buy_price` wyłącznie do prezentacji (D2). Wycena kosztu czyta Partie, nie średnią (dziś `quantity × average_buy_price` — `domain/valuation.py:53`).
 
 **Konflikt: unikalność `(portfolio_id, asset_id)` vs obligacje per Partia (E5.1) — rozwiązanie [propozycja]:** unikalność **zostaje**. Obligacje z różnych dni zakupu tej samej serii to jedna Pozycja (Walor = seria) i wiele Partii w `portfolios_lot` z różnym `acquired_on`; wycena obligacji liczy się per Partia. Alternatywa odrzucona: Pozycja per Partia — łamie FIFO per rachunek (D2), kontrakt API pozycji i test architektury modułów.
 
@@ -291,18 +303,17 @@ Kolumny bez zmian: `portfolio_id`, `asset_id`, `quantity` `(18,9)`, `average_buy
 | `id` | `BigInteger` | nie | — | PK (niestabilny po `rebuild`) |
 | `portfolio_id` | `BigInteger` | nie | — | FK `portfolios_portfolio.id` CASCADE; FIFO obowiązuje w obrębie Portfela = rachunku (D2) |
 | `asset_id` | `BigInteger` | nie | — | FK `assets_asset.id` |
-| `open_operation_id` | `BigInteger` | nie | — | FK `portfolios_operation.id` CASCADE; Operacja otwierająca (buy, przelew przychodzący, split-wynik) — **klucz biznesowy Partii** |
-| `acquired_on` | `Date` | nie | — | data nabycia (przy przelewie papierów zachowana z Portfela źródłowego) |
+| `open_operation_id` | `BigInteger` | nie | — | FK `portfolios_operation.id` CASCADE; Operacja, która otworzyła Partię **w tym Portfelu** (zakup albo przelew przychodzący) |
+| `origin_operation_id` | `BigInteger` | nie | — | FK `portfolios_operation.id` CASCADE; pierwotny zakup — niezmienny przy przelewie i splicie; **klucz biznesowy Partii** razem z `open_operation_id` |
+| `split_ratio` | `Numeric(18,9)` | nie | `1` | skumulowany przelicznik splitów/scaleń zastosowanych do Partii (E8.1) |
+| `acquired_on` | `Date` | nie | — | data nabycia (przy przelewie i splicie niezmienna) |
 | `tax_date` | `Date` | nie | — | data zdarzenia podatkowego (rozrachunek wg D12) |
-| `quantity_initial` / `quantity_open` | `Numeric(18,9)` | nie | — | `CHECK quantity_open >= 0 AND quantity_open <= quantity_initial` |
-| `unit_price` | `Numeric(18,9)` | nie | — | cena jednostkowa w walucie waloru, bez prowizji |
-| `cost_local` | `Numeric(18,2)` | nie | — | koszt nabycia pozostałej ilości w walucie waloru, z prowizją |
-| `cost_base` | `Numeric(18,2)` | nie | — | jw. w walucie Portfela, po kursie brokera |
-| `cost_tax_pln` | `Numeric(18,2)` | tak | `NULL` | jw. w PLN po Kursie podatkowym (`NULL` do czasu publikacji tabeli NBP, E2.3) |
+| `quantity_initial` / `quantity_open` / `unit_price` | `Numeric(18,9)` | nie | — | `CHECK 0 <= quantity_open <= quantity_initial`; cena w walucie waloru, bez prowizji, po splicie przeliczona przy stałym koszcie |
+| `cost_local` / `cost_base` / `cost_tax_pln` | `Numeric(18,2)` | nie / nie / tak | — / — / `NULL` | koszt nabycia pozostałej ilości z prowizją: w walucie waloru / w walucie Portfela po kursie brokera / w PLN po Kursie podatkowym (`NULL` do publikacji tabeli NBP, E2.3) |
 | `fx_rate` / `fx_rate_tax` | `Numeric(18,9)` | nie / tak | `1` / `NULL` | kopie kursów z Operacji (audytowalność kosztu) |
 | `closed_on` | `Date` | tak | `NULL` | data wyczerpania Partii |
 
-Indeksy: `(portfolio_id, asset_id, acquired_on, open_operation_id) WHERE quantity_open > 0` (kolejka FIFO), UNIQUE `(open_operation_id)`. Flagi podatkowe Partii (ulga IPO, darowizna, spadek) **nie leżą tu** (dane użytkownika, tabela jest przebudowywana) — `taxes_lot_attribute` w [doc 08](./08_schemat_danych_nowe_moduly.md), klucz `open_operation_id`.
+Split **nie tworzy** Operacji otwierającej: Partia zostaje, zmienia się `split_ratio`, ilość i cena jednostkowa przy stałym koszcie i dacie nabycia. Przelew papierów daje Portfelowi docelowemu **wiele Partii z jedną Operacją otwierającą** (po jednej na `origin_operation_id`). UNIQUE `(portfolio_id, open_operation_id, origin_operation_id)`; indeks kolejki FIFO `(portfolio_id, asset_id, acquired_on, open_operation_id) WHERE quantity_open > 0`. Flagi podatkowe Partii (ulga IPO, darowizna, spadek) **nie leżą tu** (dane użytkownika, tabela jest przebudowywana) — `taxes_lot_attribute` w [doc 08](./08_schemat_danych_nowe_moduly.md), klucz `origin_operation_id`.
 
 ### 5.7 `portfolios_lot_consumption` (nowa, E2.4) — dane pochodne
 
@@ -313,7 +324,7 @@ Indeksy: `(portfolio_id, asset_id, acquired_on, open_operation_id) WHERE quantit
 | `close_operation_id` | `BigInteger` | nie | FK `portfolios_operation.id` CASCADE (sprzedaż, wykup, przelew wychodzący) |
 | `closed_on` | `Date` | nie | dzień zamknięcia (`operation_day`) |
 | `quantity` | `Numeric(18,9)` | nie | `CHECK > 0` |
-| `proceeds_local`, `cost_local`, `fee_local` | `Numeric(18,2)` | nie | w walucie waloru; prowizja sprzedaży rozdzielona proporcjonalnie (E2.4) |
+| `proceeds_local`, `cost_local`, `fee_local` | `Numeric(18,2)` | nie | w walucie waloru; `proceeds` = przychód **brutto**; prowizja sprzedaży rozłożona proporcjonalnie na zużyte Partie, reszta zaokrąglenia kosztu do `(18,2)` trafia do ostatniego zużycia (E2.4) |
 | `proceeds_base`, `cost_base` | `Numeric(18,2)` | nie | w walucie Portfela (kurs brokera) |
 | `proceeds_tax_pln`, `cost_tax_pln` | `Numeric(18,2)` | tak | w PLN po Kursie podatkowym (D5); wejście dla `taxes` |
 
@@ -323,10 +334,10 @@ UNIQUE `(lot_id, close_operation_id)`; indeksy `(close_operation_id)`, `(closed_
 
 | Tabela | Kolumny | Ograniczenia |
 |---|---|---|
-| `portfolios_cash_balance` | `id` PK; `portfolio_id` FK CASCADE; `currency_id` FK; `balance` `Numeric(18,2)` null=nie (domyślnie `0`) | UNIQUE `(portfolio_id, currency_id)`; saldo ujemne odrzuca księga (`INSUFFICIENT_CASH`-podobny kod z ledgera), nie `CHECK` |
-| `portfolios_auto_flow` | `id` PK; `portfolio_id` FK CASCADE; `trigger_operation_id` FK `portfolios_operation.id` CASCADE; `currency_id` FK; `flow_type` `String(10)` (`deposit`, `withdrawal`); `amount` `Numeric(18,2)`; `flow_day` `Date` | indeks `(portfolio_id, flow_day)`, `(trigger_operation_id)` |
+| `portfolios_cash_balance` | `id` PK; `portfolio_id` FK CASCADE; `currency_id` FK; `balance` `Numeric(18,3)` null=nie (domyślnie `0`) | UNIQUE `(portfolio_id, currency_id)`; saldo ujemne odrzuca księga (`INSUFFICIENT_CASH`-podobny kod z ledgera), nie `CHECK` |
+| `portfolios_auto_flow` | `id` PK; `portfolio_id` FK CASCADE; `trigger_operation_id` FK `portfolios_operation.id` CASCADE; `currency_id` FK; `flow_type` `String(10)` (`deposit`, `withdrawal`); `amount` `Numeric(18,2)`; `flow_day` `Date`; `sequence` `Integer` (miejsce w kolejności dnia) | indeks `(portfolio_id, flow_day, sequence)`, `(trigger_operation_id)` |
 
-**[propozycja] Automatyczne wpłaty (E2.2b) są pochodne, nie wierszami `portfolios_operation`.** Powód: P3 — Operacje to źródło prawdy; wiersz wygenerowany przez księgę musiałby być kasowany i odtwarzany przy edycji operacji wyzwalającej, a użytkownik mógłby go edytować (konflikt z P3). `rebuild` buduje `portfolios_auto_flow` od zera; TWR/XIRR czytają go jako przepływy zewnętrzne (E2.2b), eksport (E4.5) go pomija. Ostrzeżenie: wymaga ADR, bo zmienia definicję „przepływu zewnętrznego”.
+**[propozycja] Automatyczne wpłaty (E2.2b, flaga `auto_funding`) są pochodne, nie wierszami `portfolios_operation`.** Powód: P3 — Operacje to źródło prawdy; wiersz wygenerowany przez księgę musiałby być kasowany i odtwarzany przy edycji operacji wyzwalającej, a użytkownik mógłby go edytować (konflikt z P3). `rebuild` buduje `portfolios_auto_flow` od zera; TWR/XIRR czytają go jako przepływy zewnętrzne (E2.2b), eksport (E4.5) go pomija. Ostrzeżenie: wymaga ADR, bo zmienia definicję „przepływu zewnętrznego”.
 
 ### 5.9 `portfolios_operation_tag` (nowa, E2.7)
 
@@ -334,13 +345,12 @@ UNIQUE `(lot_id, close_operation_id)`; indeksy `(close_operation_id)`, `(closed_
 
 ### 5.10 `portfolios_daily` (nowa, E2.5, D7) — snapshot dzienny, pochodny
 
-Klucz: PK `(portfolio_id, day)`; `portfolio_id` FK CASCADE; `day` `Date` (dzień w strefie z D13). Szereg po dniach kalendarzowych; dni bez sesji mają przeniesioną wycenę (statystyki E7.1 pomijają je przez kalendarz E1.9).
+Klucz: PK `(portfolio_id, day)`; `portfolio_id` FK CASCADE; `day` `Date` (dzień w strefie z D13). Wiersze `day ≥ portfolios_portfolio.dirty_from` są nieaktualne (5.1). Szereg po dniach kalendarzowych; dni bez sesji mają przeniesioną wycenę (statystyki E7.1 pomijają je przez kalendarz E1.9).
 
 | Kolumna | Typ | Null | Uwagi |
 |---|---|---|---|
-| `value`, `cash`, `positions_value` | `Numeric(18,2)` | nie | w walucie Portfela, po kursach wyceny dnia |
+| `value`, `cash`, `positions_value`, `income`, `fees`, `taxes` | `Numeric(18,2)` | nie | w walucie Portfela, po kursach wyceny dnia; dochody (dywidendy, odsetki), opłaty, podatki dnia |
 | `ext_in`, `ext_out` | `Numeric(18,2)` | nie | przepływy zewnętrzne dnia (wpłaty, wypłaty, `portfolios_auto_flow`, przelewy spoza Grupy wg zakresu — E3.1) |
-| `income`, `fees`, `taxes` | `Numeric(18,2)` | nie | dochody (dywidendy, odsetki), opłaty, podatki dnia |
 | `r_day` | `Numeric(18,12)` | tak | stopa dnia; `NULL` przy wartości początkowej 0 |
 | `twr_index` | `Numeric(24,12)` | nie | `Π(1+r)`, `Decimal` (D7, D11) |
 | `cum_ext_in`, `cum_ext_out` | `Numeric(18,2)` | nie | skumulowane przepływy — zysk okresu w O(1) ([metodyka](../../research/05_metodyka_metryk.md)) |
@@ -355,23 +365,37 @@ PK `(portfolio_id, asset_id, day)`; FK CASCADE na `portfolios_portfolio`, FK `as
 | `quantity` | `Numeric(18,9)` | nie | stan na koniec dnia |
 | `price_local` | `Numeric(18,9)` | tak | cena zamknięcia w walucie waloru (z `find_close`) |
 | `fx` | `Numeric(18,9)` | nie | kurs wyceny waluta waloru → waluta Portfela tego dnia (E7.4) |
-| `mv_local` | `Numeric(18,2)` | tak | **wartość w walucie waloru** = `quantity × price_local` (E7.4: rozbicie cena/waluta) |
-| `mv_base` | `Numeric(18,2)` | tak | `mv_local × fx`, waluta Portfela |
-| `cost_base` | `Numeric(18,2)` | nie | koszt otwartych Partii (E2.4) |
-| `flow_in`, `flow_out` | `Numeric(18,2)` | nie | przepływy waloru dnia (zakup/sprzedaż) |
+| `mv_local`, `mv_base` | `Numeric(18,2)` | tak | wartość w walucie waloru = `quantity × price_local` (E7.4) / `mv_local × fx` w walucie Portfela |
+| `cost_base`, `flow_in`, `flow_out` | `Numeric(18,2)` | nie | koszt otwartych Partii (E2.4); przepływy waloru dnia (zakup/sprzedaż) |
 | `r_day`, `twr_index` | `Numeric(18,12)`, `Numeric(24,12)` | tak / nie | stopa i indeks waloru |
 | `is_stale`, `is_synthetic` | `Boolean` | nie | z `find_close` |
 
 Indeks: `(asset_id, day)` (alokacje, wykres waloru E3.8). Rozmiar [wniosek]: 30 walorów × 3 650 dni ≈ 110 tys. wierszy na Portfel (liczba z przeglądu) — dlatego `rebuild` zapisuje partiami.
+
+### 5.12 `portfolios_operation_lot_pick` (nowa, E2.4) — wskazanie Partii przy sprzedaży
+
+Dane użytkownika (nie pochodne), więc FK do Operacji jest dozwolony. Brak wierszy = FIFO. Suma `quantity` musi równać się ilości sprzedaży, a każda pozycja mieścić się w otwartej ilości Partii — inaczej 409 `LOT_SELECTION_INVALID`.
+
+| Kolumna | Typ | Null | Uwagi |
+|---|---|---|---|
+| `operation_id` | `BigInteger` | nie | FK `portfolios_operation.id` CASCADE (sprzedaż, wykup, przelew wychodzący) |
+| `open_operation_id`, `origin_operation_id` | `BigInteger` | nie | FK `portfolios_operation.id` RESTRICT **[propozycja]** — klucz biznesowy Partii (5.6), stabilny po `rebuild` |
+| `quantity` | `Numeric(28,10)` | nie | `CHECK > 0` |
+
+PK `(operation_id, open_operation_id, origin_operation_id)`.
+
+### 5.13 `portfolios_market_cursor` (nowa, E2.5)
+
+Jeden wiersz (`id` PK z `CHECK id = 1`, `last_change_id` `BigInteger` — ostatni przeliczony wiersz `assets_price_change`). `rebuild_dirty` czyta zmiany po kursorze przez serwis `assets`, ustawia `dirty_from`, przebudowuje i przesuwa kursor w jednej transakcji ([ADR-0016](../adr/0016-snapshoty-dzienne-i-przebudowa.md)).
 
 ## 6. Kolumny pochodne i wygaszane
 
 | Kolumna | Decyzja [propozycja] | Uzasadnienie | Kiedy usunąć |
 |---|---|---|---|
 | `portfolios_portfolio.cash_balance` | zostaje jako **cache salda w walucie bazowej Portfela** (linia `portfolios_cash_balance` dla `base_currency_id`); pole API `cash_balance` bez zmiany; sumę wielowalutową liczy serwis kursem wyceny | API (`schemas/portfolios.py`) i `LedgerState.cash_balance` (`ledger.py:105`) to jeden `Decimal`; usunięcie łamie frontend | po E3.4 (kokpit liczy z Salda per waluta), osobnym ADR-em |
-| `portfolios_portfolio.total_deposited` | zostaje jako cache = `cum_ext_in − cum_ext_out` ostatniego `portfolios_daily`, przepływy przeliczone **kursem Operacji** na walutę Portfela | w wielu walutach „suma wpłat” wymaga jednego kursu — kurs z momentu wpłaty jest jedyną definicją niezależną od dnia wyceny (reguła do potwierdzenia w ADR D4) | jw. |
-| `assets_asset.current_price` | cache ostatniej ceny z `assets_price`; zapisuje go wyłącznie zadanie odświeżania (E1.4); nowe odczyty wyceny idą do `find_close` | ścieżka żądania nie woła dostawcy (E1.4), a bieżąca cena bez historii nie spełnia D7 | po E2.5 |
-| `assets_currency.exchange_rate` | cache kursu względem USD do czasu E1.1 (E0.1 liczy kurs krzyżowy z niego, `domain/valuation.py:55-57`); potem z `assets_fx_rate`; nowa waluta **bez kursu** nie dostaje domyślnego 1 — kolumna staje się `nullable`, brak kursu → błąd z `code` | domyślne `1` zafałszowuje wycenę po cichu | po E1.4 |
+| `portfolios_portfolio.total_deposited` | zostaje jako cache: suma wpłat − wypłat (`deposit`/`withdrawal`, `portfolios_auto_flow`) przeliczona **kursem Operacji** na walutę Portfela; **Przelew go nie zmienia** (5.4), więc różni się od `cum_ext_in − cum_ext_out` o przelewy | w wielu walutach „suma wpłat” wymaga jednego kursu — kurs z momentu wpłaty jest jedyną definicją niezależną od dnia wyceny (reguła do potwierdzenia w ADR D4) | jw. |
+| `assets_asset.current_price` | cache ostatniej ceny z `assets_price`; zapisuje go serwis `assets` w tej samej transakcji co zapis ceny do `assets_price` ([ADR-0015](../adr/0015-historia-cen-i-kursow.md)); nowe odczyty wyceny idą do `find_close` | ścieżka żądania nie woła dostawcy (E1.4), a bieżąca cena bez historii nie spełnia D7 | po E2.5 |
+| `assets_currency.exchange_rate` | cache kursu względem USD do czasu E1.1 (E0.1 liczy kurs krzyżowy z niego, `domain/valuation.py:55-57`); potem z `assets_fx_rate`; nowa waluta **bez kursu** nie dostaje domyślnego 1 — kolumna staje się `nullable`, brak kursu → `RATE_MISSING` (przed E1.1 heurystyka `exchange_rate = 1 ∧ code ≠ USD`) | domyślne `1` zafałszowuje wycenę po cichu | po E1.4 |
 | `assets_currency.base_currency_id` | wygasza się: żaden kod wyceny jej nie czyta (tylko CRUD `currencies.py:44-67`); usunięcie po sprawdzeniu, że żaden wiersz jej nie używa | historia kursów w `assets_fx_rate` zastępuje relację | E1.1 + zgoda właściciela (usunięcie kolumny z danymi) |
 
 ## 7. Polityka migracji (D16, E2.0)
@@ -379,21 +403,19 @@ Indeks: `(asset_id, day)` (alokacje, wykres waloru E3.8). Rozmiar [wniosek]: 30 
 | Krok | Zasada |
 |---|---|
 | Kształt migracji | jedna migracja `--autogenerate` per krok planu; tylko nowe tabele i kolumny `nullable`/`server_default`; test `alembic check` bez dryfu |
-| Wypełnianie danych | komenda `rebuild-all` (`portfolios/entrypoints.py` + `app/cli.py`): `operation_day`, `status='posted'` (z `server_default`), Partie, zużycie, salda per waluta, `portfolios_auto_flow`, snapshoty, `cost_tax_pln` tam, gdzie kurs jest dostępny |
-| Idempotencja | `rebuild-all` dwa razy = identyczny stan (DoD 8); kasuje i odtwarza tabele pochodne, nie dotyka `portfolios_operation` poza `operation_day` |
-| Zaostrzenie | `operation_day NOT NULL`, `assets_currency.exchange_rate NULL`-owalność, usunięcie `provider_symbol` — osobne migracje po zielonym `rebuild-all` |
-| Seed | `seed/seed_data.py` ma zahardkodowany stan (`cash_balance=15000.000` w l.191, `total_dividends=18.50` w l.222), więc kryterium E2.0 „rebuild-all na seed daje stan identyczny z obecnym” jest fałszywe — **seed trzeba naprawić (stan wyliczać replayem) albo zmienić kryterium** |
+| Wypełnianie danych | komenda `rebuild-all` (`portfolios/entrypoints.py` + `app/cli.py`): w `portfolios_operation` zapisuje **tylko** `operation_day`, `sequence`, `currency_id` (= waluta bazowa Portfela); odtwarza Partie, zużycie, salda per waluta, `portfolios_auto_flow`, snapshoty, `cost_tax_pln` tam, gdzie kurs jest dostępny; Pozycje aktualizuje w miejscu |
+| Idempotencja | `rebuild-all` dwa razy = identyczny stan (DoD 8); kasuje i odtwarza tabele pochodne (poza Pozycjami), nie dotyka reszty `portfolios_operation`; poprzedza go `rebuild-all --check` (E0.3) |
+| Zaostrzenie | `operation_day NOT NULL`, `currency_id NOT NULL`, `assets_currency.exchange_rate` nullable — osobne migracje po zielonym `rebuild-all` |
+| Seed (E0.5) | stan Portfeli i Pozycji liczony replayem Operacji przez `PortfolioLedger`, nie zahardkodowany |
 
 ## 8. Konflikty z istniejącym kodem
 
 | # | Kod dziś | Konflikt | Rozwiązanie |
 |---|---|---|---|
 | 1 | `Position` UNIQUE `(portfolio_id, asset_id)`, `position.py:66-69` | obligacje per Partia | unikalność zostaje, Partie osobno (5.5) |
-| 2 | `valuation.py:53` koszt = ilość × średnia | wycena z Partii | `HoldingLike` czyta Partie; przepisać `test_valuation.py` |
-| 3 | `LedgerState.cash_balance` jeden `Decimal` (`ledger.py:105`) | gotówka per waluta | stan księgi = mapa `waluta → saldo`; kolumny Portfela jako cache (sekcja 6) |
-| 4 | `PortfolioLedger.rebuild` składa jeden portfel (`ledger.py:311`) | przelewy łączą Portfele | przebudowa spójnej składowej (5.4), ADR |
-| 5 | `operation_date` `timestamptz`; dzień w UTC (`metrics.py:148`) | D13 | `operation_day` (5.4) |
-| 6 | `OperationService._record` commituje (`operations.py:99-100`) | import/przelew potrzebują `record_many` bez commitu | rdzeń bez commitu ([ADR-0008](../adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md)); szczegóły w doc 08 |
+| 2 | `LedgerState.cash_balance` jeden `Decimal` (`ledger.py:105`); `valuation.py:53` koszt = ilość × średnia | gotówka per waluta, wycena z Partii | stan księgi = mapa `waluta → saldo`, `HoldingLike` czyta Partie (przepisać `test_valuation.py`); kolumny Portfela jako cache (sekcja 6) |
+| 3 | `PortfolioLedger.rebuild` składa jeden portfel (`ledger.py:311`) | przelewy łączą Portfele | przebudowa spójnej składowej (5.4), ADR |
+| 4 | `OperationService._record` commituje (`operations.py:99-100`) | import/przelew potrzebują `record_many` bez commitu | rdzeń bez commitu ([ADR-0008](../adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md)); szczegóły w doc 08 |
 
 ## Otwarte punkty
 
@@ -401,15 +423,23 @@ Indeks: `(asset_id, day)` (alokacje, wykres waloru E3.8). Rozmiar [wniosek]: 30 
 |---|---|---|
 | 1 | Zatwierdzenie ADR: D1, D2, D4, D9, D12, D13, D15, D16 (biznesowe i techniczne) — tabele z tego dokumentu są szkicem do ich czasu | E2.1–E2.4 |
 | 2 | **[propozycja]** `asset_type` osobno od Klasy waloru; mapowanie typ → domyślna Klasa w konfiguracji | E1.3, E3.3 |
-| 3 | **[propozycja]** `last_price_change_at` jako `Date` per walor z compare-and-set; analogiczny znacznik kursów na `assets_currency` | E2.5 |
-| 4 | **[propozycja]** Przelew jako jeden wiersz + przebudowa spójnej składowej; algorytm w ADR | E2.3 |
-| 5 | **[propozycja]** Automatyczne wpłaty pochodne (`portfolios_auto_flow`) zamiast Operacji | E2.2b |
-| 6 | **[propozycja]** `portfolios_operation.lot_ref_operation_id` zamiast FK do Partii | E2.4 |
-| 7 | **[propozycja]** `cash_balance`/`total_deposited` jako cache; definicja `total_deposited` wielowalutowa | E2.2 |
-| 8 | **[propozycja]** Ticker globalnie UNIQUE; ten sam symbol na dwóch giełdach rozróżnia sufiks w tickerze | E1.3 |
-| 9 | **[propozycja]** Okresy obligacji: stopa na `(seria, nr okresu)`; ROR/DOR (okresy krótsze niż rok) wymagają potwierdzenia na listach emisyjnych | E5.1 |
-| 10 | Źródło ogłoszonych stóp obligacji i sposób ich ładowania (brak API); Tabele odsetkowe jako PDF — próbki właściciela/pobranie | E5.1 |
-| 11 | Źródło lokalnego katalogu GPW/NewConnect (E1.3) — nie występuje w dowodzie | E1.3 |
-| 12 | **[propozycja]** Limity IKE/IKZE: tabela `portfolios_account_limit` ([doc 08](./08_schemat_danych_nowe_moduly.md), 4.6), nie w `core_data_user_settings` ani `taxes` (cykl modułów) | E5.6 |
-| 13 | Kontrakty API (ścieżki, koperty, paginacja) tych tabel — osobny dokument; adresowanie Portfela po `id` zamiast `portfolio_name` | E2.7, E3.1 |
-| 14 | Próbki plików właściciela (eksport myfund, wyciągi brokerów) — nie wpływają na ten schemat, blokują doc 08 (import) | E4.2a, E4.3 |
+| 3 | **[propozycja]** Przelew jako jeden wiersz + przebudowa spójnej składowej; `adjustment`; `lot_pick` z FK RESTRICT na Partię | E2.3, E2.4 |
+| 4 | **[propozycja]** Automatyczne wpłaty pochodne (`portfolios_auto_flow`, `auto_funding`) zamiast Operacji | E2.2b |
+| 5 | **[propozycja]** `cash_balance`/`total_deposited` jako cache; `total_deposited` bez Przelewów, kursem Operacji | E2.2 |
+| 6 | **[propozycja]** Ticker globalnie UNIQUE; ten sam symbol na dwóch giełdach rozróżnia sufiks | E1.3 |
+| 7 | **[propozycja]** Okresy obligacji: stopa na `(seria, nr okresu)`; ROR/DOR wymagają potwierdzenia na listach emisyjnych; źródło i ładowanie stóp (brak API, PDF-y — próbki właściciela) | E5.1 |
+| 8 | Źródło lokalnego katalogu GPW/NewConnect (E1.3) i kalendarza `assets_market_holiday` — nie występuje w dowodzie | E1.3, E1.9 |
+| 9 | **[propozycja]** Limity IKE/IKZE: `portfolios_account_limit` ([doc 08](./08_schemat_danych_nowe_moduly.md), 4.6) | E5.6 |
+| 10 | Kontrakty API tych tabel: [doc 09](./09_kontrakt_api_docelowy.md); próbki plików brokerów blokują import (doc 08) | E2.7, E4.2a |
+
+## Zmiany względem poprzedniej wersji
+
+| Zmiana | Źródło |
+|---|---|
+| Przelew = jeden wiersz; `list_by_*` także po `counter_portfolio_id`; FK `RESTRICT`; `total_deposited` bez Przelewów | A1, D |
+| Partia: `origin_operation_id`, `split_ratio`, nowy UNIQUE; tabela `portfolios_operation_lot_pick` zastępuje kolumnę wskazania Partii | A2, A3 |
+| `currency_id` jawne, backfill = waluta bazowa Portfela; klucz porządku `(operation_day, sequence, id)` | A4, A5 |
+| Snapshoty wg ADR-0016: `assets_price_change`, `portfolios_market_cursor`, `dirty_from`; usunięte kolumny znaczników zmian cen/kursów i daty snapshotu | A6 |
+| Nazwy: `fx_tax_*`, `settlement_source`, `regular`, `auto_funding`; usunięty symbol dostawcy z Waloru; skale `(18,3)`; CHECK tylko w nowych tabelach | A7, A8 |
+| Kurs krzyżowy składa `portfolios`; `RATE_MISSING`; `proceeds` brutto; `rebuild-all` zapisuje `operation_day`/`sequence`/`currency_id`, Pozycje w miejscu; usunięty akapit o kryterium seeda | A9, A10, E0.5 |
+| `condition_thresholds`, `assets_market_holiday`, definicja `adjustment`; bez `timezone` (ADR-0019); `REFERENCE_DATA_OWNER_ONLY` | C, D |
