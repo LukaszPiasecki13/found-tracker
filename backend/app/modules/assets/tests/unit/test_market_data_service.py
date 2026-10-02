@@ -336,3 +336,38 @@ def test_data_status_can_list_only_the_problems(
     status = service.data_status(only_problems=True)
 
     assert [a.ticker for a in status.assets] == ["CCC"]
+
+
+def test_a_price_the_column_cannot_hold_is_skipped_not_fatal(
+    service: MarketDataService,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+) -> None:
+    tiny = SimpleNamespace(id=1, ticker="TINY", archived_at=None)
+    ok = SimpleNamespace(id=2, ticker="OKAY", archived_at=None)
+    provider.quotes["TINY"] = make_quote("TINY", current_price=Decimal("3e-11"))
+    provider.quotes["OKAY"] = make_quote("OKAY", current_price=Decimal("5"))
+
+    assert service.refresh_asset_prices([tiny, ok]) == 1
+
+    prices.record_closes.assert_called_once()
+    assert prices.record_closes.call_args.args[0] is ok
+
+
+def test_a_database_failure_on_one_asset_does_not_lose_the_others(
+    service: MarketDataService,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+    session: MagicMock,
+) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    bad = SimpleNamespace(id=1, ticker="BAD", archived_at=None)
+    good = SimpleNamespace(id=2, ticker="GOOD", archived_at=None)
+    provider.quotes["BAD"] = make_quote("BAD")
+    provider.quotes["GOOD"] = make_quote("GOOD")
+    prices.record_closes.side_effect = [IntegrityError("x", {}, Exception("c")), 1]
+
+    assert service.refresh_asset_prices([bad, good]) == 1
+
+    session.commit.assert_called_once()

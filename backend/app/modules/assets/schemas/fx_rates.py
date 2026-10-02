@@ -44,7 +44,7 @@ class ManualFxRateRequest(BaseModel):
     from_currency_id: int = Field(gt=0)
     to_currency_id: int = Field(gt=0)
     rate_date: date
-    rate: Decimal = Field(gt=0, lt=Decimal(MAX_PRICE_OR_RATE))
+    rate: Decimal = Field(gt=0, lt=Decimal(MAX_PRICE_OR_RATE), decimal_places=9)
 
     @model_validator(mode="after")
     def currencies_differ(self) -> Self:

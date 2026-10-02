@@ -20,7 +20,7 @@ from app.modules.assets.constants import (
     SOURCE_MANUAL,
     STALE_AFTER_DAYS,
 )
-from app.modules.assets.domain import invert_rate, is_stale, pick_effective
+from app.modules.assets.domain import invert_rate, is_stale, pick_effective, storable
 from app.modules.assets.exceptions import (
     CurrencyNotFoundError,
     FutureDateError,
@@ -177,12 +177,15 @@ class FxRateService:
         is_synthetic: bool = False,
     ) -> None:
         """Store one observation (idempotent per pair, day and source) and refresh
-        the cached rates of both currencies. A non-positive rate is dropped.
+        the cached rates of both currencies. A rate that does not fit the column is
+        dropped.
 
         No-commit core - transaction belongs to caller.
         """
-        if rate <= 0 or source_currency.id == target_currency.id:
+        stored = storable(rate)
+        if stored is None or source_currency.id == target_currency.id:
             return
+        rate = stored
         self._rates.upsert(
             from_id=source_currency.id,
             to_id=target_currency.id,

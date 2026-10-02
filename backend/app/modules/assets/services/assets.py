@@ -233,9 +233,7 @@ class AssetService:
                     raise AssetArchivedError
                 apply_changes(asset, values)
                 if price is not None:
-                    # Keep the cache even for 0 ("no price"); a positive price
-                    # goes through the history, which re-derives the cache.
-                    asset.current_price = price
+                    # Through the history, which re-derives the cache.
                     self._prices.record_manual_price_today(asset, price)
                 return self._repo.update(asset)
         except IntegrityError as err:

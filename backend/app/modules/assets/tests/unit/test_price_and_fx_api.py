@@ -578,3 +578,32 @@ def test_refresh_validates_the_body(
 ) -> None:
     assert client.post("/assets/refresh-prices", json=body).status_code == 422
     services.assets.accept_for_refresh.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"close": "0.0000000001"}, {"close": "1.0000000001"}],
+)
+def test_manual_price_needs_a_value_the_column_can_hold(
+    client: TestClient, services: Services, body: dict[str, object]
+) -> None:
+    response = client.put("/assets/1/prices/2026-10-01", json=body)
+
+    assert response.status_code == 422
+    services.prices.set_manual_price.assert_not_called()
+
+
+def test_manual_rate_needs_a_value_the_column_can_hold(
+    client: TestClient, services: Services
+) -> None:
+    response = client.put(
+        "/assets/fx-rates",
+        json={
+            "from_currency_id": 2,
+            "to_currency_id": 1,
+            "rate_date": "2026-10-01",
+            "rate": "0.0000000001",
+        },
+    )
+
+    assert response.status_code == 422

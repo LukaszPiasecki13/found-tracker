@@ -97,7 +97,9 @@ class AssetCreateRequest(_IdentifierFields):
     name: str = Field(min_length=1, max_length=100)
     asset_class_id: int
     currency_id: int
-    current_price: Decimal = Field(default=Decimal("0"), ge=0, lt=_MAX_PRICE)
+    current_price: Decimal = Field(
+        default=Decimal("0"), ge=0, lt=_MAX_PRICE, decimal_places=9
+    )
     exchange: str = Field(default="", max_length=50)
     sector: str = Field(default="", max_length=100)
     asset_type: str = DEFAULT_ASSET_TYPE
@@ -125,7 +127,8 @@ _REQUIRED_UPDATE_FIELDS = frozenset(
 
 
 class AssetUpdateRequest(_IdentifierFields):
-    """Partial update; NOT NULL columns reject an explicit `null` with a 422,
+    """Partial update (a `current_price` must be positive); NOT NULL columns
+    reject an explicit `null` with a 422,
     `isin`, `mic` and `country` accept it to clear the value."""
 
     model_config = ConfigDict(extra="forbid")
@@ -136,7 +139,9 @@ class AssetUpdateRequest(_IdentifierFields):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     asset_class_id: int | None = None
     currency_id: int | None = None
-    current_price: Decimal | None = Field(default=None, ge=0, lt=_MAX_PRICE)
+    current_price: Decimal | None = Field(
+        default=None, gt=0, lt=_MAX_PRICE, decimal_places=9
+    )
     exchange: str | None = Field(default=None, max_length=50)
     sector: str | None = Field(default=None, max_length=100)
     asset_type: str | None = None
