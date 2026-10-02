@@ -19,11 +19,11 @@ if __package__ in {None, ""}:
 
 import app.infrastructure.sql.models_registry  # noqa: F401
 from app.core.config import get_settings
-from app.infrastructure.sql.factory import sql_factory
+from app.core.dependencies import sql_factory
+from app.core.passwords import hash_password
 from app.modules.assets.models import Asset, AssetClass, Currency
 from app.modules.core_data.models import User
 from app.modules.portfolios.models import Operation, Portfolio, Position
-from app.core.passwords import hash_password
 
 if __package__ in {None, ""}:
     from seed.seed_data import (

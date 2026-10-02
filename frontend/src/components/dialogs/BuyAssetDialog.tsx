@@ -171,18 +171,21 @@ const BuyAssetDialog: React.FC<BuyAssetDialogProps> = ({ open, onClose, pocketId
                 }
               }}
               loading={searchLoading}
-              renderOption={(props, option) => (
-                <li {...props}>
-                  <Box display="flex" alignItems="center" gap={1} width="100%">
-                    <span>
-                      {option.ticker} - {option.name}
-                    </span>
-                    {isFromYahoo(option) && (
-                      <Chip label="Yahoo Finance" size="small" color="primary" variant="outlined" />
-                    )}
-                  </Box>
-                </li>
-              )}
+              renderOption={(props, option) => {
+                const { key, ...optionProps } = props as typeof props & { key: string };
+                return (
+                  <li key={key} {...optionProps}>
+                    <Box display="flex" alignItems="center" gap={1} width="100%">
+                      <span>
+                        {option.ticker} - {option.name}
+                      </span>
+                      {isFromYahoo(option) && (
+                        <Chip label="Yahoo Finance" size="small" color="primary" variant="outlined" />
+                      )}
+                    </Box>
+                  </li>
+                );
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}

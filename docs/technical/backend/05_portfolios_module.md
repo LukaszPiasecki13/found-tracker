@@ -33,7 +33,8 @@ Wszystkie wymagają zalogowanego użytkownika (`get_current_user`) i działają 
 | `GET /portfolios/{id}` | `PortfolioDetailResponse` — podsumowanie + `positions` (wycenione, z `portfolio_weight_pct`) + `updated_at` |
 | `PUT`/`PATCH /portfolios/{id}` | `PortfolioResponse`; jawny `null` = „bez zmian” |
 | `DELETE /portfolios/{id}` | 204; usuwa też pozycje i operacje |
-| `GET /portfolios/positions?portfolio_name=` | `PositionResponse[]` — najpierw odświeża kursy walut i ceny walorów pozycji (best-effort, [`04_assets_module.md` §3](./04_assets_module.md#3-reguły-biznesowe)), potem wycenia |
+| `GET /portfolios/positions?portfolio_name=` | `PositionResponse[]` — wycena po zapisanych cenach, bez efektów ubocznych |
+| `POST /portfolios/positions/refresh?portfolio_name=` | `PositionResponse[]` — najpierw odświeża kursy walut i ceny walorów pozycji (best-effort, [`04_assets_module.md` §3](./04_assets_module.md#3-reguły-biznesowe)), potem wycenia |
 | `GET /portfolios/operations?portfolio_name=` | `OperationResponse[]`, od najnowszej (`operation_date`, `created_at`) |
 | `POST /portfolios/operations` | 201, `OperationResponse` |
 | `PUT`/`PATCH /portfolios/operations/{id}` | `OperationResponse`; zmienia `quantity`, `price`, `amount`, `fee`, `fx_rate`, `notes`, `operation_date` (typ i walor są stałe; jawny `null` = „bez zmian”, poza `notes`) |
@@ -160,5 +161,5 @@ Testy parytetu (`tests/unit/test_ledger_parity.py`) odtwarzają scenariusze test
 | Struktura, wiring, błędy z `code`, `transaction()`, `find_`/`get_`, testy `unit/` + `integration/` | zgodne z celem | — | R-07 (domknięty) |
 | `domain/` (księga, wycena), typowane argumenty, `Decimal` do granicy schematu, port cen, testy parytetu | zgodne z celem; wariant (a) ADR-0005 czeka na akceptację | — | R-08 (domknięty) |
 | Rejestracja operacji z datą wcześniejszą niż istniejące | stosowana do bieżącego stanu; późniejsza przebudowa (edycja/usunięcie) układa historię wg dat i może ją odrzucić | decyzja właściciela: walidować `POST` przebudową całej historii albo zostawić | — (otwarte) |
-| Odświeżanie kursów/cen | synchronicznie w `GET /portfolios/positions` | entrypoint + harmonogram ([`04_assets_module.md`](./04_assets_module.md)) | — (poza planem) |
+| Odświeżanie kursów/cen | synchronicznie w `POST /portfolios/positions/refresh` | entrypoint + harmonogram ([`04_assets_module.md`](./04_assets_module.md)) | — (poza planem) |
 | `mypy` | nieuruchamiany | `mypy app` zielone | R-10 |
