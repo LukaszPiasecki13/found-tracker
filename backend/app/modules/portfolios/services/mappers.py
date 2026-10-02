@@ -19,4 +19,5 @@ def position_response(
         unrealized_pnl=valuation.unrealized_pnl,
         return_pct=valuation.return_pct,
         portfolio_weight_pct=valuation.portfolio_weight_pct,
+        rate_missing=valuation.rate_missing,
     )

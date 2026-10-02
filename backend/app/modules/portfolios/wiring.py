@@ -38,6 +38,7 @@ def build_portfolio_service(session: Session) -> PortfolioService:
         PortfolioRepository(session),
         assets_wiring.build_currency_service(session),
         build_portfolio_valuator(),
+        build_fx_map_builder(session),
     )
 
 
@@ -47,6 +48,7 @@ def build_position_service(session: Session) -> PositionService:
         PositionRepository(session),
         assets_wiring.build_market_data_service(session),
         build_portfolio_valuator(),
+        build_fx_map_builder(session),
     )
 
 

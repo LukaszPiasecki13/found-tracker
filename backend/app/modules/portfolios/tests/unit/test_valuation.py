@@ -8,10 +8,6 @@ from app.modules.portfolios.domain import FxMap, PortfolioValuator
 D = Decimal
 PLN, USD, EUR, GBP = 1, 2, 3, 4
 
-# Stored "USD per one unit" rates must never leak into a valuation that is given
-# a rate map: every holding below carries this poisoned one.
-POISON = "999"
-
 
 def _portfolio(
     cash: str = "0", deposited: str = "0", *, base: int = PLN
@@ -27,7 +23,6 @@ def _holding(
     current_price: str,
     *,
     currency_id: int = PLN,
-    exchange_rate: str = POISON,
     average_fx: str = "1",
     fees: str = "0",
 ) -> SimpleNamespace:
@@ -36,19 +31,16 @@ def _holding(
         average_buy_price=D(average_price),
         average_fx_rate=D(average_fx),
         total_fees=D(fees),
-        asset=SimpleNamespace(
-            current_price=D(current_price),
-            currency_id=currency_id,
-            currency=SimpleNamespace(exchange_rate=D(exchange_rate)),
-        ),
+        asset=SimpleNamespace(current_price=D(current_price), currency_id=currency_id),
     )
 
 
 def test_position_in_the_base_currency_is_valued_without_fx() -> None:
     holding = _holding("10", "20", "25")
 
+    # A rate for the base currency itself is never read.
     valuation = PortfolioValuator().value(
-        _portfolio(), [holding], {(PLN, PLN): D(POISON)}
+        _portfolio(), [holding], {(PLN, PLN): D("999")}
     )
 
     position = valuation.positions[0]
@@ -207,14 +199,6 @@ def test_golden_portfolio_in_pln_with_eur_usd_and_pln_positions() -> None:
         D("4000") / D("9620") * 100,
         D("300") / D("9620") * 100,
     ]
-
-
-def test_without_a_rate_map_the_transitional_path_reads_the_currency_rate() -> None:
-    holding = _holding("10", "20", "25", currency_id=USD, exchange_rate="4")
-
-    position = PortfolioValuator().value(_portfolio(), [holding]).positions[0]
-
-    assert position.market_value == D("1000")
 
 
 def test_zero_denominators_give_zero_percentages() -> None:
