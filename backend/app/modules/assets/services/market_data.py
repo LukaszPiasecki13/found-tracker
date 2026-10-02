@@ -17,12 +17,15 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.core.market_data import MarketDataProvider, MarketDataUnavailableError, Quote
 from app.modules.assets.constants import (
     DEFAULT_CURRENCY_CODE,
     DEFAULT_QUOTE_TYPE,
     SOURCE_YAHOO,
 )
+from app.modules.assets.domain import storable
 from app.modules.assets.exceptions import AssetNotFoundOnProviderError
 from app.modules.assets.models.assets import Asset
 from app.modules.assets.models.currencies import Currency
@@ -134,16 +137,26 @@ class MarketDataService:
                 continue
             seen.add(asset.id)
             price = self._fetch_price(asset.ticker)
-            if price is not None and price > 0:
+            if price is not None and storable(price) is not None:
                 found.append((asset, price))
 
         today = self._today()
         stored = 0
         with self._asset_repo.transaction():
             for asset, price in found:
-                stored += self._prices.record_closes(
-                    asset, {today: price}, source=SOURCE_YAHOO, is_synthetic=True
-                )
+                # One item failing at the database must not lose the others.
+                try:
+                    with self._asset_repo.savepoint():
+                        stored += self._prices.record_closes(
+                            asset,
+                            {today: price},
+                            source=SOURCE_YAHOO,
+                            is_synthetic=True,
+                        )
+                except SQLAlchemyError:
+                    logger.warning(
+                        "Price write failed for %s", asset.ticker, exc_info=True
+                    )
             self._asset_repo.flush()
         return stored
 
@@ -173,14 +186,21 @@ class MarketDataService:
                     currency.exchange_rate = rate
                     continue
                 if base is not None:
-                    self._fx_rates.record_rate(
-                        currency,
-                        base,
-                        rate,
-                        rate_date=today,
-                        source=SOURCE_YAHOO,
-                        is_synthetic=True,
-                    )
+                    try:
+                        with self._currency_repo.savepoint():
+                            self._fx_rates.record_rate(
+                                currency,
+                                base,
+                                rate,
+                                rate_date=today,
+                                source=SOURCE_YAHOO,
+                                is_synthetic=True,
+                            )
+                    except SQLAlchemyError:
+                        logger.warning(
+                            "Rate write failed for %s", currency.code, exc_info=True
+                        )
+                        continue
                 # The cache is derived from the history only for the system
                 # currency; any other base keeps the direct assignment.
                 if base is None or base_code != DEFAULT_CURRENCY_CODE:

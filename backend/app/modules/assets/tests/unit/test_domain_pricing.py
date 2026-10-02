@@ -148,3 +148,23 @@ def test_is_stale_after_the_threshold(observed: date | None, stale: bool) -> Non
 def test_invert_rate_rounds_to_the_stored_nine_places() -> None:
     assert invert_rate(Decimal("4")) == Decimal("0.250000000")
     assert invert_rate(Decimal("3")) == Decimal("0.333333333")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("1", "1.000000000"),
+        ("0.0000000014", "0.000000001"),
+        ("999999999.9999999994", "999999999.999999999"),
+        ("0.0000000004", None),  # rounds to zero
+        ("0", None),
+        ("-1", None),
+        ("1000000000", None),  # overflows Numeric(18, 9)
+    ],
+)
+def test_storable_rounds_to_the_column_or_refuses(value: str, expected: str | None):
+    from app.modules.assets.domain import storable
+
+    result = storable(Decimal(value))
+
+    assert result == (Decimal(expected) if expected else None)

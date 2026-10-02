@@ -13,7 +13,7 @@ from app.modules.assets.constants import (
     SOURCE_MANUAL,
     STALE_AFTER_DAYS,
 )
-from app.modules.assets.domain import best_per_day, is_stale, pick_effective
+from app.modules.assets.domain import best_per_day, is_stale, pick_effective, storable
 from app.modules.assets.exceptions import (
     AssetArchivedError,
     FutureDateError,
@@ -224,15 +224,16 @@ class PriceService:
         source: str,
         is_synthetic: bool,
     ) -> int:
-        """Store provider closes (non-positive ones are dropped) and refresh the
-        asset's cached price; returns how many were stored. Idempotent: the same
-        day and source overwrites.
+        """Store provider closes (ones that do not fit the column are dropped) and
+        refresh the asset's cached price; returns how many were stored.
+        Idempotent: the same day and source overwrites.
 
         No-commit core - transaction belongs to caller.
         """
         stored = 0
-        for day, close in closes.items():
-            if close <= 0:
+        for day, raw in closes.items():
+            close = storable(raw)
+            if close is None:
                 continue
             self._prices.upsert(
                 asset_id=asset.id,

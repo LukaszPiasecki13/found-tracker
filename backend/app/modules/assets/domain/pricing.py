@@ -81,3 +81,14 @@ def invert_rate(rate: Decimal) -> Decimal:
     """The reverse quote of a positive rate, to the 9 places the rate column
     stores (`Numeric(18, 9)`)."""
     return (Decimal(1) / rate).quantize(Decimal("0.000000001"))
+
+
+_MIN_STORED = Decimal("0.000000001")
+_MAX_STORED = Decimal(10) ** 9
+
+
+def storable(value: Decimal) -> Decimal | None:
+    """`value` rounded to the 9 places of `Numeric(18, 9)`, or `None` when it would
+    round to zero or overflow the column (a bad provider quote, not a price)."""
+    rounded = value.quantize(_MIN_STORED)
+    return rounded if _MIN_STORED <= rounded < _MAX_STORED else None

@@ -12,6 +12,7 @@ from app.modules.assets.domain.pricing import (
     is_stale,
     pick_effective,
     source_rank,
+    storable,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "normalize_mic",
     "pick_effective",
     "source_rank",
+    "storable",
 ]

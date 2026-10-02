@@ -28,7 +28,7 @@ class ManualPriceRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    close: Decimal = Field(gt=0, lt=Decimal(MAX_PRICE_OR_RATE))
+    close: Decimal = Field(gt=0, lt=Decimal(MAX_PRICE_OR_RATE), decimal_places=9)
     currency_id: int | None = Field(default=None, gt=0)
 
 

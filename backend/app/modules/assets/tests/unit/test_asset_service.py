@@ -667,16 +667,16 @@ def test_update_routes_a_price_through_the_history(
     prices.record_manual_price_today.assert_called_once_with(asset, Decimal("5"))
 
 
-def test_update_to_a_zero_price_clears_the_cache_without_history(
-    service: AssetService, asset_repo: MagicMock, prices: MagicMock
-) -> None:
-    asset = SimpleNamespace(id=1, archived_at=None, current_price=Decimal("1"))
-    asset_repo.get_by_id.return_value = asset
+def test_update_request_rejects_a_zero_price() -> None:
+    with pytest.raises(ValueError):
+        AssetUpdateRequest(current_price=Decimal("0"))
 
-    service.update(1, AssetUpdateRequest(current_price=Decimal("0")))
 
-    assert asset.current_price == Decimal("0")
-    prices.record_manual_price_today.assert_called_once_with(asset, Decimal("0"))
+def test_requests_reject_more_than_nine_decimals() -> None:
+    with pytest.raises(ValueError):
+        AssetUpdateRequest(current_price=Decimal("0.0000000001"))
+    with pytest.raises(ValueError):
+        _create_request(current_price="1.0000000001")
 
 
 def test_update_without_a_price_leaves_the_history_alone(
