@@ -42,7 +42,7 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 | Dokument | Co zawiera |
 |---|---|
 | [`business/CONTEXT.md`](./business/CONTEXT.md) | Słownik domeny: Portfel, Pozycja, Operacja, Walor, Klasa waloru, Waluta, Metryki. **Obowiązujące nazewnictwo** w kodzie, dokumentach i rozmowie |
-| [`business/adr/`](./business/adr/README.md) | ADR-y biznesowe — dziś puste; konwencja numeracji |
+| [`business/adr/`](./business/adr/README.md) | ADR-y biznesowe (wszystkie `Proposed`, decyzje właściciela D1–D15 z [roadmapy](./plans/02_roadmapa_funkcjonalna.md)): [0001 Portfel = rachunek](./business/adr/0001-portfel-jest-rachunkiem.md), [0002 koszt nabycia, partie FIFO](./business/adr/0002-koszt-nabycia-partie-fifo.md), [0003 gotówka wielowalutowa](./business/adr/0003-gotowka-wielowalutowa.md), [0004 metodologia stóp zwrotu](./business/adr/0004-metodologia-stop-zwrotu.md), [0005 daty i zdarzenie podatkowe](./business/adr/0005-daty-operacji-i-zdarzenie-podatkowe.md), [0006 zakres modułu podatkowego](./business/adr/0006-zakres-modulu-podatkowego.md), [0007 dane referencyjne i usuwanie](./business/adr/0007-dane-referencyjne-i-usuwanie.md) |
 
 ## ADR-y techniczne
 
@@ -62,6 +62,13 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`0010`](./technical/adr/0010-decimal-i-precyzja-pieniedzy.md) | `Decimal` dla kwot/cen/ilości/kursów; `float` tylko w wektorach do wykresów |
 | [`0011`](./technical/adr/0011-audyt-odlozony.md) | Audyt zmian świadomie odłożony |
 | [`0012`](./technical/adr/0012-jwt-odstepstwa-od-checklisty.md) | JWT: odstępstwa od security-checklist (HS256, `localStorage`, stateless refresh) |
+| [`0013`](./technical/adr/0013-kierunki-zaleznosci-nowych-modulow.md) | Nowe moduły `taxes`/`planning`/`notifications`: kierunki zależności; import w `portfolios` (propozycja) |
+| [`0014`](./technical/adr/0014-numeryka-statystyk-float-i-numpy.md) | Księga i obligacje na `Decimal` w `domain/`; statystyki na `float`/numpy w `services/` (propozycja) |
+| [`0015`](./technical/adr/0015-historia-cen-i-kursow.md) | Historia cen i kursów w bazie, nieskorygowana, ze źródłem (propozycja) |
+| [`0016`](./technical/adr/0016-snapshoty-dzienne-i-przebudowa.md) | Snapshoty dzienne jako pochodna księgi; przebudowa od daty najstarszej zmiany, spójna składowa Portfeli (propozycja) |
+| [`0017`](./technical/adr/0017-zadania-w-tle-i-cli.md) | Zadania w tle jako `python -m app.cli`, wołające tylko `entrypoints.py` (propozycja) |
+| [`0018`](./technical/adr/0018-architektura-importu.md) | Import: szkic → zatwierdzenie → cofnięcie; parsery jako adaptery (propozycja) |
+| [`0019`](./technical/adr/0019-migracje-danych-i-kolumny-dat.md) | Dane istniejące wypełnia `rebuild-all`; `operation_day` nową kolumną (propozycja) |
 
 ## L2 — Kontrakty
 
@@ -75,12 +82,16 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`assets`](./technical/backend/04_assets_module.md) | `backend/app/modules/assets/**` — waluty, klasy, walory, dane rynkowe |
 | [`portfolios`](./technical/backend/05_portfolios_module.md) | `backend/app/modules/portfolios/**` — portfele, pozycje, operacje, metryki |
 | [wiring i entrypointy](./technical/backend/06_wiring_i_entrypointy.md) | `backend/app/modules/*/{wiring,entrypoints,dependencies}.py`, `main.py` |
+| [schemat danych docelowy](./technical/backend/07_schemat_danych_docelowy.md) | `draft` — projekt docelowy: core_data, assets, portfolios (tabele i kolumny dziś → docelowo) |
+| [schemat danych — nowe moduły](./technical/backend/08_schemat_danych_nowe_moduly.md) | `draft` — projekt docelowy: security (tokeny), import, taxes, planning, notifications |
+| [kontrakt API docelowy](./technical/backend/09_kontrakt_api_docelowy.md) | `draft` — projekt docelowy: ścieżki, koperty, paginacja, kody błędów |
 
 ### Frontend
 
 | Dokument | Zakres kodu |
 |---|---|
 | [architektura frontendu](./technical/frontend/frontend-architecture.md) | `frontend/src/**` — opis stanu faktycznego (`draft`) |
+| [IA i konwencje UI](./technical/frontend/ia-i-konwencje-ui.md) | `draft` — projekt docelowy: trasy, nawigacja, formatowanie, flagi jakości danych, kreator importu |
 
 ## Baza potwierdzonych ustaleń technicznych (`docs/knowledge_base/`)
 
