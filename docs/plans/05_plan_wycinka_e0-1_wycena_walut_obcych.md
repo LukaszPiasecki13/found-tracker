@@ -189,6 +189,10 @@ Frontend (bez Vitest — E0.7; weryfikacja `npm run lint`, `npm run build`, ręc
 | `components/PocketsList.tsx:138-154` | `!== undefined` → `!= null`; przy `null` pokaż „—” i `Chip` „Brak kursu” (samo `!= null` ukryłoby blok zysku) |
 | bez zmian | `PocketChartsPage.tsx:85-88` (`\|\| 0` obsługuje `null`), `positionService.ts`, `DashboardPage.tsx:14-16` (F3 → E0.9) |
 
+## 7a. Stan realizacji (branch `feat/e0-1-wycena-walut-obcych`)
+
+K1–K7 oraz E0.1b wykonane. Odstępstwa od planu: (1) K2 poszedł po K3/K4 — schematy nullable zmieniono razem z domeną, bo `mypy app` strict wymaga spójnych typów w jednym kroku; (2) zapas „kurs z `exchange_rate` waluty waloru” w domenie nie powstał — domena od razu wymaga `FxMap`, więc nie było commitu z cichym kursem; (3) E0.1b (endpoint `GET /portfolios/fx-rate` + poprawka obu dialogów) wdrożone razem z wycinkiem, zgodnie z ryzykiem z §8; (4) istniejące Operacje z kursem USD nie są naprawiane (E0.8/E2.0), a `total_fees` dalej sumuje różne waluty.
+
 ## 8. Ryzyka i wycofanie
 
 | Ryzyko | Mitygacja |
