@@ -130,7 +130,7 @@ typ zdarzenia (`accounting/rules.py`). Plany Free/Basic/Advanced, ceny niepokaza
 
 | Narzędzie | Ustalenia | Źródło |
 |---|---|---|
-| **myfund.pl** | Cennik od 2026-10-01: Basic 39,92, Standard 79,92, Pro 127,92, Expert 199,92 PLN/rok; portfele 1/5/20/99; import transakcji od Pro, narzędzia podatkowe tylko w Expert; „100+ integracji”, kreator importu AI; flaga „Uwzględnij w PIT” na operacji i stawka 19% per konto (`kontoStopaPodatku`); aplikacje mobilne v4.00 (09.2026). Szczegóły: [01_myfund.md](./01_myfund.md) | https://myfund.pl/index.php?mod=cennik |
+| **myfund.pl** | Cennik od 2026-10-01: Basic 39,92, Standard 79,92, Pro 127,92, Expert 199,92 PLN/rok; portfele 1/5/20/99; import transakcji od Pro, narzędzia podatkowe tylko w Expert; „100+ integracji”, kreator importu AI; flaga „Uwzględnij w PIT” na operacji i stawka 19% per konto (`kontoStopaPodatku`); aplikacje mobilne v4.00 (2026-07-28, forum myfund, wątek 6881). Szczegóły: [01_myfund.md](./01_myfund.md) | https://myfund.pl/index.php?mod=cennik |
 | **Freenance** | PSD2, inwestycje, IKE/IKZE/PPK, krypto; ceny niespójne między stronami (19,99 PLN/mies. vs 49 PLN/mies.) **[niezweryfikowane]**; dominuje wyniki SEO stronami porównawczymi — traktować jako stronnicze | https://freenance.io/porownania/freenance-vs-myfund-vs-getquin-2026-najlepszy-tracker-portfela-inwestycyjnego-etf-polska/ |
 | **Biznesradar** | Portfel wirtualny (3 portfele); BR Plus 285 PLN/rok: więcej portfeli, alerty, historia wartości vs **WIG** | https://www.biznesradar.pl/premium/brplus |
 | **Inwestomat** | Darmowy arkusz Google (2024-10-07): GPW/NC i rynki zagraniczne, automatyczna historia dzienna, **XIRR**, **FIFO** | https://inwestomat.eu/wszystkie-twoje-inwestycje-w-1-miejscu/ |
@@ -163,8 +163,8 @@ Stock Events, Yahoo (dane w §1.2).
 | Nieruchomości / walory własne | ◐ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ◐ | ? | ✅ | ✅ |
 | Gotówka jako pełna księga | ✅ | ◐ migawki | ✅ | ✅ | n/d | ✅ | ? | ? | ? | ✅ | ✅ |
 | Partie zakupu (loty podatkowe) | ✅ FIFO/średnia | ❌ | ✅ FIFO | ❌ | ✅ FIFO/LIFO/HIFO/ACB | ✅ FIFO/LIFO/min/max | ? | ? | ? | ❌ | ✅ FIFO **[wniosek]** z PIT |
-| Splity | ◐ niszczący kreator | ✅ tabela | ✅ `split_ratio` partii | ❌ | n/d | ✅ automatycznie | ◐ błędy | ✅ (3P) | ? | ? | ? |
-| Spin-off / fuzja / zmiana tickera | ◐ delivery | ❌ | ◐ Adjustment | ❌ | n/d | ✅ „adjustments” (zakres ?) | ◐ ręcznie (3P) | ? | ? | ? | ? |
+| Splity | ◐ niszczący kreator | ✅ tabela | ✅ `split_ratio` partii | ❌ | n/d | ✅ automatycznie | ◐ błędy | ✅ (3P) | ? | ? | ✅ [H-OP] |
+| Spin-off / fuzja / zmiana tickera | ◐ delivery | ❌ | ◐ Adjustment | ❌ | n/d | ✅ „adjustments” (zakres ?) | ◐ ręcznie (3P) | ? | ? | ? | ✅ konwersje [H-OP] |
 | TWR | ✅ dzienny TTWROR | ❌ zaślepka | ✅ | ? | ❌ | ❌ (tylko MWR) | ✅ (3P) | ✅ TTWROR | ✅ TTWROR | ❌ | ✅ jednostki portfela *Dok* |
 | MWR / IRR | ✅ IRR | ❌ zaślepka | ✅ | ? | ❌ | ✅ zmod. Dietz | ✅ IRR | ? | ✅ | ✅ IRR (alternatywy) | ✅ do wyboru *Dok* |
 | Inna miara | bezwzględna, delta | ROAI + efekt walutowy | zmiana wartości, zysk vs koszt | — | PnL | CAGR / prosta | — | — | — | — | stopa zwrotu |
@@ -175,13 +175,13 @@ Stock Events, Yahoo (dane w §1.2).
 | Raporty podatkowe | ❌ (tylko zyski) | ❌ | ◐ zrealizowany P&L | ❌ | ✅ PnL z okresem zwolnienia | ✅ CGT AU/CA | ❌ | ✅ dashboard DE | ❌ | ❌ | ✅ PIT (Expert) |
 | Import CSV | ✅ konfigurowalny | ✅ aliasy | ✅ szablony + AI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Parsowanie PDF | ✅ ~136 banków | ❌ | ❌ | ❌ | ❌ | ✅ noty e-mailem | ❌ | ✅ | ? | ❌ | ✅ kreator AI |
-| API brokera / agregator | ◐ plik IBKR Flex | ❌ | ✅ SnapTrade (płatny) | ✅ Plaid (Maybe) | ✅ giełdy/łańcuchy | ✅ 200+ | ✅ Yodlee + SnapTrade | ✅ autosync | ✅ | ✅ Plaid/Yodlee/Salt Edge | ❌ (pliki) |
+| API brokera / agregator | ◐ plik IBKR Flex | ❌ | ✅ SnapTrade (płatny) | ✅ Plaid (Maybe) | ✅ giełdy/łańcuchy | ✅ 200+ | ✅ Yodlee + SnapTrade | ✅ autosync | ✅ | ✅ Plaid/Yodlee/Salt Edge | ◐ XTB API |
 | Polscy brokerzy | ❌ | ❌ | ❌ | ❌ | ❌ | ? | ? | ❌ | ❌ (3P) | ? | ✅ XTB, mBank, Bossa, BOŚ (3P) |
-| Alerty cenowe | ◐ limity | ❌ | ? | ❌ | ❌ | ✅ | ? | ? | ? | ❌ | ? |
+| Alerty cenowe | ◐ limity | ❌ | ? | ❌ | ❌ | ✅ | ? | ? | ? | ❌ | ✅ [H-AL] |
 | Mobile | ◐ companion tylko do odczytu | PWA | ✅ iOS | ✅ (Sure) | ❌ | ✅ web | ✅ | ✅ | ✅ | ✅ | ✅ v4.00 |
 
 myfund TWR/MWR: FAQ opisuje „jednostki portfela” jak w funduszach (= TWR), MWR do wyboru —
-https://myfund.pl/index.php?raport=FAQ.
+https://myfund.pl/index.php?raport=FAQ. Kody [H-OP] i [H-AL] (strony pomocy myfund) oraz import przez API XTB — [01_myfund.md](./01_myfund.md).
 
 ## 3. Najlepsze pomysły do przejęcia
 
@@ -194,8 +194,8 @@ https://myfund.pl/index.php?raport=FAQ.
 | 5 | **Dekompozycja zwrotu:** zysk kapitałowy / dywidendy / zysk walutowy / opłaty / podatki | Sharesight; PP (widok kalkulacji) | Polacy z ETF-ami USA/UE w PLN muszą widzieć efekt FX |
 | 6 | **Podwójna seria „z efektem walutowym / bez”** | Ghostfolio (`*WithCurrencyEffect`) | Tanie, gdy FX jest per data |
 | 7 | **Nieniszczące splity** (zdarzenia stosowane przy odczycie lub współczynnik per partia) | Ghostfolio `adjustActivityBySplits`; Wealthfolio `split_ratio` | Unikać przepisywania historii jak w PP |
-| 8 | **Wymienne strategie kosztu** (FIFO/LIFO/HIFO/średnia) za jednym interfejsem | Rotki `cost_basis/base.py` | Polska wymaga FIFO **per rachunek papierów** (art. 24 ust. 10); inne strategie do widoków „co jeśli” |
-| 9 | **Optymalizacja podatkowa przydziału sprzedaży** (Minimise Gain / CGT) | Sharesight AU CGT | Prawo PL ustala FIFO, więc nie do PIT-38 — tylko informacyjnie **[wniosek]** |
+| 8 | **Wymienne strategie kosztu** (FIFO/LIFO/HIFO/średnia) za jednym interfejsem | Rotki `cost_basis/base.py` | W Polsce FIFO **per rachunek papierów** jest domyślne, gdy nie da się określić ceny nabycia zbywanych papierów (art. 24 ust. 10); wskazanie partii dopuszczalne, gdy broker ją identyfikuje (myfund od 05.2026 dla XTB, [01_myfund.md](./01_myfund.md)) — **[wniosek]**, zakres rozstrzyga biznesowy ADR; inne strategie do widoków „co jeśli” |
+| 9 | **Optymalizacja podatkowa przydziału sprzedaży** (Minimise Gain / CGT) | Sharesight AU CGT | W PL FIFO jest domyślne; wskazanie partii tylko gdy da się określić cenę nabycia zbywanych papierów (art. 24 ust. 10) — optymalizacja do PIT-38 możliwa najwyżej w tym zakresie, poza nim tylko informacyjnie **[wniosek]** |
 | 10 | **DSL ekstraktorów PDF per bank** testowany na zanonimizowanych fiksturach tekstowych | PP `datatransfer/pdf/*` (`DocumentType` → `Block` → `section().match(regex)`) | Wyciągi i potwierdzenia XTB, mBank, Bossa, BOŚ |
 | 11 | **Łańcuch walidacji importu:** waluty → wartość brutto FX → duplikaty → zapis | PP `datatransfer/actions/*` | Idempotentne ponowne importy |
 | 12 | **Zapisane szablony mapowania CSV + podgląd rozpoznania walorów** (`ExistingAsset / AutoResolvedNewAsset / NeedsFixing`) | Wealthfolio | UX dla niedopasowanych tickerów, np. GPW vs Yahoo `.WA` |

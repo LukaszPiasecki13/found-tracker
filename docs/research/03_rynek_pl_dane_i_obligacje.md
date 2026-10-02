@@ -33,7 +33,7 @@ Odbiorca: implementujący wycenę Walorów w `backend/app/modules/assets/` i `po
 | Akcje GPW (wszystkie rynki) | Stooq CSV `https://stooq.pl/q/d/l/?s=<sym>&i=d` | darmowe z kluczem | CSV | „As March 2026, Stooq requires an API key for data downloads” (pandas-datareader #1012, 2026-04-13) | dekady **[niezweryfikowane]** | EOD | Z kontenera: `Recv failure: Connection reset by peer` (stooq.pl i stooq.com). Klucz przez `get_apikey` z CAPTCHA, dzienny limit wywołań, paczki bulk `stooq.com/db/h/` **[niezweryfikowane]** (snippet) |
 | Dane oficjalne GPW | GPW „Cennik Usług Informacyjnych” od 2025-01-01 | płatne | e-mail/https/SFTP | „Wyniki sesji (dane GPW)” 3 500 zł netto/rok; „Wyniki sesji (dane GPW i BondSpot)” 7 600 zł; „Dane referencyjne i notowania instrumentów dłużnych (dane GPW)” 1 900 zł. Przypis 3: dalsze rozpowszechnianie elektroniczne = **„dziewięciokrotności stawki”** | historyczne za dopłatą | po sesji | Dla jednoosobowego trackera self-hosted to przesada **[wniosek]** |
 | Catalyst (obligacje korporacyjne, skarbowe hurtowe) | GPW/BondSpot (płatne, j.w. poz. 15–16, 26); Yahoo — nie sprawdzono | płatne / ? | — | jak wyżej | — | EOD | **[niezweryfikowane]**, czy Yahoo lub Stooq pokrywa Catalyst |
-| Fundusze TFI (wycena JU) | strony TFI, analizy.pl, Stooq | darmowe | HTML/CSV, scraping | ToS poszczególnych serwisów nie sprawdzono | — | dzienna wycena | **[niezweryfikowane]**. myfund importuje TFI i Analizy.pl (badanie `research_myfund.md`) |
+| Fundusze TFI (wycena JU) | strony TFI, analizy.pl, Stooq | darmowe | HTML/CSV, scraping | ToS poszczególnych serwisów nie sprawdzono | — | dzienna wycena | **[niezweryfikowane]**. myfund importuje TFI i Analizy.pl ([01_myfund.md](./competitors/01_myfund.md)) |
 | Akcje i ETF zagraniczne | Yahoo | darmowe | j.w. | j.w. | długa | EOD | Działa dziś w `yahoo.py:60-64` (`yf.Ticker(...).history`) |
 | Kursy walut | **NBP Web API** `https://api.nbp.pl` | darmowe | JSON/XML, REST | brak warunków licencyjnych na stronie API (WebFetch 2026-10-02) | „dla kursów walut – od 2 stycznia 2002 r.” | tabela A: dni robocze | §1.2 |
 | Złoto | NBP `api/cenyzlota` | darmowe | JSON | j.w. | „dla cen złota – od 2 stycznia 2013 r.” | dni robocze | Test: `cenyzlota/2026-09-25` → `cena 528.37` (PLN/g); `2012-12-31` → 404 |
@@ -41,7 +41,7 @@ Odbiorca: implementujący wycenę Walorów w `backend/app/modules/assets/` i `po
 | CPI | GUS: BDL API `https://bdl.stat.gov.pl/api/v1/` (HTTP 200), DBW `api-dbw.stat.gov.pl` (302) | darmowe | JSON | — | — | miesięcznie | Do obligacji niepotrzebne, bo MF ogłasza stopę (§2.3). Przydatne do „zwrotu realnego” |
 | Stopa referencyjna NBP | `https://static.nbp.pl/dane/stopy/stopy_procentowe.xml` | darmowe | XML | — | od daty publikacji pliku | przy zmianie | Test: `data_publikacji="2026-03-05"`, stopa referencyjna `oprocentowanie="3,75"`, `obowiazuje_od="2026-03-05"` |
 | WIBOR / WIRON | GPW Benchmark | płatne | e-mail/https | Cennik GPW poz. 19 „Stawki referencyjne WIBOR, WIBID i WIRON (dane GPWB)” 4 600 zł netto/rok. WIRON po sesji, WIBOR „następnego Dnia Roboczego przed godziną 11:00” | — | dziennie | Potrzebne tylko do obligacji zmiennokuponowych z Catalyst |
-| POLSTR | GPW Benchmark | ? | strona administratora | ? | od 2025-06-02 | dziennie | Wybrany przez KS NGR (2024-12-06) jako następca WIBOR; termin zamiany przesunięty na koniec 2027 **[niezweryfikowane]** (bankoweabc.pl, snippet) |
+| POLSTR | GPW Benchmark | ? | strona administratora | ? | od 2025-06-02 | dziennie | KS NGR w listopadzie–grudniu 2024 wybrał WIRF-; ostateczna decyzja o POLSTR jako następcy WIBOR: 30.01.2025. WIBOR: komunikat GPW Benchmark z 18.05.2026 — O/N nie jest opracowywany od 2026-10-01, ostatni fixing 1M/3M/6M 31.12.2036 **[niezweryfikowane]** (źródła wtórne: komunikaty banków, np. citibank.pl; gpwbenchmark.pl nie pobrano — 404) |
 
 ### 1.2 NBP Web API — szczegóły do implementacji
 
@@ -80,8 +80,8 @@ Odbiorca: implementujący wycenę Walorów w `backend/app/modules/assets/` i `po
 | Typ | Seria X.2026 | Zapadalność | Nominał / cena | Oprocentowanie | Kapitalizacja / wypłata | Opłata za przedterminowy wykup (emisje od 2024-09-01) | Cena zamiany |
 |---|---|---|---|---|---|---|---|
 | OTS | OTS0127 | 3 mies. | 100 zł | 2,00% stałe; „Odsetki: 0,50 zł” | wypłata przy wykupie | przy wykupie przed terminem „klient otrzymuje wpłacone środki w pełnej wysokości” (bez odsetek) | 100,00 zł |
-| ROR | ROR1027 | 1 rok | 100 zł | 1. miesiąc 4,00%; dalej „stopa referencyjna NBP+0,00%” | brak; wypłata co miesiąc | 0,50 zł | 99,90 zł |
-| DOR | DOR1028 | 2 lata | 100 zł | 1. miesiąc 4,15%; dalej „stopa referencyjna NBP+0,15%” | brak; co miesiąc | 0,70 zł | 99,90 zł |
+| ROR | ROR1027 | 1 rok | 100 zł | 1. miesiąc 4,00%; dalej „stopa referencyjna NBP+0,00%” | brak; wypłata co miesiąc | 0,50 zł; w 1. okresie ≤ narosłe odsetki, od 2. okresu „w pełnej wysokości z należności do wykupu (również w przypadku gdy wartość narosłych odsetek … jest mniejsza” — wypłata może spaść poniżej 100 | 99,90 zł |
+| DOR | DOR1028 | 2 lata | 100 zł | 1. miesiąc 4,15%; dalej „stopa referencyjna NBP+0,15%” | brak; co miesiąc | 0,70 zł; reguła jak ROR (1. okres ≤ narosłe, od 2. okresu w pełnej wysokości) | 99,90 zł |
 | TOS | TOS1029 | 3 lata | 100 zł | 4,40% stałe; wierzytelność w dniu wykupu 113,79 zł (list 97/2026 ust. 14) | roczna kapitalizacja; wypłata przy wykupie | 1,00 zł (0,70 zł dla emisji do 2024-08-31) | 99,90 zł |
 | COI | COI1030 | 4 lata | 100 zł | 1. rok 4,75%; dalej „marża 1,50% + inflacja” | brak; odsetki co roku | 2,00 zł (0,70 zł do 2024-08-31) | 99,90 zł |
 | EDO | EDO1036 | 10 lat | 100 zł | 1. rok 5,35%; dalej „marża 2,00% + inflacja” | roczna kapitalizacja; przy wykupie | 3,00 zł (2,00 zł do 2024-08-31) | 99,90 zł |
@@ -127,6 +127,8 @@ dla dnia d (start_k <= d < end_k):
       if typ != COI or k == 1: przed_podatkiem = max(przed_podatkiem, 100)   # floor wg tabeli 2.2
       podatek = 19% * max(przed_podatkiem - 100, 0), zaokr. do grosza (rachunek zwykły; reguła — §2.4); 0 na IKE/IKZE
   ROR/DOR: odsetki miesięczne = N * r_m/12 ; narosłe w miesiącu = N * r_m/12 * a/ACT_m   [wniosek, §2.4]
+      opłata = min(b, narosłe)  [k == 1]  ;  opłata = b  [k >= 2, bez dolnego ograniczenia 100]
+      przed_podatkiem = N + narosłe - opłata          # ROR0623: 100 + 0,18 - 0,50 = 99,68
 ```
 
 - **„Wartość rynkowa” w UI [wniosek]:** dwie liczby: `brutto` (wartość nominalna + narosłe odsetki; tak pokazuje to Tabela odsetkowa) oraz „wartość likwidacyjna netto” (po opłacie i podatku). Z drugiej liczby liczy się realny wynik.
@@ -144,6 +146,7 @@ Sprawdzono w Pythonie (`Decimal`, `ROUND_HALF_UP`) 2026-10-02. „Odsetki naros�
 | TOS1029: W = 100·1,044³ | — | 113,79 | list 97/2026 ust. 14: „113,79 zł” ✔ |
 | ROR0623: zakup 01.06.2022, r = 5,25%, pełny 1. miesiąc | 100·0,0525/12 | 0,44 | „0,44 zł przed opodatkowaniem” ✔ |
 | ROR0623: „narosłe na 29.06.2022” | 100·0,0525/12·28/30 | 0,41 | „0,41 zł” ✔ — wzór miesięczny `r/12·a/ACT` to **[wniosek]** dopasowany do przykładu; listu ROR nie pobrano |
+| ROR0623: przedterminowy wykup, 2. okres (r = 5,25%), „narosłe na 14.07.2022” | 100·0,0525/12·13/31; opłata 0,50 (k = 2, pełna) | 0,18; 99,68 | „99,68 zł = 100 zł + 0,18 zł (odsetki narosłe na 14.07.2022 r.) – 0,50 zł” ✔ |
 
 **Zaokrąglenie podatku — sprzeczność źródeł.** Broszura MF do PIT-38 (art. 63 § 1a Ordynacji) mówi o zaokrągleniu podatku z art. 30a ust. 1 pkt 1–3 „do pełnych groszy w górę”. Przykłady PKO BP temu przeczą: 19% × 2,16 = 0,4104 → podatek **0,41** (zaokrąglenie w górę dałoby 0,42); 19% × 0,44 = 0,0836 → wypłata 0,36, czyli podatek **0,08**. Wynik zgadza się z zaokrągleniem matematycznym do grosza. **rekomendacja:** test złoty z przykładów MF/PKO BP, reguła jako parametr; rozstrzygnąć na Tabelach odsetkowych lub potwierdzeniach wykupu.
 
@@ -176,7 +179,7 @@ Dostęp 2026-10-01/02, o ile nie zaznaczono inaczej.
 - Yahoo chart API (test): https://query1.finance.yahoo.com/v8/finance/chart/PKO.WA
 - EODHD: https://eodhd.com/pricing , https://eodhd.com/exchange/WAR
 - Twelve Data: https://twelvedata.com/prime (snippet); FMP: https://apis.io/plans/financialmodelingprep/financialmodelingprep-plans-pricing/ (snippet)
-- POLSTR: https://bankoweabc.pl/nowy-wskaznik-polstr-zastapi-wibor/ (snippet)
+- POLSTR: https://bankoweabc.pl/nowy-wskaznik-polstr-zastapi-wibor/ (snippet); WIBOR, komunikat GPW Benchmark z 18.05.2026 (wtórnie): https://www.citibank.pl/poland/files/gpwb-komunikat.25.05.pdf , https://comparic.pl/koniec-wibor-ogloszony-gpw-benchmark-wyznaczyl-date-co-to-oznacza-dla-kredytobiorcow/ (snippety wyszukiwarki)
 - GUS BDL API: https://bdl.stat.gov.pl/api/v1/
 - KDPW T+2 i dywidendy: https://www.sii.org.pl/7513/analizy/newsroom/nowy-cykl-rozliczeniowy-na-gpw.html (snippet)
 

@@ -20,7 +20,7 @@ Odbiorca: implementujący `backend/app/modules/portfolios/` (FastAPI, `Decimal`,
 | Szybka liczba przy niepełnej historii | Modified Dietz | Tylko tam, gdzie brakuje dziennego wektora wyceny |
 | Annualizacja | `(1+R)^(365/days) − 1` tylko dla okresu ≥ 365 dni (GIPS 2.A.12) | Annualizacja zwrotu 3-dniowego daje absurdy (§1.6) |
 | Ryzyko | Z dziennego szeregu zwrotów TWR r_t, nie ze zmian MV | Zmiany MV zawierają wpłaty |
-| Podatkowy P/L (PL) | FIFO per rachunek maklerski (art. 24 ust. 10 ustawy o PIT), przeliczenie na PLN kursem średnim NBP z dnia poprzedniego | Obecne `average_buy_price` to średni koszt — OK dla UI, błędne dla PIT-38 |
+| Podatkowy P/L (PL) | FIFO per rachunek maklerski jako domyślne, gdy nie da się określić ceny nabycia zbywanych papierów (art. 24 ust. 10 ustawy o PIT, §6.2), przeliczenie na PLN kursem średnim NBP z dnia poprzedniego | Obecne `average_buy_price` to średni koszt — OK dla UI, błędne dla PIT-38 |
 ## 1. Miary zwrotu
 ### 1.1 Prosty ROI
 ```
@@ -154,11 +154,11 @@ Pozycja w walucie L, wyceniana w walucie bazowej B (PLN): `MV_B,t = Q_t × P_L,t
 R_fx           = (1 + R_base) / (1 + R_local) − 1
 R_base         = R_local + R_fx + R_local × R_fx          (cross term)
 ```
-**Przykład:** akcja USA 100 → 110 USD, USD/PLN 4.00 → 3.80. R_local = +10 %, R_fx = −5 %, R_base = 110 × 3.80 / (100 × 4.00) − 1 = **+4.5 %** = 10 % − 5 % − 0.5 % (składnik krzyżowy). Kwotowo dla 1 akcji (koszt 400 PLN, teraz 418 PLN): efekt ceny po starym kursie (110 − 100) × 4.00 = +40 PLN; efekt walutowy po nowej cenie 110 × (3.80 − 4.00) = −22 PLN; razem +18 PLN. Kolejność „najpierw cena, potem FX na nowej cenie” wkłada składnik krzyżowy do efektu FX. **rekomendacja:** wybierz jedną kolejność, udokumentuj, nie zmieniaj — to konwencja, nie prawo. Sharesight raportuje zysk walutowy „purely in relation to the currency movement on the invested capital”; jego składowe % nie sumują się (5.39 % dywidendowy + 5.39 % kapitałowy = 9.86 % łącznie), bo każdą annualizuje tym samym mianownikiem średnich lat inwestycji (Sharesight components).
+**Przykład:** akcja USA 100 → 110 USD, USD/PLN 4.00 → 3.80. R_local = +10 %, R_fx = −5 %, R_base = 110 × 3.80 / (100 × 4.00) − 1 = **+4.5 %** = 10 % − 5 % − 0.5 % (składnik krzyżowy). Kwotowo dla 1 akcji (koszt 400 PLN, teraz 418 PLN): efekt ceny po starym kursie (110 − 100) × 4.00 = +40 PLN; efekt walutowy po nowej cenie 110 × (3.80 − 4.00) = −22 PLN; razem +18 PLN. Kolejność „najpierw cena, potem FX na nowej cenie” wkłada składnik krzyżowy do efektu FX. **rekomendacja:** wybierz jedną kolejność, udokumentuj, nie zmieniaj — to konwencja, nie prawo. Sharesight raportuje zysk walutowy „purely in relation to the currency movement on the invested capital”; jego składowe % nie sumują się (5.39 % dywidendowy + 5.39 % kapitałowy = 9.86 % łącznie); Sharesight tłumaczy to tym, że kapitalizacja jest „exponential rather than linear” (Sharesight components, https://help.sharesight.com/components-return/).
 
 **Jakie kursy FX:**
 - PP używa kursów referencyjnych EBC i ostrzega, że „will probably differ slightly from the real transaction rates” (PP-Prices).
-- Podatek w PL: kwoty walutowe po średnim kursie NBP (tabela A) z ostatniego dnia roboczego przed dniem przychodu/kosztu (art. 11a ustawy o PIT) — źródło wtórne, **[niezweryfikowane]** z tekstem ustawy.
+- Podatek w PL: kwoty walutowe po średnim kursie NBP (tabela A) z ostatniego dnia roboczego przed dniem przychodu/kosztu (art. 11a ustawy o PIT; cytat z tekstu jednolitego Dz.U. 2026 poz. 592 w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)).
 - **rekomendacja:** przechowuj `fx_rate` i `fx_source` (`broker`, `nbp_a`, `ecb`) per Operacja; kurs brokera dla kosztu nabycia w UI, NBP A z D−1 dla rejestru podatkowego, dzienny kurs rynkowy/NBP dla wyceny. Istniejące `average_fx_rate` w `domain/protocols.py` to pojęcie kosztu nabycia — trzymaj osobno od FX wyceny.
 ## 4. Metryki ryzyka
 GIPS 2.A.18: okresowość i metodologia ryzyka dla kompozytu i benchmarku muszą być takie same. Każdą metrykę licz z szeregu TWR r_t (§1.2), nigdy ze zmian surowej MV. Przykładowy szereg (indeks 100, 102, 99, 101, 97, 103): r = [+2.0000 %, −2.9412 %, +2.0202 %, −3.9604 %, +6.1856 %]; wyniki niżej to dane zabawkowe.
@@ -170,7 +170,7 @@ GIPS 2.A.18: okresowość i metodologia ryzyka dla kompozytu i benchmarku muszą
 | Sharpe | `D_t = R_Fund,t − R_B,t`; `S = mean(D) / stdev(D)`; `S_T = S_1 × sqrt(T)` | rf 4 % rocznie → dziennie (1.04)^(1/252) − 1 = 0.01556 %; S dzienny 0.1559, × sqrt(252) = **2.48** |
 | Sortino | `DD_down = sqrt( Σ_t min(0, r_t − MAR)² / N )` (N = wszystkie obserwacje); `Sortino = (mean(r) − MAR) / DD_down` | MAR = 0: DD_down = 2.2061 %, dzienny 0.2995, ×√252 = 4.76 |
 | Beta / alfa / korelacja | `β = Cov(r_p, r_b) / Var(r_b)`; `α (Jensen 1968) = mean(r_p − r_f) − β × mean(r_b − r_f)`; `ρ = Cov(r_p, r_b) / (σ_p × σ_b)` | benchmark +1 %, −2 %, +1.5 %, −3 %, +5 % (α bez rf): β = 1.30, ρ = 0.995 |
-| VaR historyczny | `VaR_α = −Quantile_{1−α}(r_t) × V` (np. α = 95 %, 1 dzień, V = bieżąca MV) | 20 zwrotów z `rm_examples2.py`: nearest-rank (k = ceil(0.05 × 20) = 1) → −2.60 %; interpolacja liniowa (NumPy, typ 7) → −2.125 % |
+| VaR historyczny | `VaR_α = −Quantile_{1−α}(r_t) × V` (np. α = 95 %, 1 dzień, V = bieżąca MV) | 20 zwrotów z `rm_examples2.py`: kwantyl 5 % zwrotów: nearest-rank (k = ceil(0.05 × 20) = 1) → −2.60 %, interpolacja liniowa (NumPy, typ 7) → −2.125 %; VaR (dodatni, strata) = **2.60 %** albo **2.125 %** × V |
 
 - **Zmienność.** Skalowanie pierwiastkiem czasu zakłada niezależność zwrotów (Sharpe 1994; Lo 2002 kwantyfikuje błąd). GIPS 4.A: 3-letnie annualizowane odchylenie ex post „using monthly returns”. **rekomendacja:** pokazuj obie wersje (×√252 z dziennych, ×√12 z miesięcznych) z etykietą. PP (`Risk.Volatility`, `PerformanceIndex.filterReturnsForVolatilityCalculation`) używa log-zwrotów `ln(1 + r)`, pomija pierwszy dzień, dni bez posiadania, weekendy i święta (`TradeCalendar`) i liczy `sqrt(Σ(lr − mean)² / (n − 1) × n)` — **[wniosek]** z lektury kodu: to zmienność za cały okres, nie p.a.; sprawdź przed porównaniem z PP. **Pułapka:** wektor na każdy dzień kalendarzowy z forward-fill daje r = 0 w weekendy i obniża σ o ok. sqrt(5/7) — filtruj dni nienotowane (§10.3).
 - **Drawdown.** PP (`Risk.Drawdown`) raportuje też maksymalny czas trwania drawdownu (najdłużej „pod wodą” od ostatniego szczytu) i najdłuższy czas odrabiania (od dołka do nowego szczytu). Licz z indeksu TWR I_t, nie z MV (wypłata nie jest drawdownem). Nieodrobiony drawdown na końcu okresu → `recovered = false`; MDD zależy od okresu; dane dzienne zaniżają drawdowny śróddzienne.
@@ -182,8 +182,8 @@ GIPS 2.A.18: okresowość i metodologia ryzyka dla kompozytu i benchmarku muszą
 | Kandydat | Zalety | Wady | Status |
 |---|---|---|---|
 | Stopa referencyjna NBP | oficjalna, prosta, funkcja schodkowa | stopa polityki, nie inwestowalny zwrot | źródła wtórne: 3.75 % w lipcu 2026 (**[niezweryfikowane]**: nbp.pl blokował automatyczny dostęp) |
-| WIBOR 3M | długa historia | wygaszany; GPW Benchmark ogłosił koniec WIBOR/WIBID; O/N kończy się 2026-10-01, dłuższe tenory podobno do 2036 (**[niezweryfikowane]**, wtórne) | |
-| WIRON → POLSTR | stopa overnight typu risk-free (GPW Benchmark) | krótka historia; w styczniu 2025 KS NGR wybrał **POLSTR** w miejsce WIRON jako indeks docelowy (wtórne) | |
+| WIBOR 3M | długa historia | wygaszany; komunikat GPW Benchmark z 18.05.2026: WIBOR O/N kończy się 2026-10-01, ostatni fixing 1M/3M/6M 31.12.2036 (**[niezweryfikowane]**, wtórne) | |
+| WIRON → POLSTR | stopa overnight typu risk-free (GPW Benchmark) | krótka historia; KS NGR w listopadzie–grudniu 2024 wybrał WIRF-, a ostateczną decyzję o **POLSTR** jako indeksie docelowym w miejsce WIRON podjął 30.01.2025 (wtórne) | |
 | Rentowność 52-tyg. bonów / krótkich obligacji | inwestowalna | nieregularne emisje | |
 | 0 % | proste | zawyża Sharpe'a przy wysokich stopach | |
 
@@ -209,7 +209,7 @@ Bench_MV_t = units × P_bench,t × FX_t
 ## 6. Koszt nabycia: średni vs FIFO vs wskazanie partii
 - **Średnia ruchoma:** „All shares are assigned the same average purchase price”, przeliczana tylko przy kupnach (PP-Cost).
 - **FIFO:** „Each share retains its original purchase price. When a sale occurs, the oldest shares are sold first.”
-- **Wskazanie konkretnej partii:** w niektórych krajach dopuszczalne podatkowo, w Polsce nie (§6.2).
+- **Wskazanie konkretnej partii:** dopuszczalne podatkowo w wielu krajach; w Polsce dopuszczalne, gdy da się określić cenę nabycia zbywanych papierów — FIFO jest regułą domyślną (§6.2).
 - PP (400 akcji, średnio 103 EUR): średnia → zrealizowany 1 650 + niezrealizowany 1 200; FIFO → 2 250 + 600; razem 2 850 w obu. „The total gain remains identical; methodology only reallocates gains between realized and unrealized.” PP liczy obie (`PerformanceIndex.getClientPerformanceSnapshot(useFifo)`).
 
 **Przykład** (prowizje w koszcie nabycia, jak PP-Purchase: „totaling 67 EUR, including 3 EUR in fees and taxes”):
@@ -228,14 +228,14 @@ Bench_MV_t = units × P_bench,t × FX_t
 | Niezrealizowany przy 130 (MV 650) | 47.50 | 97.50 |
 | **Razem** | **384.00** | **384.00** |
 ### 6.2 Dlaczego FIFO ma znaczenie w Polsce (PIT-38)
-- **Art. 24 ust. 10 ustawy o PIT** (Dz.U. 1991 nr 80 poz. 350): gdy nie da się ustalić ceny nabycia sprzedanych papierów kupionych po różnych cenach, sprzedaż dotyczy kolejno papierów nabytych najwcześniej (FIFO). Parafraza za źródłami wtórnymi (SII, infor.pl); tekst w ISAP: https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19910800350 (**[niezweryfikowane]**, czy ten id prowadzi do tekstu jednolitego).
-- Praktycy (SII): FIFO stosuje się **osobno dla każdego rachunku papierów wartościowych** — `Portfolio` w FundTracker może nie odpowiadać 1:1 rachunkowi.
-- Koszty i przychody walutowe → PLN po średnim kursie NBP z ostatniego dnia roboczego przed (art. 11a, wtórne, **[niezweryfikowane]**).
+- **Art. 24 ust. 10 ustawy o PIT** (tekst jednolity Dz.U. 2026 poz. 592; pełny cytat w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)): FIFO stosuje się, „jeżeli … nie jest możliwe określenie ceny nabycia zbywanych papierów wartościowych”, „odrębnie dla każdego rachunku papierów wartościowych”. FIFO jest więc regułą domyślną, nie zakazem identyfikacji: gdy broker identyfikuje sprzedawaną partię, można przyjąć jej cenę. Przykład: myfund w maju 2026 dodał wybór konkretnej transakcji kupna dla XTB (https://myfund.pl/index.php?raport=pomoc&helpID=20). **[wniosek]:** model partii musi dopuszczać wskazanie partii obok FIFO; czy FundTracker to obsłuży — decyduje biznesowy ADR. `Portfolio` w FundTracker może nie odpowiadać 1:1 rachunkowi.
+- Koszty i przychody walutowe → PLN po średnim kursie NBP z ostatniego dnia roboczego przed (art. 11a; cytat w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)).
 - Zaokrąglenie podstawy i podatku: art. 63 §1 Ordynacji podatkowej (do pełnych złotych, od 50 gr w górę) (**[niezweryfikowane]**) — dotyczy deklarowanej podstawy i podatku, nie rejestru partii.
 - To nie jest porada podatkowa. **rekomendacja:** eksport PIT-38 oznaczać jako „szkic do sprawdzenia”.
 
-**Konsekwencja:** obecna domena (`PositionState.average_buy_price`, `average_fx_rate`) to średni koszt — dobry dla „średniej ceny” w UI, ale zrealizowany P/L podatkowy musi pochodzić z rejestru partii FIFO z przeliczeniem na PLN kursem NBP z D−1 **każdej partii**. Średni FX × średnia cena ≠ suma kosztów PLN per partia.
+**Konsekwencja:** obecna domena (`PositionState.average_buy_price`, `average_fx_rate`) to średni koszt — dobry dla „średniej ceny” w UI, ale zrealizowany P/L podatkowy musi pochodzić z rejestru partii (FIFO domyślnie) z przeliczeniem na PLN kursem NBP z D−1 **każdej partii**. Średni FX × średnia cena ≠ suma kosztów PLN per partia.
 ### 6.3 Model danych partii zakupu (lotów podatkowych) (**rekomendacja**)
+> Terminy „partia (lot podatkowy)” i `transfer_in`/`transfer_out` są **proponowane**: [CONTEXT.md](../business/CONTEXT.md) wymienia dziś „lot” i „transfer” na liście _Unikać_. Przyjęcie wymaga zmiany CONTEXT.md przez decyzję D3 [roadmapy](../plans/02_roadmapa_funkcjonalna.md).
 ```
 tax_lot
   id, portfolio_id, account_ref (broker account for per-account FIFO), asset_id
@@ -364,7 +364,7 @@ position_daily(portfolio_id, asset_id, date, qty, price_local, fx, mv_base, flow
 
 **Testy właściwości** (Hypothesis, jeśli dodany — decyzja o zależności): wpłata w dowolnej dacie nie zmienia TWR, gdy MV skaluje się razem z nią; bez przepływów zewnętrznych TWR = IRR (okresu, de-annualizowany); Total P/L identyczny dla FIFO i średniego kosztu; `R(a, c) = (1 + R(a, b))(1 + R(b, c)) − 1` (łączenie); drawdown nigdy ujemny; suma MV Pozycji = MV Portfela minus gotówka. **Walidacja krzyżowa:** eksport przykładowego Portfela do Portfolio Performance (import CSV) i porównanie TTWROR, IRR, MDD i zysków zrealizowanych FIFO. Oczekiwane drobne różnice ze źródeł FX (EBC vs NBP) i skalowania zmienności PP (§4).
 ## 11. Pytania otwarte (do weryfikacji przed implementacją)
-1. Tekst prawny art. 24 ust. 10, art. 11a i art. 30b ustawy o PIT oraz art. 63 Ordynacji podatkowej — czytane tylko źródła wtórne.
+1. Art. 63 Ordynacji podatkowej — czytane tylko źródła wtórne (art. 24 ust. 10, 11a, 30b ustawy o PIT zacytowano z tekstu jednolitego Dz.U. 2026 poz. 592 w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)).
 2. Bieżąca stopa referencyjna NBP i dostępność danych POLSTR/WIRON, w tym licencja GPW Benchmark na redystrybucję w aplikacji.
 3. Czy `Portfolio` w FundTracker = jeden rachunek maklerski (FIFO per rachunek).
 4. Czy dodać typy Operacji `transfer_in`/`transfer_out`, `fee`, `tax`, `interest`, `split` — wszystkie potrzebne do poprawnego TWR i partii.
@@ -378,10 +378,10 @@ Dostęp: 2026-10-01.
 - Sharpe 1994 (DOI 10.3905/jpm.1994.409501): https://web.stanford.edu/~wfsharpe/art/sr/sr.htm ; Sharpe 1966: https://doi.org/10.1086/294846 ; Sortino & Price 1994: https://doi.org/10.3905/joi.3.3.59 ; Jensen 1968: https://doi.org/10.1111/j.1540-6261.1968.tb00815.x ; Lo 2002: https://doi.org/10.2469/faj.v58.n4.2453
 - Karnosky & Singer 1994: https://rpc.cfainstitute.org/research/foundation/1994/global-asset-management-and-performance-attribution ; Vanguard, rebalansowanie (lustro PDF strony trzeciej): https://www.aaii.com/files/journal/pdf/best-practices-for-portfolio-rebalancing.pdf
 - TradingView, benchmark: https://www.tradingview.com/support/solutions/43000756149-what-is-a-benchmark-and-how-does-benchmarking-work/ ; Python `decimal`: https://docs.python.org/3/library/decimal.html
-- Wikipedia (wtórne): https://en.wikipedia.org/wiki/Modified_Dietz_method , https://en.wikipedia.org/wiki/Time-weighted_return ; ISAP, ustawa o PIT: https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU19910800350
+- Wikipedia (wtórne): https://en.wikipedia.org/wiki/Modified_Dietz_method , https://en.wikipedia.org/wiki/Time-weighted_return ; ustawa o PIT, tekst jednolity Dz.U. 2026 poz. 592 — patrz [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)
 
 ## Luki i niepewności
-- Przepisy podatkowe (art. 24 ust. 10, 11a, 30b ustawy o PIT; art. 63 Ordynacji) — tylko źródła wtórne (SII, infor.pl); id ISAP niepotwierdzony; szczegóły stosowania stawki 19 % niezweryfikowane.
+- Art. 63 Ordynacji — tylko źródła wtórne; szczegóły stosowania stawki 19 % niezweryfikowane. Art. 24 ust. 10, 11a, 30b ustawy o PIT: tekst jednolity Dz.U. 2026 poz. 592, cytaty w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md).
 - Stopa referencyjna NBP 3.75 % (lipiec 2026), harmonogram wygaszania WIBOR, wybór POLSTR — źródła wtórne; nbp.pl blokował dostęp. Przydatność €STR/SOFR jako rf — niezweryfikowana.
 - Brak źródła pierwotnego dla VaR (Jorion — wydanie/strony niezweryfikowane) i praktyki Monte Carlo; atrybucja rozszerzenia reguły Kartezjusza (Laguerre) niezweryfikowana.
 - Skalowanie zmienności w PP (× n) to odczyt kodu, niepotwierdzony w UI. Investopedia niedostępna; dokumentacja atrybucji Eagle i wątek forum PP cytowane wtórnie, bez URL w materiale.
