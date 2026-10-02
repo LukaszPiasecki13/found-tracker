@@ -1,8 +1,9 @@
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Environment = Literal["development", "test", "staging", "production"]
 
@@ -28,11 +29,11 @@ class Settings(BaseSettings):
     jwt_audience: str = "found-tracker-client"
 
     # HTTP
-    cors_origins: list[str] = Field(default_factory=list)
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # Accounts (e-mails, comma-separated or a JSON list) allowed to change the
     # data every user shares: assets, asset classes and currencies.
-    admin_emails: list[str] = Field(default_factory=list)
+    admin_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # Rate limiter: trust `X-Forwarded-For` from a reverse proxy. `None` means
     # "not set explicitly": on in production, off elsewhere; an explicit value wins.
@@ -64,9 +65,12 @@ class Settings(BaseSettings):
     @classmethod
     def split_list_setting(cls, value: object) -> object:
         """Accept a comma-separated string or a JSON list (CORS_ORIGINS, ...)."""
-        if isinstance(value, str) and not value.strip().startswith("["):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            return json.loads(text)
+        return [item.strip() for item in text.split(",") if item.strip()]
 
     @field_validator("log_level")
     @classmethod

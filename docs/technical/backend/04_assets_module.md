@@ -100,4 +100,4 @@ Moduł nie ma `domain/` — to CRUD plus I/O (DOM-7) — ani `entrypoints.py`, b
 | Element | Stan | Cel | Krok |
 |---|---|---|---|
 | Struktura, wiring, błędy z `code`, `transaction()`, `find_`/`get_`, testy `unit/` + `integration/` | zgodne z celem | — | R-04 (domknięty) |
-| Odświeżanie kursów/cen w tle | wywoływane synchronicznie w `GET /portfolios/positions` | `assets/entrypoints.py` (`refresh_currency_rates`) + driver (harmonogram), gdy powstanie | — (poza planem) |
+| Odświeżanie kursów/cen w tle | wywoływane synchronicznie w `POST /portfolios/positions/refresh` | `assets/entrypoints.py` (`refresh_currency_rates`) + driver (harmonogram), gdy powstanie | — (poza planem) |
