@@ -52,7 +52,7 @@ Jeden wiersz na użytkownika. Waluta jest zapisana jako **kod**, nie FK — `cor
 |---|---|---|---|---|---|
 | `id` | `BigInteger` | nie | — | PK | — |
 | `user_id` | `BigInteger` | nie | — | FK `users.id`, UNIQUE | E0.9 |
-| `display_currency_code` | `String(3)` | nie | `'PLN'` | walidacja istnienia w `assets_currency` w serwisie kontraktu | E0.9, E3.4 |
+| `display_currency_code` | `String(3)` | nie | `'PLN'` | kod waluty weryfikowany przy wycenie (ADR-0013 pkt 5), nie przy zapisie | E0.9, E3.4 |
 | `stale_price_days` | `SmallInteger` | nie | `7` | `CHECK >= 1` | E0.9, E1.7 |
 | `condition_thresholds` | `JSONB` | tak | `NULL` (= progi domyślne z kodu) | progi kondycji portfela (E7.6); klucze walidowane w serwisie | E7.6 |
 | `risk_free_series_code` | `String(40)` | tak | `NULL` (= stopa referencyjna NBP) | kod z `assets_rate_series.code`, bez FK | E7.2 |
@@ -237,12 +237,13 @@ Domyślna prowizja per typ waloru (% + minimum) podpowiadana w formularzu; nie j
 |---|---|---|---|
 | `id` | `BigInteger` | nie | PK |
 | `portfolio_id` | `BigInteger` | nie | FK CASCADE |
-| `asset_type` | `String(20)` | tak | `NULL` = wszystkie typy; wartość z `assets_asset.asset_type` |
+| `asset_class_id` | `BigInteger` | tak | FK `assets_assetclass.id`; `NULL` = wszystkie klasy; klucz reguły do czasu `asset_type` z E1.3, potem `asset_type` |
+| `asset_type` | `String(20)` | tak | `NULL` = wszystkie typy; wartość z `assets_asset.asset_type` (od E1.3) |
 | `rate_pct` | `Numeric(9,6)` | nie | `CHECK >= 0` |
 | `min_fee` | `Numeric(18,2)` | nie (domyślnie `0`) | — |
 | `currency_id` | `BigInteger` | tak | FK `assets_currency.id`; `NULL` = waluta Portfela |
 
-UNIQUE `(portfolio_id, asset_type)`.
+UNIQUE `(portfolio_id, asset_class_id)` do E1.3, potem `(portfolio_id, asset_type)`.
 
 ### 5.3 `portfolios_group` + `portfolios_group_member` (nowe, E2.1, E3.1)
 
@@ -350,7 +351,7 @@ Klucz: PK `(portfolio_id, day)`; `portfolio_id` FK CASCADE; `day` `Date` (dzień
 | Kolumna | Typ | Null | Uwagi |
 |---|---|---|---|
 | `value`, `cash`, `positions_value`, `income`, `fees`, `taxes` | `Numeric(18,2)` | nie | w walucie Portfela, po kursach wyceny dnia; dochody (dywidendy, odsetki), opłaty, podatki dnia |
-| `ext_in`, `ext_out` | `Numeric(18,2)` | nie | przepływy zewnętrzne dnia (wpłaty, wypłaty, `portfolios_auto_flow`, przelewy spoza Grupy wg zakresu — E3.1) |
+| `ext_in`, `ext_out` | `Numeric(18,2)` | nie | przepływy zewnętrzne dnia (wpłaty, wypłaty, `portfolios_auto_flow`); snapshot Portfela zawsze zapisuje przelew jako przepływ zewnętrzny (`ext_in`/`ext_out`), a klasyfikację zależną od zakresu (Grupa) liczy odczyt z `counter_portfolio_id` (ADR biznesowy 0004, E3.1) |
 | `r_day` | `Numeric(18,12)` | tak | stopa dnia; `NULL` przy wartości początkowej 0 |
 | `twr_index` | `Numeric(24,12)` | nie | `Π(1+r)`, `Decimal` (D7, D11) |
 | `cum_ext_in`, `cum_ext_out` | `Numeric(18,2)` | nie | skumulowane przepływy — zysk okresu w O(1) ([metodyka](../../research/05_metodyka_metryk.md)) |
@@ -374,7 +375,7 @@ Indeks: `(asset_id, day)` (alokacje, wykres waloru E3.8). Rozmiar [wniosek]: 30 
 
 ### 5.12 `portfolios_operation_lot_pick` (nowa, E2.4) — wskazanie Partii przy sprzedaży
 
-Dane użytkownika (nie pochodne), więc FK do Operacji jest dozwolony. Brak wierszy = FIFO. Suma `quantity` musi równać się ilości sprzedaży, a każda pozycja mieścić się w otwartej ilości Partii — inaczej 409 `LOT_SELECTION_INVALID`.
+Dane użytkownika (nie pochodne), więc FK do Operacji jest dozwolony. Brak wierszy = FIFO. Suma `quantity` musi równać się ilości sprzedaży, a każda pozycja mieścić się w otwartej ilości Partii — inaczej 400 `LOT_SELECTION_INVALID`.
 
 | Kolumna | Typ | Null | Uwagi |
 |---|---|---|---|

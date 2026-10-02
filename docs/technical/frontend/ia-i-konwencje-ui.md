@@ -354,5 +354,4 @@ Legenda endpointów: **ist.** = istnieje w `backend/app/modules/*/api`; **nowy**
 | 6 | Nawigacja mobilna (dolny pasek) wchodzi dopiero w E11.1 — do tego czasu hamburger | akceptacja kolejności |
 | 7 | Wybór narzędzia do generowania typów OpenAPI i skryptu zrzutu schematu (niezweryfikowane lokalnie) | E0.7 |
 | 8 | Zachowanie `getErrorMessage` przy 422 (lista w `detail`) — do sprawdzenia uruchomieniem; `npm run build` z niedziałającym `index.html` — do potwierdzenia | brak `node_modules` w środowisku autora |
-| 9 | Wpis dokumentu w mapie wiedzy (`docs/00_KNOWLEDGE-MAP.md`) | poza zakresem tego zadania |
 | 10 | Próbki plików do kreatora (eksport myfund, wyciągi brokerów) potrzebne do ostatecznego kształtu kroków 2–3 | właściciel; E4.2a, E4.3 |

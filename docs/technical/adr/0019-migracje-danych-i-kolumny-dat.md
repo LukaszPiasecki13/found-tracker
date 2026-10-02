@@ -10,7 +10,7 @@ last_reviewed: 2026-10-02
 
 Migracje schematu powstają wyłącznie z `alembic revision --autogenerate`, są addytywne (kolumny `null` albo z `server_default`), a dane pochodne i wsteczne uzupełnienia robi idempotentna komenda CLI. Data kalendarzowa Operacji (D13) trafia do **nowej** kolumny `operation_day`, bo zmiana typu istniejącej kolumny wymagałaby ręcznej edycji migracji. Seed przestaje trzymać zahardkodowane stany, które nie zgadzają się z replayem Operacji.
 
-**Rozstrzyga:** D16 i techniczną część D13 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E2.0, E2.3, E2.5, E0.5 (migracja pola tymczasowego). Reguła interpretacji `fx_rate` (D4) jest decyzją biznesową, poza tym ADR-em.
+**Rozstrzyga:** D16 i techniczną część D13 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E2.0, E2.3, E2.5. Reguła interpretacji `fx_rate` (D4) jest decyzją biznesową, poza tym ADR-em.
 
 ## Kontekst
 
@@ -38,7 +38,7 @@ Migracje schematu powstają wyłącznie z `alembic revision --autogenerate`, są
 | M1 | Migracja tylko z `alembic revision --autogenerate`; model w `models_registry.py`; `alembic check` bez dryfu |
 | M2 | Nowa kolumna: `nullable=True` albo `server_default`; „NOT NULL bez defaultu” w dwóch krokach (pkt 3) |
 | M3 | Zmiany typu istniejącej kolumny z niejawnym rzutowaniem — zakazane; nowa kolumna obok, stara wygaszona osobnym ADR-em |
-| M4 | Dane (backfill, przeniesienia) **nie** w migracjach; idempotentne polecenie CLI ([ADR-0017](0017-zadania-w-tle-i-cli.md)), np. `rebuild-all` — dotyczy też „pola tymczasowego” z E0.5, znikającego w E1.2 |
+| M4 | Dane (backfill, przeniesienia) **nie** w migracjach; idempotentne polecenie CLI ([ADR-0017](0017-zadania-w-tle-i-cli.md)), np. `rebuild-all` |
 
 **2. `operation_day` i `sequence`**
 - `operation_day` `Date` (kalendarz **Europe/Warsaw**, D13) — nowa kolumna, `null` w migracji A; źródło prawdy dla porządku, podatku i snapshotów. `operation_date` (`timestamptz`) zostaje jako moment zdarzenia (godzina opcjonalna); wygaszenie po przejściu frontendu — osobny ADR.

@@ -34,7 +34,7 @@ Rekomendacja: moduł podatkowy liczy **dane pomocnicze do PIT-38** w trzech osob
 
 | Pozycja | Powód |
 |---|---|
-| Spin-off, prawa poboru/PDA — skutki podatkowe dla kosztu nabycia | dowód ich nie przeanalizował (luka 8); partie po zdarzeniu dostają flagę `tax_review_required`, a raport je wymienia bez wyliczania |
+| Spin-off, prawa poboru/PDA — skutki podatkowe dla kosztu nabycia | dowód ich nie przeanalizował (luka 8); znacznik `TAX_REVIEW_REQUIRED` liczony z łańcucha Operacji (nie kolumna), a raport je wymienia bez wyliczania |
 | PIT/ZG dla dywidend | dywidendy (art. 30a) idą do części G, nie do PIT/ZG; PIT/ZG tylko dla **zagranicznych zysków kapitałowych** (art. 30b ust. 5a–5f, per kraj) |
 | Wypłaty/zwroty z IKE, IKZE, PPK, OIPE (19% / 10%) | rachunki z ulgą poza pulami; wypłaty to osobne reguły (art. 30a ust. 1 pkt 10–11f; art. 30 ust. 1 pkt 14) — kandydat v2 |
 | Limity wpłat IKE/IKZE (kontrola przekroczenia) i raport wpłat IKZE do odliczenia (art. 26 ust. 1 pkt 2b) | **poza v1** (v2): wartości limitów niezweryfikowane (obwieszczenia M.P. nie pobrane); w E5.6 limity są wyłącznie konfiguracją z `source_ref` i etykietą [niezweryfikowane], bez raportu odliczeń |

@@ -127,7 +127,6 @@ Badania z datą i źródłami; **nienormatywne** — rekomendacje stąd obowiąz
 
 ## Czego tu nie ma
 
-- **Kontrakt API** (REST) jako osobny dokument — opisują go schematy w `backend/app/modules/*/schemas/` i dokumenty modułów.
 - **`PRODUCT.md`** — kanon produktu w jednym miejscu; do czasu powstania zakres opisuje [`CONTEXT.md`](./business/CONTEXT.md).
 - **Automatyczny walidator** — ręcznie: `python .claude/skills/knowledge-base/scripts/kb_validate.py --root . --strict`. Sekcja *Indeks dokumentów* poniżej pozostaje pusta, dopóki walidator nie wygeneruje jej (`--write-index`).
 
