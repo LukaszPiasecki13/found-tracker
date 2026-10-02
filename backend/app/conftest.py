@@ -139,8 +139,15 @@ def integration_client(
 def auth_headers(
     integration_client: TestClient,
     integration_data: IntegrationData,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> dict[str, str]:
     email = f"{integration_data.value('user')}@example.com"
+    # Assets, asset classes and currencies are admin-only. The user is created
+    # per test and rolled back with it, so making it an admin is safe and keeps
+    # the suite independent of the developer's ADMIN_EMAILS.
+    monkeypatch.setattr(
+        get_settings(), "admin_emails", [email, *get_settings().admin_emails]
+    )
     registration = integration_client.post(
         "/auth/register",
         json={"email": email, "password": "StrongPass123"},

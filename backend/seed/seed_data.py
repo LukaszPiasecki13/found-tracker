@@ -120,7 +120,7 @@ ASSETS: tuple[AssetSeed, ...] = (
         sector="Broad Market",
     ),
     AssetSeed(
-        ticker="BTCUSD",
+        ticker="BTC-USD",
         name="Bitcoin (USD pair)",
         asset_class_name="Crypto",
         currency_code="USD",
@@ -129,7 +129,7 @@ ASSETS: tuple[AssetSeed, ...] = (
         sector="Crypto",
     ),
     AssetSeed(
-        ticker="CDR",
+        ticker="CDR.WA",
         name="CD PROJEKT",
         asset_class_name="Stock",
         currency_code="PLN",
@@ -138,7 +138,7 @@ ASSETS: tuple[AssetSeed, ...] = (
         sector="Gaming",
     ),
     AssetSeed(
-        ticker="PKO",
+        ticker="PKO.WA",
         name="PKO Bank Polski",
         asset_class_name="Stock",
         currency_code="PLN",
@@ -147,7 +147,7 @@ ASSETS: tuple[AssetSeed, ...] = (
         sector="Banking",
     ),
     AssetSeed(
-        ticker="PKN",
+        ticker="PKN.WA",
         name="PKN Orlen",
         asset_class_name="Stock",
         currency_code="PLN",
@@ -174,7 +174,7 @@ ASSETS: tuple[AssetSeed, ...] = (
         sector="Industrials",
     ),
     AssetSeed(
-        ticker="ETHUSD",
+        ticker="ETH-USD",
         name="Ethereum (USD pair)",
         asset_class_name="Crypto",
         currency_code="USD",
@@ -268,7 +268,7 @@ POSITIONS: tuple[PositionSeed, ...] = (
     ),
     PositionSeed(
         portfolio_name="Polish Stocks",
-        ticker="CDR",
+        ticker="CDR.WA",
         quantity=Decimal("50"),
         average_buy_price=Decimal("120.000000000"),
         average_fx_rate=Decimal("1.000000000"),
@@ -277,7 +277,7 @@ POSITIONS: tuple[PositionSeed, ...] = (
     ),
     PositionSeed(
         portfolio_name="Polish Stocks",
-        ticker="PKO",
+        ticker="PKO.WA",
         quantity=Decimal("150"),
         average_buy_price=Decimal("50.000000000"),
         average_fx_rate=Decimal("1.000000000"),
@@ -286,7 +286,7 @@ POSITIONS: tuple[PositionSeed, ...] = (
     ),
     PositionSeed(
         portfolio_name="Polish Stocks",
-        ticker="PKN",
+        ticker="PKN.WA",
         quantity=Decimal("80"),
         average_buy_price=Decimal("48.000000000"),
         average_fx_rate=Decimal("1.000000000"),
@@ -295,7 +295,7 @@ POSITIONS: tuple[PositionSeed, ...] = (
     ),
     PositionSeed(
         portfolio_name="Crypto Portfolio",
-        ticker="BTCUSD",
+        ticker="BTC-USD",
         quantity=Decimal("0.15"),
         average_buy_price=Decimal("54000.000000000"),
         average_fx_rate=Decimal("1.000000000"),
@@ -304,7 +304,7 @@ POSITIONS: tuple[PositionSeed, ...] = (
     ),
     PositionSeed(
         portfolio_name="Crypto Portfolio",
-        ticker="ETHUSD",
+        ticker="ETH-USD",
         quantity=Decimal("2.5"),
         average_buy_price=Decimal("3000.000000000"),
         average_fx_rate=Decimal("1.000000000"),
@@ -485,7 +485,7 @@ OPERATIONS: tuple[OperationSeed, ...] = (
     OperationSeed(
         portfolio_name="Polish Stocks",
         operation_type="buy",
-        ticker="CDR",
+        ticker="CDR.WA",
         quantity=Decimal("50"),
         price=Decimal("120.000000000"),
         amount=None,
@@ -497,7 +497,7 @@ OPERATIONS: tuple[OperationSeed, ...] = (
     OperationSeed(
         portfolio_name="Polish Stocks",
         operation_type="buy",
-        ticker="PKO",
+        ticker="PKO.WA",
         quantity=Decimal("150"),
         price=Decimal("50.000000000"),
         amount=None,
@@ -509,7 +509,7 @@ OPERATIONS: tuple[OperationSeed, ...] = (
     OperationSeed(
         portfolio_name="Polish Stocks",
         operation_type="buy",
-        ticker="PKN",
+        ticker="PKN.WA",
         quantity=Decimal("80"),
         price=Decimal("48.000000000"),
         amount=None,
@@ -521,7 +521,7 @@ OPERATIONS: tuple[OperationSeed, ...] = (
     OperationSeed(
         portfolio_name="Polish Stocks",
         operation_type="dividend",
-        ticker="PKO",
+        ticker="PKO.WA",
         quantity=Decimal("0"),
         price=Decimal("0"),
         amount=Decimal("22.50"),
@@ -533,7 +533,7 @@ OPERATIONS: tuple[OperationSeed, ...] = (
     OperationSeed(
         portfolio_name="Polish Stocks",
         operation_type="dividend",
-        ticker="PKN",
+        ticker="PKN.WA",
         quantity=Decimal("0"),
         price=Decimal("0"),
         amount=Decimal("12.80"),
@@ -557,7 +557,7 @@ OPERATIONS: tuple[OperationSeed, ...] = (
     OperationSeed(
         portfolio_name="Crypto Portfolio",
         operation_type="buy",
-        ticker="BTCUSD",
+        ticker="BTC-USD",
         quantity=Decimal("0.15"),
         price=Decimal("54000.000000000"),
         amount=None,
@@ -569,7 +569,7 @@ OPERATIONS: tuple[OperationSeed, ...] = (
     OperationSeed(
         portfolio_name="Crypto Portfolio",
         operation_type="buy",
-        ticker="ETHUSD",
+        ticker="ETH-USD",
         quantity=Decimal("2.5"),
         price=Decimal("3000.000000000"),
         amount=None,
