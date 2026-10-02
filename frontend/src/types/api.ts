@@ -159,3 +159,10 @@ export interface ApiError {
   detail?: string | ValidationDetail[];
   code?: string;
 }
+
+export interface FxRate {
+  from_currency: string;
+  to_currency: string;
+  rate: number;
+  via: 'identity' | 'direct' | 'inverse' | 'cross';
+}
