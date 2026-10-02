@@ -257,3 +257,33 @@ def test_a_currency_without_a_rate_leaves_the_portfolio_unvalued_not_wrong(
     [summary] = api.summaries(name)
     assert summary["rate_missing"] is True
     assert summary["total_value"] is None
+
+
+def test_fx_rate_endpoint_composes_cross_rates_from_stored_ones(
+    integration_client: TestClient,
+    integration_session: Session,
+    auth_headers: dict[str, str],
+) -> None:
+    _currency(integration_session, "USD", "1")
+    _currency(integration_session, "EUR", "1.08")
+    _currency(integration_session, "PLN", "0.25")
+    _currency(integration_session, "GBP", "1")  # the column default: no quote
+
+    def get(source: str, target: str) -> Any:
+        return integration_client.get(
+            "/portfolios/fx-rate",
+            headers=auth_headers,
+            params={"from_currency": source, "to_currency": target},
+        )
+
+    cross = get("eur", "PLN")
+    assert cross.status_code == 200, cross.text
+    assert cross.json() == {
+        "from_currency": "EUR",
+        "to_currency": "PLN",
+        "rate": 4.32,
+        "via": "cross",
+    }
+    assert get("USD", "PLN").json()["rate"] == 4
+    assert get("GBP", "PLN").json()["code"] == "RATE_MISSING"
+    assert get("XXX", "PLN").json()["code"] == "CURRENCY_NOT_FOUND"

@@ -13,12 +13,19 @@ of silently at 1.
 
 from collections.abc import Iterable
 from decimal import Decimal
+from typing import Literal
 
 from app.modules.assets.constants import DEFAULT_CURRENCY_CODE
+from app.modules.assets.exceptions import CurrencyNotFoundError
 from app.modules.assets.services.currencies import CurrencyService
 from app.modules.portfolios.domain import FxMap
+from app.modules.portfolios.exceptions import RateMissingError
+from app.modules.portfolios.schemas.fx_rates import FxRateResponse
 
 _ONE = Decimal("1")
+_RATE_PLACES = Decimal("1e-9")
+
+type Via = Literal["identity", "direct", "inverse", "cross"]
 
 
 def _usd_rate(code: str, stored_rate: Decimal) -> Decimal | None:
@@ -53,3 +60,46 @@ class FxMapBuilder:
             for source in usd_rates
             if source != base
         }
+
+
+class FxRateService:
+    """One rate between two currencies, for the UI (the buy dialog's hint)."""
+
+    def __init__(
+        self, currency_service: CurrencyService, fx_map_builder: FxMapBuilder
+    ) -> None:
+        self._currencies = currency_service
+        self._fx = fx_map_builder
+
+    def quote(self, from_code: str, to_code: str) -> FxRateResponse:
+        """The rate turning one unit of `from_code` into `to_code`. Raises
+        CurrencyNotFoundError for an unknown code and RateMissingError when
+        either currency has no quote."""
+        by_code = {c.code: c for c in self._currencies.list_currencies()}
+        source = by_code.get(from_code.strip().upper())
+        target = by_code.get(to_code.strip().upper())
+        if source is None or target is None:
+            raise CurrencyNotFoundError
+        via: Via
+        if source.id == target.id:
+            rate, via = _ONE, "identity"
+        else:
+            found = self._fx.build([target.id]).get((source.id, target.id))
+            if found is None:
+                raise RateMissingError
+            rate = found
+            via = _via(source.code, target.code)
+        return FxRateResponse(
+            from_currency=source.code,
+            to_currency=target.code,
+            rate=rate.quantize(_RATE_PLACES),
+            via=via,
+        )
+
+
+def _via(from_code: str, to_code: str) -> Via:
+    if to_code == DEFAULT_CURRENCY_CODE:
+        return "direct"
+    if from_code == DEFAULT_CURRENCY_CODE:
+        return "inverse"
+    return "cross"
