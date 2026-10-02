@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import { usePockets, useDeletePocket } from '../hooks/usePockets';
 import AddPocketDialog from './dialogs/AddPocketDialog';
+import RateMissingChip from './RateMissingChip';
 
 const PocketsList: React.FC = () => {
   const navigate = useNavigate();
@@ -135,7 +136,19 @@ const PocketsList: React.FC = () => {
                       {formatCurrency(Number(pocket.total_deposited) || 0, pocket.base_currency?.code)}
                     </Typography>
 
-                    {pocket.total_profit_loss !== undefined && (
+                    {pocket.total_profit_loss === null && (
+                      <Box mt={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Zysk/Strata
+                        </Typography>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Typography variant="body1">—</Typography>
+                          {pocket.rate_missing && <RateMissingChip />}
+                        </Box>
+                      </Box>
+                    )}
+
+                    {pocket.total_profit_loss != null && (
                       <Box mt={1}>
                         <Typography variant="body2" color="text.secondary">
                           Zysk/Strata
@@ -150,7 +163,7 @@ const PocketsList: React.FC = () => {
                             color={(Number(pocket.total_profit_loss) || 0) >= 0 ? 'success.main' : 'error.main'}
                           >
                             {formatCurrency(Number(pocket.total_profit_loss) || 0, pocket.base_currency?.code)}
-                            {pocket.total_return_pct !== undefined && (
+                            {pocket.total_return_pct != null && (
                               <> ({Number(pocket.total_return_pct).toFixed(2)}%)</>
                             )}
                           </Typography>
