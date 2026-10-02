@@ -10,6 +10,7 @@ import {
   ButtonGroup,
   Chip,
   CircularProgress,
+  Skeleton,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -112,7 +113,7 @@ const PocketDetailsPage: React.FC = () => {
         </ButtonGroup>
       </Box>
 
-      {rateMissing && (
+      {rateMissing && !positionsLoading && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Dla części pozycji brakuje kursu waluty wobec waluty portfela — wartość portfela i wynik
           nie mogą zostać policzone.
@@ -136,7 +137,9 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Wartość pozycji
             </Typography>
-            {totalPositionsValue === null ? (
+            {positionsLoading ? (
+              <Skeleton width={120} height={40} />
+            ) : totalPositionsValue === null ? (
               <RateMissingChip />
             ) : (
               <Typography variant="h5" fontWeight="bold">
@@ -150,7 +153,9 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Całkowita wartość
             </Typography>
-            {totalValue === null ? (
+            {positionsLoading ? (
+              <Skeleton width={120} height={40} />
+            ) : totalValue === null ? (
               <RateMissingChip />
             ) : (
               <Typography variant="h5" fontWeight="bold">
@@ -164,7 +169,9 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Zysk/Strata
             </Typography>
-            {totalProfitLoss === null ? (
+            {positionsLoading ? (
+              <Skeleton width={120} height={40} />
+            ) : totalProfitLoss === null ? (
               <RateMissingChip />
             ) : (
               <>

@@ -95,3 +95,16 @@ def test_a_currency_without_a_quote_has_no_rate(
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "RATE_MISSING"
+
+
+def test_a_quote_reads_the_currencies_once() -> None:
+    currencies = MagicMock()
+    currencies.list_currencies.return_value = [
+        _currency(1, "USD", "1"),
+        _currency(2, "EUR", "1.08"),
+        _currency(3, "PLN", "0.25"),
+    ]
+
+    FxRateService(currencies, FxMapBuilder(currencies)).quote("EUR", "PLN")
+
+    currencies.list_currencies.assert_called_once_with()
