@@ -45,7 +45,11 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
   const assetCurrencyCode = selectedPosition?.asset.currency.code;
   const pocketCurrencyCode = pocket?.base_currency.code;
   const needsRate = !!assetCurrencyCode && !!pocketCurrencyCode && assetCurrencyCode !== pocketCurrencyCode;
-  const { data: fxQuote, isError: isFxRateUnavailable } = useFxRate(
+  const {
+    data: fxQuote,
+    isError: isFxRateUnavailable,
+    isLoading: isFxRateLoading,
+  } = useFxRate(
     needsRate ? assetCurrencyCode : undefined,
     needsRate ? pocketCurrencyCode : undefined
   );
@@ -55,6 +59,10 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
       setFxRate('1');
     } else if (fxQuote) {
       setFxRate(fxQuote.rate.toString());
+    } else {
+      // No quote (loading or unknown): never keep the previous asset's rate or a silent 1;
+      // the empty required field forces a deliberate manual entry.
+      setFxRate('');
     }
   }, [needsRate, fxQuote]);
 
@@ -338,7 +346,9 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
             type="submit"
             variant="contained"
             color="warning"
-            disabled={createOperationMutation.isPending || !selectedPosition || !quantity || !price}
+            disabled={
+              createOperationMutation.isPending || isFxRateLoading || !selectedPosition || !quantity || !price
+            }
           >
             {createOperationMutation.isPending ? <CircularProgress size={24} /> : 'Sprzedaj'}
           </Button>
