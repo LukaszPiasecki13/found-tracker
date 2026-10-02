@@ -65,11 +65,22 @@ const PocketDetailsPage: React.FC = () => {
   };
 
   const cashBalance = Number(pocket.cash_balance) || 0;
-  const totalPositionsValue = positions?.reduce((sum, pos) => sum + (Number(pos.market_value) || 0), 0) || 0;
+  // While positions are still refreshing, fall back to the value stored on the pocket.
+  const totalPositionsValue = positions
+    ? positions.reduce((sum, pos) => sum + (Number(pos.market_value) || 0), 0)
+    : Number(pocket.positions_value) || 0;
   const totalValue = cashBalance + totalPositionsValue;
   const totalDeposited = Number(pocket.total_deposited) || 0;
-  const totalProfitLoss = Number(pocket.total_profit_loss) || (totalValue - totalDeposited);
-  const totalReturnPct = Number(pocket.total_return_pct);
+  // Once positions are refreshed, derive the result from the same fresh values as the
+  // totals above; the pocket's own figures were computed at the previously stored prices.
+  const totalProfitLoss = positions
+    ? totalValue - totalDeposited
+    : Number(pocket.total_profit_loss) || 0;
+  const totalReturnPct = positions
+    ? totalDeposited > 0
+      ? (totalProfitLoss / totalDeposited) * 100
+      : 0
+    : Number(pocket.total_return_pct);
 
   return (
     <Box>

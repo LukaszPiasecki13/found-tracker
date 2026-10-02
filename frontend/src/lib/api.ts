@@ -64,7 +64,19 @@ api.interceptors.response.use(
   async (error: AxiosError<ApiError>) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    // A 401 from the credential endpoints themselves (wrong password, ...) is a normal
+    // answer for the form, not an expired session: no refresh and no redirect,
+    // which would reload the page and wipe the form and its error message.
+    const isAuthRequest = ['/auth/login', '/auth/register', '/auth/token'].some((path) =>
+      originalRequest?.url?.startsWith(path)
+    );
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isAuthRequest
+    ) {
       originalRequest._retry = true;
 
       try {
