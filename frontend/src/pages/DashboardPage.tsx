@@ -12,29 +12,33 @@ export default function DashboardPage() {
 
   // Totals are shown in PLN (the overview's display currency). Currency rates are
   // quoted against USD, so a pocket's amount converts via base rate / PLN rate.
-  const totalMetrics = useMemo(() => {
-    if (!pockets) return { totalValue: 0, totalDeposited: 0, totalProfit: 0, pocketCount: 0 };
+  const plnRate = Number(currencies?.find((c) => c.code === 'PLN')?.exchange_rate) || 0;
+  const rateUnavailable = !!currencies && plnRate <= 0;
 
-    const plnRate = Number(currencies?.find((c) => c.code === 'PLN')?.exchange_rate) || 0;
-    const toPln = (amount: number | null | undefined, pocket: Pocket) => {
-      const baseRate = Number(pocket.base_currency.exchange_rate) || 0;
-      const factor = plnRate > 0 ? baseRate / plnRate : 1;
-      return (Number(amount) || 0) * factor;
-    };
+  // A portfolio with a position lacking a currency rate has no value/profit (null). It is
+  // left out of every sum (value, deposits and profit alike) so the percentage stays consistent.
+  const unvaluedCount = pockets?.filter((pocket) => pocket.rate_missing === true).length ?? 0;
+
+  const totalMetrics = useMemo(() => {
+    const empty = { totalValue: 0, totalDeposited: 0, totalProfit: 0, pocketCount: 0 };
+    if (!pockets) return empty;
+    const pocketCount = pockets.length;
+    if (plnRate <= 0) return { ...empty, pocketCount };
+
+    const valued = pockets.filter((pocket) => pocket.rate_missing !== true);
     const sum = (pick: (pocket: Pocket) => number | null | undefined) =>
-      pockets.reduce((total, pocket) => total + toPln(pick(pocket), pocket), 0);
+      valued.reduce((total, pocket) => {
+        const baseRate = Number(pocket.base_currency.exchange_rate) || 0;
+        return total + (Number(pick(pocket)) || 0) * (baseRate / plnRate);
+      }, 0);
 
     return {
       totalValue: sum((pocket) => pocket.total_value ?? pocket.cash_balance),
       totalDeposited: sum((pocket) => pocket.total_deposited),
       totalProfit: sum((pocket) => pocket.total_profit_loss),
-      pocketCount: pockets.length,
+      pocketCount,
     };
-  }, [pockets, currencies]);
-
-  // A portfolio with a position lacking a currency rate has no profit figure (null): its
-  // profit is left out of the sum, so say so instead of showing a silently lower total.
-  const hasUnvaluedPocket = pockets?.some((pocket) => pocket.rate_missing === true) ?? false;
+  }, [pockets, plnRate]);
 
   return (
     <Box>
@@ -42,12 +46,17 @@ export default function DashboardPage() {
         Dashboard
       </Typography>
 
-      {hasUnvaluedPocket && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          Część portfeli ma pozycje bez kursu waluty — ich wartość i wynik nie są w pełni wliczone do sum.
+      {rateUnavailable && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Brak kursu PLN — nie można przeliczyć sum portfeli na złote.
         </Alert>
       )}
-      
+      {unvaluedCount > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Liczba portfeli z pozycjami bez kursu waluty: {unvaluedCount} — nie są wliczone do sum poniżej.
+        </Alert>
+      )}
+
       <PortfolioOverview
         totalValue={totalMetrics.totalValue}
         totalProfit={totalMetrics.totalProfit}
