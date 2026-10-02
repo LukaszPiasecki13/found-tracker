@@ -45,7 +45,7 @@ Kategoria Waloru: akcja, fundusz, obligacja, itp. Słownik zarządzany przez uż
 _Unikać_: typ waloru, kategoria
 
 **Waluta** (`assets_currency`)
-Waluta notowania Waloru lub bazowa Portfela. Niesie kurs wymiany względem waluty bazowej systemu, odświeżany z danych rynkowych.
+Waluta notowania Waloru lub bazowa Portfela. Niesie kurs wymiany względem waluty bazowej systemu (USD), odświeżany z danych rynkowych; kurs między dwiema dowolnymi walutami to iloraz ich kursów. Waluta bez notowania nie ma kursu — wycena pozycji, która go wymaga, pokazuje „brak kursu” zamiast wartości policzonej po kursie 1.
 _Unikać_: kurs (kurs to `exchange_rate`, nie Waluta)
 
 **Kurs walutowy operacji** (`fx_rate`)
