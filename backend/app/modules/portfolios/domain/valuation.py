@@ -9,7 +9,7 @@ rate against the same reference currency, so the portfolio's own rate cancels
 it out). A percentage of zero is zero.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
 
@@ -17,6 +17,9 @@ from app.modules.portfolios.domain.protocols import HoldingLike, ValuedPortfolio
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
+
+# Rate that turns one unit of the first currency into the second, by currency id.
+FxMap = Mapping[tuple[int, int], Decimal]
 
 
 def _percent(part: Decimal, whole: Decimal) -> Decimal:
