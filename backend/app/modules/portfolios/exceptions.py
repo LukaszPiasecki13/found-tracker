@@ -28,6 +28,13 @@ class OperationNotFoundError(NotFoundError):
         super().__init__("Operation not found", code="OPERATION_NOT_FOUND")
 
 
+class RateMissingError(NotFoundError):
+    """A currency of the pair has no quote yet (see `services/fx.py`)."""
+
+    def __init__(self) -> None:
+        super().__init__("Currency rate not available", code="RATE_MISSING")
+
+
 # --- Conflict (409): uniqueness ---
 
 
