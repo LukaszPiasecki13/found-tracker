@@ -1,14 +1,18 @@
 """Currency API endpoints (mounted under `/assets/currencies`)."""
 
-from fastapi import APIRouter, Depends
+from typing import Annotated
 
-from app.modules.assets.dependencies import get_currency_service
+from fastapi import APIRouter, Depends, Query
+
+from app.modules.assets.dependencies import get_currency_service, get_fx_rate_service
 from app.modules.assets.schemas.currencies import (
     CurrencyCreateRequest,
     CurrencyResponse,
     CurrencyUpdateRequest,
 )
+from app.modules.assets.schemas.fx_rates import FxRateLookupQuery, FxRateLookupResponse
 from app.modules.assets.services.currencies import CurrencyService
+from app.modules.assets.services.fx_rates import FxRateService
 from app.modules.security.dependencies import get_current_admin, get_current_user
 
 router = APIRouter(
@@ -34,6 +38,16 @@ def create_currency(
     service: CurrencyService = Depends(get_currency_service),
 ):
     return service.create(data)
+
+
+@router.get("/rate", response_model=FxRateLookupResponse)
+def get_rate(
+    query: Annotated[FxRateLookupQuery, Query()],
+    service: FxRateService = Depends(get_fx_rate_service),
+):
+    """The stored rate between two currencies on a day (default today), direct or
+    inverse; cross rates through a third currency are composed by `portfolios`."""
+    return service.get_rate(query.from_currency, query.to_currency, query.as_of)
 
 
 @router.get("/{currency_id:int}", response_model=CurrencyResponse)

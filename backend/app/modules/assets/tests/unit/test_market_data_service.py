@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -17,11 +17,32 @@ def provider() -> FakeMarketDataProvider:
     return FakeMarketDataProvider()
 
 
+TODAY = date(2026, 10, 2)
+
+
+@pytest.fixture
+def prices() -> MagicMock:
+    mock = MagicMock()
+    mock.record_closes.return_value = 1
+    return mock
+
+
+@pytest.fixture
+def fx_rates() -> MagicMock:
+    return MagicMock()
+
+
 @pytest.fixture
 def service(
-    asset_repo: MagicMock, currency_repo: MagicMock, provider: FakeMarketDataProvider
+    asset_repo: MagicMock,
+    currency_repo: MagicMock,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+    fx_rates: MagicMock,
 ) -> MarketDataService:
-    return MarketDataService(asset_repo, currency_repo, provider)
+    return MarketDataService(
+        asset_repo, currency_repo, provider, prices, fx_rates, today=lambda: TODAY
+    )
 
 
 # --- search ---
@@ -133,12 +154,13 @@ def test_close_history_is_end_exclusive(
 def test_refresh_asset_prices_skips_failing_and_priceless_assets(
     service: MarketDataService,
     provider: FakeMarketDataProvider,
+    prices: MagicMock,
     session: MagicMock,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    apple = SimpleNamespace(id=1, ticker="AAPL", current_price=Decimal("1"))
-    broken = SimpleNamespace(id=2, ticker="BRKN", current_price=Decimal("2"))
-    delisted = SimpleNamespace(id=3, ticker="GONE", current_price=Decimal("3"))
+    apple = SimpleNamespace(id=1, ticker="AAPL", archived_at=None)
+    broken = SimpleNamespace(id=2, ticker="BRKN", archived_at=None)
+    delisted = SimpleNamespace(id=3, ticker="GONE", archived_at=None)
     provider.quotes["AAPL"] = make_quote("AAPL")
     provider.failing.add("BRKN")
 
@@ -146,13 +168,42 @@ def test_refresh_asset_prices_skips_failing_and_priceless_assets(
         updated = service.refresh_asset_prices([apple, broken, delisted, apple])
 
     assert updated == 1
-    assert apple.current_price == Decimal("190.5")
-    assert broken.current_price == Decimal("2")
-    assert delisted.current_price == Decimal("3")
+    prices.record_closes.assert_called_once_with(
+        apple, {TODAY: Decimal("190.5")}, source="yahoo", is_synthetic=True
+    )
     assert provider.calls.count(("quote", "AAPL")) == 1
     assert "BRKN" in caplog.text
     session.commit.assert_called_once()
     session.rollback.assert_not_called()
+
+
+def test_refresh_asset_prices_leaves_archived_assets_alone(
+    service: MarketDataService,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+) -> None:
+    archived = SimpleNamespace(
+        id=1, ticker="AAPL", archived_at=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    provider.quotes["AAPL"] = make_quote("AAPL")
+
+    assert service.refresh_asset_prices([archived]) == 0
+
+    assert provider.calls == []
+    prices.record_closes.assert_not_called()
+
+
+def test_refresh_asset_prices_ignores_a_non_positive_price(
+    service: MarketDataService,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+) -> None:
+    asset = SimpleNamespace(id=1, ticker="NEG", archived_at=None)
+    provider.quotes["NEG"] = make_quote("NEG", current_price=Decimal("-1"))
+
+    assert service.refresh_asset_prices([asset]) == 0
+
+    prices.record_closes.assert_not_called()
 
 
 def test_refresh_asset_prices_of_nothing_updates_nothing(
@@ -164,10 +215,11 @@ def test_refresh_asset_prices_of_nothing_updates_nothing(
 # --- refresh_currency_rates ---
 
 
-def test_refresh_currency_rates_is_best_effort_per_currency(
+def test_refresh_currency_rates_records_history_best_effort_per_currency(
     service: MarketDataService,
     currency_repo: MagicMock,
     provider: FakeMarketDataProvider,
+    fx_rates: MagicMock,
     session: MagicMock,
 ) -> None:
     usd = SimpleNamespace(code="USD", exchange_rate=Decimal("0.9"))
@@ -182,8 +234,105 @@ def test_refresh_currency_rates_is_best_effort_per_currency(
 
     assert updated == 2
     assert usd.exchange_rate == Decimal("1")
-    assert eur.exchange_rate == Decimal("1.08")
+    # The cache of a non-base currency is derived from the history, not assigned.
+    assert eur.exchange_rate == Decimal("1")
+    fx_rates.record_rate.assert_called_once_with(
+        eur,
+        usd,
+        Decimal("1.08"),
+        rate_date=TODAY,
+        source="yahoo",
+        is_synthetic=True,
+    )
     assert gbp.exchange_rate == Decimal("1.2")
     assert xxx.exchange_rate == Decimal("5")
     assert ("fx", "USD", "USD") not in provider.calls
     session.commit.assert_called_once()
+
+
+def test_refresh_currency_rates_to_another_base_assigns_the_rate_directly(
+    service: MarketDataService,
+    currency_repo: MagicMock,
+    provider: FakeMarketDataProvider,
+    fx_rates: MagicMock,
+) -> None:
+    pln = SimpleNamespace(id=1, code="PLN", exchange_rate=Decimal("1"))
+    usd = SimpleNamespace(id=2, code="USD", exchange_rate=Decimal("1"))
+    currency_repo.list_all.return_value = [pln, usd]
+    provider.rates[("USD", "PLN")] = Decimal("3.9")
+
+    assert service.refresh_currency_rates("PLN") == 2
+
+    assert usd.exchange_rate == Decimal("3.9")
+    assert pln.exchange_rate == Decimal("1")
+    fx_rates.record_rate.assert_called_once()
+
+
+def test_refresh_currency_rates_without_the_base_row_still_sets_the_cache(
+    service: MarketDataService,
+    currency_repo: MagicMock,
+    provider: FakeMarketDataProvider,
+    fx_rates: MagicMock,
+) -> None:
+    eur = SimpleNamespace(id=1, code="EUR", exchange_rate=Decimal("1"))
+    currency_repo.list_all.return_value = [eur]
+    provider.rates[("EUR", "USD")] = Decimal("1.08")
+
+    assert service.refresh_currency_rates() == 1
+
+    assert eur.exchange_rate == Decimal("1.08")
+    fx_rates.record_rate.assert_not_called()
+
+
+# --- data_status ---
+
+
+def test_data_status_reports_stale_and_priceless_assets(
+    service: MarketDataService,
+    asset_repo: MagicMock,
+    prices: MagicMock,
+    fx_rates: MagicMock,
+) -> None:
+    fresh = SimpleNamespace(id=1, ticker="AAA")
+    old = SimpleNamespace(id=2, ticker="BBB")
+    none = SimpleNamespace(id=3, ticker="CCC")
+    asset_repo.list_all.return_value = [fresh, old, none]
+    fetched = datetime(2026, 10, 2, 8, 0, tzinfo=UTC)
+    prices.latest_quotes.return_value = {
+        1: SimpleNamespace(price_date=TODAY, source="yahoo", stale=False),
+        2: SimpleNamespace(price_date=date(2026, 9, 1), source="manual", stale=True),
+    }
+    prices.last_provider_fetch.return_value = {1: fetched}
+    fx_rates.last_provider_fetch.return_value = fetched
+
+    status = service.data_status()
+
+    assert status.fx_last_success_at == fetched
+    assert [(a.ticker, a.stale, a.source, a.price_date) for a in status.assets] == [
+        ("AAA", False, "yahoo", TODAY),
+        ("BBB", True, "manual", date(2026, 9, 1)),
+        ("CCC", True, None, None),
+    ]
+    assert status.assets[0].last_success_at == fetched
+    assert status.assets[1].last_success_at is None
+
+
+def test_data_status_can_list_only_the_problems(
+    service: MarketDataService,
+    asset_repo: MagicMock,
+    prices: MagicMock,
+    fx_rates: MagicMock,
+) -> None:
+    asset_repo.list_all.return_value = [
+        SimpleNamespace(id=1, ticker="AAA"),
+        SimpleNamespace(id=2, ticker="CCC"),
+    ]
+    prices.latest_quotes.return_value = {
+        1: SimpleNamespace(price_date=TODAY, source="yahoo", stale=False)
+    }
+    prices.last_provider_fetch.return_value = {}
+    fx_rates.last_provider_fetch.return_value = None
+
+    status = service.data_status(only_problems=True)
+
+    assert [a.ticker for a in status.assets] == ["CCC"]
