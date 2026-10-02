@@ -10,7 +10,7 @@ last_reviewed: 2026-10-02
 
 > **Plan wykonawczy (L3, draft).** Nie opisuje stanu systemu. Wycinek adaptuje istniejące moduły `assets` i `portfolios` — krok E0.1 [roadmapy](./02_roadmapa_funkcjonalna.md) ([etapy E0–E5](./03_roadmapa_etapy_E0-E5.md)).
 
-Wycinek: wycena pozycji w walucie obcej kursem krzyżowym (waluta waloru → waluta bazowa Portfela), z jawnym `rate_missing` zamiast cichego kursu 1. Rozmiar **M** (3–4 dni), 7 kroków TDD, zero migracji. Dowód defektu: F1 w [stanie vs cel](../research/06_stan_found-tracker_vs_cel.md).
+Wycinek: wycena pozycji w walucie obcej kursem krzyżowym (waluta waloru → waluta bazowa Portfela), z jawnym `rate_missing` zamiast cichego kursu 1. Rozmiar **M** (4–5 dni), 7 kroków TDD, zero migracji. Dowód defektu: F1 w [stanie vs cel](../research/06_stan_found-tracker_vs_cel.md).
 
 ## Dlaczego ten wycinek
 
@@ -117,14 +117,14 @@ Każdy krok: test najpierw (czerwony lokalnie), potem kod, osobny commit i revie
 | # | Cel | Pliki | Test najpierw | Zielone gdy |
 |---|---|---|---|---|
 | K1 | `FxMapBuilder` + alias `FxMap` | nowe: `services/fx.py`, `tests/unit/test_fx_map_builder.py`; `domain/valuation.py` (+alias), `domain/__init__.py:42-67`, `services/__init__.py`, `wiring.py` (+`build_fx_map_builder`), `test_wiring.py:44` | `test_builds_cross_rates_for_pln_base`: USD 1, EUR 1,08, PLN 0,25 → `{(USD,PLN): 4, (EUR,PLN): 4.32}` | testy buildera i wiringu zielone; `pytest -m "not integration"` bez regresji (~110 linii) |
-| K2 | Domena: mapa kursów, wartości nullable, `rate_missing` — **z tymczasowym zapasem** | `domain/valuation.py:26-94`; `tests/unit/test_valuation.py` (pkt 5) | `test_eur_position_in_pln_portfolio_uses_the_cross_rate`: 10·100 EUR, `{(EUR,PLN): 4.32}` → 4 320 | `fx_rates=None` przechodzi starą ścieżką (`exchange_rate`), więc serwisy działają bez zmian; nowe testy zielone (~150) |
-| K3 | Schematy odpowiedzi: nullable + `rate_missing` | `schemas/positions.py:67-72` (`RoundedValue \| None`, `rate_missing: bool = False`), `schemas/portfolios.py:63-66`; `services/portfolios.py:30-56`; `test_portfolios_api.py:195-214` | `test_summary_exposes_rate_missing_and_nullable_totals` (JSON `null`) | `model_dump(mode="json")` daje `null`/`false`; zaokrąglenie 3/4 miejsc bez zmian (~60) |
+| K2 | Schematy odpowiedzi: nullable + `rate_missing` (przed domeną, żeby `mypy app` strict nie świecił na czerwono po zmianie typów w K3) | `schemas/positions.py:69-72` (`RoundedValue \| None`, `rate_missing: bool = False`), `schemas/portfolios.py:63-66`; `services/portfolios.py:30-56`; `test_portfolios_api.py:195-214` | `test_summary_exposes_rate_missing_and_nullable_totals` (JSON `null`) | `model_dump(mode="json")` daje `null`/`false`; zaokrąglenie 3/4 miejsc bez zmian; `mypy app` zielone (~60) |
+| K3 | Domena: mapa kursów, wartości nullable, `rate_missing` — **z tymczasowym zapasem** | `domain/valuation.py:26-94`; `tests/unit/test_valuation.py` (pkt 5; w tym kroku testy przechodzą na `fx_rates=`, a `currency=` w `_holding` zostaje — usunięcie dopiero w K4) | `test_eur_position_in_pln_portfolio_uses_the_cross_rate`: 10·100 EUR, `{(EUR,PLN): 4.32}` → 4 320 | `fx_rates=None` przechodzi starą ścieżką (`exchange_rate`), więc serwisy działają bez zmian; nowe testy zielone; `mypy app` zielone (~150) |
 | K4 | Serwisy używają buildera; usunięcie zapasu | `services/portfolios.py:67-75,93,104`; `services/positions.py:16-41`; `wiring.py:31-45`; `protocols.py:57-70`; `valuation.py` (bez `exchange_rate`); testy z pkt 5 | `test_list_valued_builds_the_fx_map_after_the_refreshes` (kolejność `rates → positions → prices → fx → value`) | `grep -rn exchange_rate backend/app/modules/portfolios/domain` puste; golden Z1 = 9 620 (~150) |
 | K5 | Frontend: typy i „Brak kursu” | pkt 7 | build/lint (brak runnera testów do E0.7) | `npm run lint`, `npm run build`; scenariusz ręczny z pkt 9 (~80) |
-| K6 | Integracyjny golden Z1 przez HTTP | `tests/integration/test_portfolio_flow.py` (+test); fixture waluty PLN/EUR/USD | `test_foreign_positions_are_valued_at_cross_rates` (`@integration`, PostgreSQL) | `GET /portfolios/{id}`: `total_value` 9 620, `rate_missing` false (~90) |
+| K6 | Integracyjny golden Z1 przez HTTP | `tests/integration/test_portfolio_flow.py` (+test); fixture: waluty o literalnych kodach (`get_or_create_by_code('USD')` z kursem 1, EUR 1,08, PLN 0,25 — fixture `currency_codes` w `conftest.py:65-80` wydaje losowe kody, a reguła „z kursem” zależy od kodu `USD`); wiersze wycofuje rollback testu | `test_foreign_positions_are_valued_at_cross_rates` (`@integration`, PostgreSQL) | `GET /portfolios/{id}`: `total_value` 9 620, `rate_missing` false (~90) |
 | K7 | Dokumentacja L2 | `docs/technical/backend/05_portfolios_module.md` (zob. pkt 9) | `kb_validate --strict` | brak nowych błędów (~25) |
 
-Dlaczego zapas w K2: gdyby `fx_rates` był wymagany od razu, K2 musiałby jednocześnie zmienić serwisy, schematy i testy (~250 linii) albo zostawić commit z cichym kursem 1. Zapas żyje dwa commity i znika w K4 (kryterium `grep`).
+Dlaczego schematy przed domeną (K2 przed K3): Pydantic v2 typuje `__init__`, więc `PositionValuation` z polami `Decimal | None` przekazane do `PositionResponse.market_value` (`services/portfolios.py:35-43`) łamałoby `mypy app` do czasu K2. Dlaczego zapas w K3: gdyby `fx_rates` był wymagany od razu, K3 musiałby jednocześnie zmienić serwisy i testy (~250 linii) albo zostawić commit z cichym kursem 1. Zapas żyje jeden commit i znika w K4 (kryterium `grep`).
 
 ## 5. Testy
 
@@ -182,24 +182,26 @@ Frontend (bez Vitest — E0.7; weryfikacja `npm run lint`, `npm run build`, ręc
 
 | Plik:linia | Zmiana |
 |---|---|
-| `types/api.ts:42-46, 62-67` | `number \| null` dla czterech pól + `rate_missing?: boolean` |
+| `types/api.ts:42-46, 64-67` | `number \| null` dla czterech pól + `rate_missing?: boolean` |
 | `components/PositionsTable.tsx:94-102` | `!== undefined` → `!= null`; usunąć zapas z `exchange_rate` (`:101`, zła semantyka) → „—” |
 | `components/PositionsTable.tsx:105-152` | komórki wartość/zysk/zwrot/udział: „—” + `Chip` „Brak kursu” przy `rate_missing` |
-| `pages/PocketDetailsPage.tsx:68-72,119,129,143-147` | dziś liczy sumy lokalnie z `market_value`; użyć `pocket.total_value` i `positions_value`, przy `null` „—” i `Alert` „Brak kursu waluty” |
-| `components/PocketsList.tsx:138-154` | `!== undefined` → `!= null` (inaczej `null` pokaże 0,00) |
+| `pages/PocketDetailsPage.tsx:68-72,119,129,143-147` | dziś liczy sumy lokalnie z `market_value`; użyć `pocket.total_value` i `positions_value`; sprawdzać `== null` PRZED `Number()` (`Number(null)` = 0, więc `Number(pocket.total_profit_loss) \|\| (totalValue - totalDeposited)` w `:71` ukryje `null` i pokaże „0,00%”) — usunąć ten fallback; przy `null` „—” i `Alert` „Brak kursu waluty” |
+| `components/PocketsList.tsx:138-154` | `!== undefined` → `!= null`; przy `null` pokaż „—” i `Chip` „Brak kursu” (samo `!= null` ukryłoby blok zysku) |
 | bez zmian | `PocketChartsPage.tsx:85-88` (`\|\| 0` obsługuje `null`), `positionService.ts`, `DashboardPage.tsx:14-16` (F3 → E0.9) |
 
 ## 8. Ryzyka i wycofanie
 
 | Ryzyko | Mitygacja |
 |---|---|
-| **Dialogi nadal podpowiadają kurs USD** (`BuyAssetDialog.tsx:62-64`, `SellAssetDialog.tsx:49` — ten drugi nie jest w F4): nowa Operacja w Portfelu PLN na walorze EUR dostanie `fx_rate` 1,08 zamiast 4,32, a wartość będzie już poprawna — wynik (`unrealized_pnl`) zrobi się zawyżony | E0.1b (S, ~1 dzień) wydać razem z tym wycinkiem; do tego czasu wpisywać kurs ręcznie; istniejące operacje z kursem z dialogu — raport E0.8 / przebudowa E2.0 |
+| **Dialogi nadal podpowiadają kurs USD** (`BuyAssetDialog.tsx:62-64`, `SellAssetDialog.tsx:49` — ten drugi nie jest w F4): nowa Operacja w Portfelu PLN na walorze EUR dostanie `fx_rate` 1,08 zamiast 4,32, a wartość będzie już poprawna — wynik (`unrealized_pnl`) zrobi się zawyżony | E0.1b (S, ~1 dzień) **blokuje wydanie na `main` razem z tym wycinkiem** (nie wdrażać K1–K7 bez E0.1b); do tego czasu wpisywać kurs ręcznie; istniejące operacje z kursem z dialogu — raport E0.8 / przebudowa E2.0 |
 | Heurystyka `exchange_rate == 1` ∧ kod ≠ USD (przed E1.1) | błąd tylko w stronę „brak kursu”, nigdy cichego kursu 1; zastępowana w E1.1 |
 | Zmiana kształtu odpowiedzi (`null`) | frontend w K5; pola addytywne; typy `\| null` przechwycą użycia przy `npm run build` |
 | Stale kursy po awarii dostawcy (`market_data.py:121-123` pomija walutę) | kurs z poprzedniego odświeżenia zostaje (jak dziś); „nieaktualny” — E1.7 |
+| `DashboardPage.tsx:16` używa `Number(null) \|\| 0` — przy `null` suma kokpitu po cichu się zaniży (ten sam rodzaj błędu co F1) | do E0.9 kokpit pokazuje sumy tylko z pól bez `null`; w K5 dopisać „—” dla Portfela z `rate_missing` albo wyłączyć dodawanie takich Portfeli do sumy z adnotacją |
+| `FxMapBuilder` pomija `Currency.base_currency_id` (seed ma EUR z bazą USD); heurystyka `exchange_rate != 1` nie odróżni waluty o kursie dokładnie 1 | błąd tylko w stronę „brak kursu”; `base_currency_id` nie jest używane przez wycenę dziś; zastąpione historią kursów w E1.1 |
 | ADR-0015 i ADR-0005 mają status `Proposed` | wycinek używa tylko ustalonej w roadmapie formy (mapa z serwisu); przy odrzuceniu zmienia się źródło mapy w `FxMapBuilder`, nie domena |
 
-Wycofanie: brak migracji ani danych — `git revert` kroków od K5 wstecz do K1; krok K2 jest wstecznie zgodny (zapas), więc dowolny prefiks K1–K3 można wdrożyć osobno.
+Wycofanie: brak migracji ani danych — `git revert` kroków od K5 wstecz do K1; krok K3 jest wstecznie zgodny (zapas), więc dowolny prefiks K1–K3 można wdrożyć osobno.
 
 ## 9. Definicja ukończenia
 
@@ -224,19 +226,19 @@ Komendy z `CLAUDE.md` projektu (backend z aktywnym `.venv`, `cd backend`):
 4. `grep -rn exchange_rate backend/app/modules/portfolios/domain` puste; `test_architecture.py` i `test_domain_purity.py` zielone.
 5. Frontend: pozycja z `rate_missing` pokazuje „—” i „Brak kursu”, bez „0,00”.
 
-**Dokumentacja:** `05_portfolios_module.md` — §3 (reguły), §4 (tabela `valuation.py`: nowa sygnatura), §5 (wycena kursem krzyżowym, `rate_missing`), §7 (konstruktory serwisów), §8 (układ: `services/fx.py`), §10 „Stan vs cel” (wiersz: wycena walut obcych → zgodne), `last_reviewed: 2026-10-02`; `04_assets_module.md` bez zmian (kontrakt `assets` nietknięty). Wiersz planu w `docs/00_KNOWLEDGE-MAP.md` dopisuje właściciel. Po wdrożeniu: ustawić status tego planu zgodnie z konwencją (draft → po akceptacji właściciela).
+**Dokumentacja (K7, w tym samym commicie co kod, reguły 4, 7, 8 z `knowledge-base.md`):** `05_portfolios_module.md` — §3 (reguły), §4 (tabela `valuation.py`: nowa sygnatura), §5 (wycena kursem krzyżowym, `rate_missing`), §7 (konstruktory serwisów), §8 (układ: `services/fx.py`), §10 „Stan vs cel” (wiersz: wycena walut obcych → zgodne), `last_reviewed: 2026-10-02`; `docs/business/CONTEXT.md` — nowe pojęcia „Kurs krzyżowy” i „Brak kursu” (z listą _Unikać_); [kontrakt API](../technical/backend/09_kontrakt_api_docelowy.md) — wiersz `RATE_MISSING` i pola odpowiedzi (`rate_missing`, wartości nullable); [stan vs cel](../research/06_stan_found-tracker_vs_cel.md) jest dowodem L4 (append-only) — nie edytować, status F1 odnotować w `05_portfolios_module.md` §10; `04_assets_module.md` bez zmian (kontrakt `assets` nietknięty). Wiersz planu w `docs/00_KNOWLEDGE-MAP.md` jest już dodany (ten sam commit co plan). Po wdrożeniu: ustawić status tego planu zgodnie z konwencją (draft → po akceptacji właściciela).
 
-**Rozmiar:** M — K1 0,5 d, K2 0,5 d, K3 0,5 d, K4 1 d, K5 0,5 d, K6 0,5 d (PostgreSQL), K7 0,25 d = ok. 3,75 d (szacunek **[wniosek]**).
+**Rozmiar:** M — K1 0,5 d, K2 0,5 d, K3 0,5 d, K4 1 d, K5 0,5 d, K6 0,5 d (PostgreSQL), K7 0,25 d = ok. 3,75 d samej pracy; **4–5 d** realnie: K4 dotyka 5 plików testów, wiringu i protokołów, K5 — 4 plików frontendu bez testów, K6 wymaga fixture PostgreSQL (szacunek **[wniosek]**).
 
 ## Otwarte punkty
 
 | # | Pytanie / blokada | Rekomendacja |
 |---|---|---|
 | 1 | Co pokazać przy braku kursu: sumy `null` czy suma częściowa z flagą? | `null` + `rate_missing` (pkt 3); decyzja właściciela |
-| 2 | Czy E0.1b (endpoint `fx-rate` + oba dialogi) w tym samym wycinku? | osobno (osobny review), ale wydać razem — ryzyko w pkt 8 |
+| 2 | Czy E0.1b (endpoint `fx-rate` + oba dialogi) w tym samym wycinku? | osobny review i commity, ale **wydanie na `main` blokujące razem z wycinkiem** — ryzyko w pkt 8 |
 | 3 | `FxMapBuilder` importuje stałą `DEFAULT_CURRENCY_CODE` z `assets.constants` czy dostaje kod USD z `CurrencyService`? | stała (test architektury jej nie flaguje, `test_architecture.py:475-500`); metoda w serwisie, jeśli właściciel woli ścisłą lekturę ADR-0006 |
 | 4 | `total_fees` Portfela sumuje opłaty w walutach waloru (`valuation.py:89`; `ledger.py:182,195`) | osobny defekt, poza wycinkiem — kandydat do E2.x |
 | 5 | Operacje już zapisane z `fx_rate` z dialogu (USD-owym) | raport E0.8, przebudowa E2.0; wycinek ich nie naprawia |
-| 6 | Roadmapa E0.1 podaje `seed_data.py:187-211`; faktyczny blok `PORTFOLIOS` to `:186-212` | poprawić przy okazji edycji roadmapy; seed ma tylko Portfele w walucie waloru — fixture w testach, nie w seedzie |
+| 6 | Seed: blok `PORTFOLIOS` to `seed_data.py:187-212` (roadmapa podaje 187-211 — różnica o jedną linię, bez znaczenia) | seed ma tylko Portfele w walucie waloru — fixture w testach, nie w seedzie |
 | 7 | Akceptacja ADR-0005 i ADR-0015 (`Proposed`) | wycinek nie wymaga; E1.1 wymaga ADR-0015 |
 | 8 | Brak `.venv` i PostgreSQL w środowisku autora planu | liczby policzone ręcznie, testów nie uruchamiano; pierwszy krok K1 zaczyna od `pytest -m "not integration"` jako bazy odniesienia |
