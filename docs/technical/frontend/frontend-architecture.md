@@ -10,7 +10,7 @@ applies_to:
 
 # Architektura frontendu (stan faktyczny)
 
-Krótki opis stanu, żeby mapa wiedzy nie miała dziury. Frontend **nie jest** przedmiotem migracji backendu i konsumuje REST API bez zmian ([CLAUDE.md](../../../CLAUDE.md)). Szczegółowy dokument (wzorce stanu, cykl sesji, responsywność) powstanie, gdy frontend stanie się przedmiotem prac.
+Krótki opis stanu, żeby mapa wiedzy nie miała dziury. Frontend **nie jest** przedmiotem migracji backendu i konsumuje REST API bez zmian ([CLAUDE.md](../../../CLAUDE.md)). Docelowa mapa ekranów i tras, konwencje UI (formatowanie, stany, błędy, wykresy, formularze) i decyzje infrastrukturalne frontendu opisuje [IA i konwencje UI](./ia-i-konwencje-ui.md).
 
 ## Stos
 
