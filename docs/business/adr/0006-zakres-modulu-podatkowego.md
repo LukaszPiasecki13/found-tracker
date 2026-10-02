@@ -37,14 +37,14 @@ Rekomendacja: moduł podatkowy liczy **dane pomocnicze do PIT-38** w trzech osob
 | Spin-off, prawa poboru/PDA — skutki podatkowe dla kosztu nabycia | dowód ich nie przeanalizował (luka 8); partie po zdarzeniu dostają flagę `tax_review_required`, a raport je wymienia bez wyliczania |
 | PIT/ZG dla dywidend | dywidendy (art. 30a) idą do części G, nie do PIT/ZG; PIT/ZG tylko dla **zagranicznych zysków kapitałowych** (art. 30b ust. 5a–5f, per kraj) |
 | Wypłaty/zwroty z IKE, IKZE, PPK, OIPE (19% / 10%) | rachunki z ulgą poza pulami; wypłaty to osobne reguły (art. 30a ust. 1 pkt 10–11f; art. 30 ust. 1 pkt 14) — kandydat v2 |
-| Raport wpłat IKZE do odliczenia (art. 26 ust. 1 pkt 2b), limity roczne | wartości limitów niezweryfikowane (obwieszczenia M.P. nie pobrane); ostrzeżenie o przekroczeniu — v2 |
+| Limity wpłat IKE/IKZE (kontrola przekroczenia) i raport wpłat IKZE do odliczenia (art. 26 ust. 1 pkt 2b) | **poza v1** (v2): wartości limitów niezweryfikowane (obwieszczenia M.P. nie pobrane); w E5.6 limity są wyłącznie konfiguracją z `source_ref` i etykietą [niezweryfikowane], bez raportu odliczeń |
 | Pochodne, CFD, Forex, krótka sprzedaż | poza zakresem produktu (plan §7) |
 | Obligacje skarbowe: podatek od odsetek | pobiera płatnik/agent emisji; FundTracker wykazuje informacyjnie, nie liczy zobowiązania; zagraniczne → część G |
 | Elektroniczna wysyłka, XML PIT-38 | poza zakresem |
 
 4. **Rachunki z ulgą**: Operacje na Portfelu z `account_type` ≠ `regular` nie zasilają żadnej puli, dywidendy na nim nie generują dopłaty, strata nie wchodzi do PIT-38 (art. 9 ust. 3a pkt 4, art. 30a ust. 8d).
-5. **Zaokrąglenia jako parametr per pole raportu**: podstawa i podatek PIT-38 (poz. 31, 35, 41, 45) do pełnych złotych (od 50 gr w górę); rachunki pośrednie na `Decimal` bez zaokrągleń. Dla podatku z art. 30a ust. 1 pkt 1–3 **źródła są sprzeczne**: broszura MF (art. 63 § 1a Ordynacji) — „do pełnych groszy w górę”, przykłady PKO BP dla obligacji temu przeczą. Parametr `rounding_rule_30a` ∈ {`grosz_up`, `zloty_half_up`} **[propozycja]**, domyślnie `grosz_up` wg broszury, oznaczone **[niezweryfikowane]** w raporcie.
-6. **Weryfikacje wymagane przed uznaniem raportu za „sprawdzony”** (każda w raporcie jako flaga, dopóki otwarta): tekst art. 63 Ordynacji; UPO PL–US i skutki W-8BEN (15%, dopłata 4%); interpretacja daty przychodu (ADR 0005); limity IKE/IKZE/OIPE z obwieszczeń M.P.; FIFO „odpowiednio” dla krypto (art. 30b ust. 7a); zgodność wyniku z **PIT-8C właściciela** (kryterium E6.2) — wymaga próbki dokumentu.
+5. **Zaokrąglenia jako parametr per pole raportu**: podstawa i podatek PIT-38 (poz. 31, 35, 41, 45) do pełnych złotych (od 50 gr w górę); rachunki pośrednie na `Decimal` bez zaokrągleń. Dla podatku z art. 30a ust. 1 pkt 1–3 **źródła są sprzeczne**: broszura MF (art. 63 § 1a Ordynacji) — „do pełnych groszy w górę”, przykłady PKO BP dla obligacji temu przeczą. Parametr `rounding_rule_30a` ∈ {`grosz_up`, `zloty_half_up`} **[propozycja]** (ustawienie raportu `taxes`), domyślnie `grosz_up` wg broszury, oznaczone **[niezweryfikowane]** w raporcie.
+6. **Weryfikacje wymagane przed uznaniem raportu za „sprawdzony”** (każda w raporcie jako flaga, dopóki otwarta): tekst art. 63 Ordynacji; UPO PL–US i skutki W-8BEN (15%, dopłata 4%); interpretacja daty przychodu (ADR 0005); limity IKE/IKZE/OIPE z obwieszczeń M.P. (konfiguracja, nie reguła zaszyta w v1); FIFO „odpowiednio” dla krypto (art. 30b ust. 7a); zgodność wyniku z **PIT-8C właściciela** (kryterium E6.2) — wymaga próbki dokumentu.
 
 ## Rozpatrywane alternatywy
 
@@ -76,5 +76,4 @@ Rekomendacja: moduł podatkowy liczy **dane pomocnicze do PIT-38** w trzech osob
 
 ## Otwarte
 
-- Próbki: PIT-8C właściciela z poprzedniego roku (kryterium zgodności E6.2) — **brak, blokuje akceptację E6.2**.
-- Czy v1 obejmuje obligacje w kolejce FIFO art. 30a ust. 4 (zależy od E5.1).
+- Próbki: PIT-8C właściciela z poprzedniego roku (kryterium zgodności E6.2) — **brak, blokuje akceptację E6.2**. Czy v1 obejmuje obligacje w kolejce FIFO art. 30a ust. 4 (zależy od E5.1).

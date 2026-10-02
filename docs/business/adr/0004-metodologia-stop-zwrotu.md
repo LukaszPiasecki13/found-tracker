@@ -23,8 +23,8 @@ Rekomendacja: „Wynik %” to **TWR dzienny** łączony geometrycznie, „Mój 
 ## Decyzja
 
 1. **TWR**: dzienny, konwencja PP (wpływ = początek dnia, wypływ = koniec dnia); wartość Portfela **z gotówką** (GIPS 2.A.11). Obliczenia i `twr_index` w `Decimal` (D11); wszystkie okresy z jednego indeksu: `R(s,e) = I_e / I_s − 1`. Przepływy zewnętrzne z tego samego dnia netujemy i dokumentujemy.
-2. **XIRR**: na przepływach zewnętrznych plus wartość początkowa (jak wpłata) i końcowa (jak wypłata), rok = 365 dni; solver wg dowodu 05 §1.4 (Newton + bisekcja). Kody: `irr_undefined` (brak zmiany znaku), `irr_ambiguous` (kilka pierwiastków — zwracamy TWR i pole puste).
-3. **Annualizacja**: `(1 + R)^(365/dni) − 1` tylko gdy okres ≥ 365 dni; inaczej `annualized = null`, `reason = "period_shorter_than_one_year"`. Dla XIRR < 1 roku pokazujemy zwrot okresu `(1 + IRR)^(dni/365) − 1`, nie stopę roczną.
+2. **XIRR**: na przepływach zewnętrznych plus wartość początkowa (jak wpłata) i końcowa (jak wypłata), rok = 365 dni; solver wg dowodu 05 §1.4 (Newton + bisekcja). Kody INLINE w metryce (HTTP 200, nie błąd 4xx): `IRR_UNDEFINED` (brak zmiany znaku), `IRR_AMBIGUOUS` (kilka pierwiastków — zwracamy TWR i pole puste).
+3. **Annualizacja**: `(1 + R)^(365/dni) − 1` tylko gdy okres ≥ 365 dni; inaczej `annualized = null`, `reason = "PERIOD_SHORTER_THAN_ONE_YEAR"` (kod inline, HTTP 200). Dla XIRR < 1 roku pokazujemy zwrot okresu `(1 + IRR)^(dni/365) − 1`, nie stopę roczną.
 4. **Modified Dietz** wyłącznie jako fallback dla podokresów bez cen, z flagą `approximation = true`.
 5. **Ryzyko** (E7): zmienność, MDD, Sharpe, Sortino, beta liczone z dziennych `r_t`; dni bez sesji pominięte (E1.9), nigdy ze zmian surowej wartości.
 6. **Klasyfikacja przepływów** — tabela poniżej; reguła: *zewnętrzny = przekracza granicę zakresu*.
@@ -53,19 +53,17 @@ Rekomendacja: „Wynik %” to **TWR dzienny** łączony geometrycznie, „Mój 
 | D. Annualizować zawsze (jak PP dla IRR) | liczby w rodzaju 3914% p.a.; sprzeczne z GIPS 2.A.12 | odrzucona |
 | E. TWR miesięczny/okresowy | zgodny z GIPS tylko przy małych przepływach; dzienne ceny już są | odrzucona |
 
-Koszt rekomendacji: pełny dzienny wektor wyceny (snapshoty E2.5, historia cen E1.1) jest warunkiem — bez niego Portfel pokazuje fallback z flagą.
-
 ## Konsekwencje
 
 **Pozytywne**
-- Liczba porównywalna z indeksem i z Portfolio Performance (walidacja krzyżowa, dowód 05 §10.5).
-- Jawne `method` i `reason` — zmiana metody jest widoczna, nie cicha.
+- Liczba porównywalna z indeksem i z Portfolio Performance (dowód 05 §10.5); jawne `method` i `reason` — zmiana metody nie jest cicha.
 
 **Negatywne**
 - „Wynik %” zmienia wartość względem dzisiejszego zwrotu od wpłat; użytkownik zobaczy dwie różne liczby (TWR i dotychczasowy zysk kwotowy).
 - Krótkie okresy bez annualizacji — brak „ładnej” liczby rocznej dla nowych Portfeli.
 - TWR Grupy nie jest średnią ważoną TWR Portfeli; liczone z własnego szeregu.
 - Zerowy mianownik (nowy lub w pełni wypłacony Portfel) wymaga komunikatu, by przerwa nie wyglądała jak „0%”.
+- Warunek: pełny dzienny wektor wyceny (snapshoty E2.5, historia cen E1.1); bez niego fallback z flagą.
 
 ## Zmiany słownika po akceptacji
 
@@ -78,5 +76,4 @@ Koszt rekomendacji: pełny dzienny wektor wyceny (snapshoty E2.5, historia cen E
 
 ## Otwarte
 
-- Stopa wolna od ryzyka dla PLN (stopa referencyjna NBP vs POLSTR; licencja GPW Benchmark) — dowód 05 §4.7, blokuje E7.1, nie TWR.
-- Skalowanie zmienności w PP (`Risk.Volatility`) niepotwierdzone w UI PP — [niezweryfikowane] przed deklarowaniem zgodności.
+- Stopa wolna od ryzyka dla PLN (NBP vs POLSTR; licencja GPW Benchmark) — dowód 05 §4.7, blokuje E7.1, nie TWR. Skalowanie zmienności w PP (`Risk.Volatility`) niepotwierdzone w UI PP — [niezweryfikowane] przed deklarowaniem zgodności.

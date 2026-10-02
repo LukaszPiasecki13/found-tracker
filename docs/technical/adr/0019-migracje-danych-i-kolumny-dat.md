@@ -45,7 +45,7 @@ Migracje schematu powstają wyłącznie z `alembic revision --autogenerate`, są
 - `sequence` `Integer`, `server_default '0'`, NOT NULL — porządek w obrębie dnia; globalny klucz (`operation_day`, `sequence`, `id`) ([ADR-0016](0016-snapshoty-dzienne-i-przebudowa.md)).
 - **Zapis:** serwis wylicza `operation_day` z `operation_date` przez `zoneinfo.ZoneInfo("Europe/Warsaw")` (`tzdata` jest w `requirements.txt:68`), nie SQL-em — niezależnie od strefy sesji.
 - Wektory metryk przechodzą na `operation_day` (zamiast dnia UTC, `metrics.py:147`).
-- **Backfill:** `rebuild-all` ustawia `operation_day` istniejących wierszy tą samą funkcją i nadaje `sequence` wg dotychczasowej kolejności (`operation_date`, `created_at`, `id`, `repositories/operations.py:53-57`) per właściciel; zapis jest deterministyczny, więc drugi przebieg nic nie zmienia.
+- **Backfill:** `rebuild-all` zapisuje w istniejących wierszach `operation_day` (tą samą funkcją), `sequence` (wg dotychczasowej kolejności `operation_date`, `created_at`, `id`, `repositories/operations.py:53-57`, numerowane per (Portfel, `operation_day`)) i `currency_id` = waluta bazowa Portfela ([ADR biznesowy 0003](../../business/adr/0003-gotowka-wielowalutowa.md) pkt 4). Pozycje aktualizuje **w miejscu** (zachowuje `opened_at`), nie kasuje ich i nie odtwarza. Zapis jest deterministyczny, więc drugi przebieg nic nie zmienia.
 
 **3. Kolejność wdrożenia**
 1. Migracja A (`autogenerate`): nowe tabele i kolumny `null`/`server_default`.
@@ -57,8 +57,8 @@ Migracje schematu powstają wyłącznie z `alembic revision --autogenerate`, są
 **4. Seed generuje stany z Operacji**
 - `seed_data.py` zawiera Operacje i dane referencyjne; **usuwamy** `cash_balance`/`total_deposited` z `PortfolioSeed` (`:187-211`) i `POSITIONS` (`:214-312`). Portfel startuje od 0.
 - Po wstawieniu Operacji seed woła przebudowę przez `wiring.py` (wyjątek od R5 dla `backend/seed/`, [ADR-0002](0002-sesja-poza-zadaniem-entrypointy-i-wiring.md)); stany i pozycje powstają z `PortfolioLedger`.
-- Dane Operacji muszą dać poprawny replay: wpłata Crypto Portfolio ≥ 15 632 (np. 16 000) **[propozycja]**; test seeda: replay seeda nie rzuca, a przebudowa dwukrotnie daje ten sam stan.
-- Kryterium E2.0 zmieniamy na: „`rebuild-all` na seed daje stan równy replayowi Operacji; drugi przebieg bez zmian”.
+- Dane Operacji muszą dać poprawny replay: wpłata Crypto Portfolio 8 000 → **16 000** (zakupy BTC/ETH wymagają ≥ 15 632) **[propozycja]**; test seeda: replay seeda nie rzuca, a przebudowa dwukrotnie daje ten sam stan.
+- Kryterium E2.0 obowiązuje dopiero po naprawie seeda i brzmi: „`rebuild-all` na seed daje stan równy replayowi Operacji; drugi przebieg bez zmian”. Kryterium E0.5 to samo sprawdza replayem przez `PortfolioLedger` (bez `rebuild-all`, który powstaje w E2.0).
 
 ## Rozpatrywane alternatywy
 

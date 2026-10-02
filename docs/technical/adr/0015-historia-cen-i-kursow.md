@@ -26,7 +26,7 @@ Moduł `assets` przechowuje dzienne zamknięcia i kursy jako fakty z źródłem 
 | Tabela | Kolumny (typ) | Klucze i indeksy |
 |---|---|---|
 | `assets_price` | `id`, `asset_id` FK, `price_date` `Date`, `close` `Numeric(18,9)`, `currency_id` FK (waluta notowania), `source` `String(20)`, `is_synthetic` `Boolean` default false, `fetched_at` `DateTime(tz)` | UNIQUE (`asset_id`, `price_date`, `source`); indeks (`asset_id`, `price_date` DESC) |
-| `assets_fx_rate` | `id`, `from_currency_id` FK, `to_currency_id` FK, `rate_date` `Date`, `rate` `Numeric(18,9)`, `source` `String(20)`, `table_no` `String(30)` null (np. `187/A/NBP/2026`), `fetched_at` | UNIQUE (`from`, `to`, `rate_date`, `source`); indeks (`from`, `to`, `rate_date` DESC) |
+| `assets_fx_rate` | `id`, `from_currency_id` FK, `to_currency_id` FK, `rate_date` `Date`, `rate` `Numeric(18,9)`, `source` `String(20)`, `table_no` `String(32)` null (np. `187/A/NBP/2026`), `fetched_at` `DateTime(tz)`, `is_synthetic` `Boolean` default false | UNIQUE (`from`, `to`, `rate_date`, `source`); indeks (`from`, `to`, `rate_date` DESC) |
 | `assets_listing` | `asset_id`, `provider` `String(20)`, `symbol` `String(40)`, `priority` `SmallInteger` | UNIQUE (`asset_id`, `provider`) |
 
 `rate` = jednostek `to` za jedną `from` (kontrakt `fetch_fx_rate`, `core/market_data.py`). NBP (tabela A, `mid`) zapisuje pary `XXX → PLN`; Yahoo — wg adaptera.
@@ -38,11 +38,11 @@ Moduł `assets` przechowuje dzienne zamknięcia i kursy jako fakty z źródłem 
 **4. Priorytet źródeł per walor.** Efektywna cena dnia = wiersz o najniższej randze: `manual` = 0 (zawsze najwyższy, bez wpisu w `assets_listing`), dostawca = `assets_listing.priority` ≥ 1, nieznane źródło = 1000. Zmiana `priority` lub dodanie ceny `manual` jest zmianą ceny od najstarszej daty, której dotyczy ([ADR-0016](0016-snapshoty-dzienne-i-przebudowa.md)).
 
 **5. „Ostatnia cena” jako pochodna.**
-- `Asset.current_price` (`models/assets.py:29`) i `Currency.exchange_rate` (`models/currencies.py:20`) zostają jako **kolumny-cache**, ustawiane wyłącznie przez serwis `assets` przy zapisie wiersza o najnowszej dacie (ta sama transakcja). Pola API `current_price`/`exchange_rate` (`schemas/assets.py:92`, `schemas/currencies.py:19`) bez zmiany kontraktu.
+- `Asset.current_price` (`models/assets.py:29`) i `Currency.exchange_rate` (`models/currencies.py:20`) zostają jako **kolumny-cache**, ustawiane wyłącznie przez serwis `assets`, w tej samej transakcji co zapis wiersza o najnowszej dacie do `assets_price` / `assets_fx_rate` (nikt inny ich nie zapisuje). Pola API `current_price`/`exchange_rate` (`schemas/assets.py:92`, `schemas/currencies.py:19`) bez zmiany kontraktu.
 - Ręczna edycja (`AssetUpdateRequest.current_price`, `schemas/assets.py:58`) zapisuje wiersz `source=manual` z dzisiejszą datą; cache wynika z niego.
 - Czytelnicy (wycena, pozycje) przechodzą na `find_close`/mapę kursów; usunięcie kolumn — osobny ADR po E3.
 
-**6. Kurs krzyżowy w `portfolios`.** Serwis `portfolios` (`FxMapBuilder`) pyta `assets` o pary bezpośrednie (para → odwrotność → przez pivot z listy [PLN, waluta systemowa] **[propozycja]**) i składa mapę `{(z, do): Decimal}` na dzień wyceny. `domain/` dostaje tylko mapę, bez portu i I/O (ADR-0005, E0.1). Kurs krzyżowy nie jest zapisywany; przy pivocie innym niż NBP odpowiedź niesie `data_quality`.
+**6. Kurs krzyżowy składa `portfolios`, nie `assets`.** `assets` zwraca tylko kursy **bezpośrednie i odwrotne** z bazy (`GET /assets/currencies/rate?from_currency=&to_currency=`; bez składania krzyżowych). Serwis `portfolios` (`FxMapBuilder`) pyta o pary bezpośrednie (para → odwrotność → przez pivot z listy [PLN, waluta systemowa] **[propozycja]**) i składa mapę `{(currency_id_z, currency_id_do): Decimal}` na dzień wyceny = `rate[z] / rate[do]`, gdzie `Currency.exchange_rate` to „USD za 1 jednostkę” (`backend/app/modules/assets/services/market_data.py:109`). Brak kursu (nie istnieje w historii ani w cache) → `RATE_MISSING`; przed E1.1 heurystyka `exchange_rate == 1` ∧ kod ≠ `USD`. `domain/` dostaje tylko mapę, bez portu i I/O (ADR-0005, E0.1). Kurs krzyżowy nie jest zapisywany; przy pivocie innym niż NBP odpowiedź niesie `data_quality`.
 
 **7. Trzy kursy na zdarzenie (D5)**
 
@@ -50,7 +50,7 @@ Moduł `assets` przechowuje dzienne zamknięcia i kursy jako fakty z źródłem 
 |---|---|---|---|
 | brokera | `portfolios_operation.fx_rate` (istnieje) | wyciąg / użytkownik | księga, gotówka |
 | wyceny | `portfolios_position_daily.fx` (ADR-0016) | `assets_fx_rate` wg priorytetu | wartość, wykresy |
-| podatkowy | `fx_rate_tax` `Numeric(18,9)`, `fx_tax_table_no` `String(30)`, `fx_tax_effective_date` `Date` (wszystkie null) na Operacji | NBP tabela A, `effectiveDate` < data podatkowa, cofanie po 404 | PIT-38 |
+| podatkowy | `fx_rate_tax` `Numeric(18,9)`, `fx_tax_date` `Date`, `fx_tax_table_no` `String(32)` (wszystkie null) na Operacji | NBP tabela A, `effectiveDate` < data podatkowa, cofanie po 404 | PIT-38 |
 
 Data podatkowa = `settlement_date` (D12), dla dywidendy dzień wypłaty. Kurs D−1 jest zawsze już opublikowany dla dat ≤ dziś; dla przyszłej daty rozrachunku pola zostają `null`, a `refresh-fx` ([ADR-0017](0017-zadania-w-tle-i-cli.md)) wypełnia `fx_rate_tax IS NULL AND data ≤ dziś`.
 
@@ -73,4 +73,4 @@ Data podatkowa = `settlement_date` (D12), dla dywidendy dzień wypłaty. Kurs D�
 ## Otwarte
 
 - Wybór waloru do testu kontraktowego splitu; zachowanie `auto_adjust` w `yfinance` 1.3.0 — zweryfikować w E1.2.
-- Kurs krzyżowy, gdy brak kursu dla pary w ogóle (nowa waluta ma dziś domyślnie 1): błąd z `code` czy `data_quality` (E0.1).
+- Kurs krzyżowy, gdy brak kursu dla pary w ogóle (nowa waluta ma dziś domyślnie 1): rozstrzygnięte jako błąd `RATE_MISSING`; otwarte tylko, czy lista wyceny ma pokazywać pozycje częściowo (`data_quality`) (E0.1).

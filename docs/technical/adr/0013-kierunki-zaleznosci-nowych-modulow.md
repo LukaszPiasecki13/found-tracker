@@ -25,17 +25,17 @@ Rozszerza listę dopuszczalnych kierunków z [ADR-0006](0006-cross-module-wylacz
 
 | Moduł | Może zależeć od | Uwagi |
 |---|---|---|
-| `core_data` | — | liść; `core_data → security` jest długiem (lista legacy w teście), nie wzorem |
+| `core_data` | — | liść; `core_data → security` jest długiem, nie wzorem: `core_data/services/users.py:7` ↔ `security/services/auth.py:2` (lista legacy w teście, tylko maleje) |
 | `security` | `core_data` | bez zmian |
 | `assets` | — | nie zależy od żadnego modułu biznesowego |
 | `portfolios` | `assets`, `core_data` | bez zmian; import (pkt 3) mieszka tu |
 | `taxes` | `portfolios`, `assets` | czyta rekordy zużycia partii (`portfolios_lot_consumption`, E2.4) przez serwis `portfolios`; z `assets` tylko metadane waloru (kraj, typ) |
-| `planning` | `portfolios`, `taxes` | rebalansing szacuje podatek FIFO (E9.2) przez serwis `taxes` |
-| `notifications` | `assets`, `portfolios` — **tylko przez porty** | pkt 2 |
+| `planning` | `portfolios`, `taxes`, `assets` | rebalansing szacuje podatek FIFO (E9.2) przez serwis `taxes`; z `assets` ceny i metadane Walorów (kierunek `planning → assets`) |
+| `notifications` | `assets`, `portfolios`, `planning` — **tylko przez porty** | pkt 2; kierunek `notifications → planning` dla alertu o celu/rebalansingu (E9.1); `notifications → taxes` nie istnieje |
 
 Zakazane na stałe: `assets → portfolios`, `portfolios → taxes|planning|notifications`, `taxes → planning|notifications`. Nikt nie zależy od `notifications`.
 
-**2. `notifications` przez porty.** Moduł definiuje `Protocol`y (`PriceSource`, `PortfolioValueSource`) w `notifications/domain/protocols.py` (DOM-8, [ADR-0005](0005-warstwa-domeny.md)). Adapter w `notifications/services/sources.py` opakowuje `AssetService`/`PortfolioService` składane przez `assets_wiring`/`portfolios_wiring`. Powód: reguła alertu to czysta logika nad kilkoma liczbami — testowalna bez bazy i niezależna od kształtu DTO cudzych modułów. Wyzwalanie alertów po odświeżeniu cen robi driver (CLI, [ADR-0017](0017-zadania-w-tle-i-cli.md)), nie zdarzenie.
+**2. `notifications` przez porty.** Moduł definiuje `Protocol`y (`PriceSource`, `PortfolioValueSource`, `PlanningSource`) w `notifications/domain/protocols.py` (DOM-8, [ADR-0005](0005-warstwa-domeny.md)). Adapter w `notifications/services/sources.py` opakowuje `AssetService`/`PortfolioService`/serwis `planning` składane przez `assets_wiring`/`portfolios_wiring`/`planning_wiring`. Powód: reguła alertu to czysta logika nad kilkoma liczbami — testowalna bez bazy i niezależna od kształtu DTO cudzych modułów. Wyzwalanie alertów po odświeżeniu cen robi driver (CLI, [ADR-0017](0017-zadania-w-tle-i-cli.md)), nie zdarzenie.
 
 **3. Import w `portfolios`, nie osobny moduł** ([ADR-0018](0018-architektura-importu.md)). Paczka importu (`import_batch`) ma FK do `portfolios_portfolio` i `portfolios_operation` w obie strony; osobny moduł `imports` wymusiłby zależność `portfolios ↔ imports`. Moduł `imports` powstaje tylko, jeśli `portfolios` przekroczy rozsądny rozmiar **i** FK da się odwrócić (D10).
 

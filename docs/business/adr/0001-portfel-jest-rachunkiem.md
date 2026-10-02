@@ -36,7 +36,7 @@ Rekomendacja: **Portfel = jeden rachunek maklerski** (typ rachunku, broker), a s
 | IKE/IKZE | typ na Portfelu; wyłączenie z puli jednym warunkiem | typ na Rachunku; Portfel może mieszać rachunki z ulgą i bez — raporty muszą filtrować per rachunek |
 | UI | Portfele na liście, Grupa jako widok łączony; brak kroku „wybierz rachunek” | dodatkowy poziom w każdym formularzu i tabeli (Portfel → Rachunek → Pozycja) |
 | Import | plik brokera → jeden Portfel; mapowanie 1:1 (Bossa: osobne pliki IKE/IKZE = osobne Portfele) | plik → Rachunek, ale Portfel i Rachunek wybierane osobno; więcej błędów mapowania |
-| Przelewy (E2.3) | między Portfelami: jedna relacja `counter_portfolio_id` (D9), kaskada A↔B | między Rachunkami: ruch wewnątrz Portfela jest przelewem bez Portfela-kontrahenta — dwa rodzaje przelewów |
+| Przelewy (E2.3) | między Portfelami: jeden wiersz Operacji z `counter_portfolio_id` (D9) | między Rachunkami: ruch wewnątrz Portfela jest przelewem bez Portfela-kontrahenta — dwa rodzaje przelewów |
 | Agregacja | tylko przez Grupę | Portfel agreguje „za darmo”, Grupa i tak potrzebna dla wielu Portfeli |
 | Zmiana kodu | mała: nowe kolumny, nowa tabela Grup | duża: nowa tabela Rachunków, klucz obcy w 4 tabelach, przebudowa `PortfolioLedger` |
 

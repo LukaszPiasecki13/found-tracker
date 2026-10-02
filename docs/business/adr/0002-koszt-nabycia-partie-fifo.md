@@ -21,10 +21,10 @@ Rekomendacja: **Partia** (nowe pojęcie, proponowane) powstaje przy każdym zaku
 
 ## Decyzja
 
-1. **Partia** = `(Portfel, Walor, Operacja otwierająca)` z ilością otwartą i pozostałą, kosztem jednostkowym w walucie Waloru (cena + prowizja zakupu, jak dziś w średniej), kursem brokera zamrożonym w dniu zakupu (koszt w walucie Portfela) i kosztem w PLN po kursie podatkowym ([ADR 0005](0005-daty-operacji-i-zdarzenie-podatkowe.md)). Tabele pochodne `portfolios_lot`, `portfolios_lot_consumption` (E2.4); partia nigdy nie jest edytowana, tylko przebudowywana.
+1. **Partia** = `(Portfel, Walor, Operacja otwierająca, Operacja pierwotna)` z ilością otwartą i pozostałą, kosztem jednostkowym w walucie Waloru (cena + prowizja zakupu, jak dziś w średniej), kursem brokera zamrożonym w dniu zakupu (koszt w walucie Portfela) i kosztem w PLN po kursie podatkowym ([ADR 0005](0005-daty-operacji-i-zdarzenie-podatkowe.md)). Tabele pochodne `portfolios_lot`, `portfolios_lot_consumption` (E2.4); partia nigdy nie jest edytowana, tylko przebudowywana. `open_operation_id` = Operacja, która otworzyła Partię w TYM Portfelu (zakup albo przelew przychodzący); `origin_operation_id` = pierwotny zakup, niezmienny przy przelewie i splicie. Unikalność `(portfolio_id, open_operation_id, origin_operation_id)`: przelew papierów może dać Portfelowi docelowemu wiele Partii z jedną Operacją otwierającą.
 2. **Domyślnie FIFO** w obrębie `(Portfel, Walor)`. Prowizja sprzedaży rozkładana proporcjonalnie na zużywane wycinki.
-3. **Wskazanie partii** [propozycja]: Operacja sprzedaży może nieść listę `(Operacja otwierająca, ilość)` jako **dane wejściowe** (nie pochodne — przeżywają `rebuild`); niewskazana reszta idzie FIFO. Dozwolone tylko gdy źródło identyfikuje partię (import z brokera, np. IBKR `Trade ID`/`Open/Close Indicator`; ręcznie z potwierdzeniem w UI). Wskazanie nieistniejącej lub za małej partii → błąd `LOT_SELECTION_INVALID`.
-4. **Przelew papierów** między Portfelami przenosi partie z kosztem i datą nabycia (E2.3); **split** zmienia ilość i koszt jednostkowy partii bez zmiany kosztu łącznego i daty (E8.1).
+3. **Wskazanie partii** [propozycja]: Operacja sprzedaży może nieść wskazanie partii w tabeli wejściowej `portfolios_operation_lot_pick(operation_id, open_operation_id, origin_operation_id, quantity Numeric(28,10))` (dane wejściowe, nie pochodne — przeżywają `rebuild`); niewskazana reszta idzie FIFO. Dozwolone tylko gdy źródło identyfikuje partię (import z brokera, np. IBKR `Trade ID`/`Open/Close Indicator`; ręcznie z potwierdzeniem w UI). Wskazanie nieistniejącej lub za małej partii → błąd `LOT_SELECTION_INVALID`.
+4. **Przelew papierów** między Portfelami przenosi partie z kosztem i datą nabycia (E2.3); **split** NIE tworzy nowej Operacji otwierającej: Partia zostaje, zmienia się `split_ratio`, ilość i cena jednostkowa przy stałym koszcie łącznym i dacie nabycia (E8.1). Atrybuty podatkowe Partii (`taxes_lot_attribute`) i wskazanie partii są kluczowane po `origin_operation_id`.
 5. **Wycena otwartych pozycji**: koszt = Σ koszt pozostały partii; niezrealizowany P/L = wartość rynkowa − ten koszt. `Position.average_buy_price` zostaje jako średnia ruchoma (dziś: bez zmian przy sprzedaży), oznaczona w UI „średnia cena zakupu (informacyjnie)”; **nie** zasila P/L ani raportów.
 6. **Zysk zrealizowany** liczony per wycinek zużycia w trzech walutach: Waluty Waloru, Waluty Portfela, PLN po kursie podatkowym.
 7. Test akceptacji: złoty test z dowodu 05 §6 (336,50 / 286,50 / 384,00) i test własności „zysk całkowity niezależny od metody”.
@@ -62,5 +62,4 @@ Rekomendacja: **Partia** (nowe pojęcie, proponowane) powstaje przy każdym zaku
 
 ## Otwarte
 
-- Czy wskazanie partii wymaga osobnej tabeli wejściowej `portfolios_operation_lot_pick` czy pola na Operacji — decyzja techniczna przy E2.4 ([propozycja]: tabela).
 - Próbki plików brokerów identyfikujących partie (IBKR, XTB) — brak; blokuje E4.3, nie ten ADR.

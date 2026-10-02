@@ -16,8 +16,8 @@ Rekomendacja: Walory, ceny ręczne, tagi i benchmarki są **globalne w instancji
 
 - Dane referencyjne są globalne i bez właściciela: `assets_asset`, `assets_currency`, `assets_assetclass` nie mają `owner_id`; endpointy zapisu `assets/*` nie sprawdzają właściciela, a rejestracja `POST /auth/register` jest otwarta — **każdy zarejestrowany użytkownik edytuje Walory, kursy i ceny** ([dowód 06](../../research/06_stan_found-tracker_vs_cel.md), §2, G20). `User` ma tylko `id`, `email`, `password_hash`, `is_active` (G21).
 - Założenie właściciela: jeden użytkownik, self-hosted ([plan](../../plans/02_roadmapa_funkcjonalna.md), §1).
-- Usuwanie dziś: Walor w użyciu → 409 `ASSET_IN_USE` (`backend/app/modules/assets/exceptions.py:89`); Portfel usuwa kaskadowo Operacje i Pozycje w ORM (`portfolio.py:60-65`), bez ochrony przed powiązaniami; brak soft-delete — ADR-0011 świadomie odłożył audyt ([ADR-0011](../../technical/adr/0011-audyt-odlozony.md)).
-- Nowe zależności: ceny historyczne i ręczne (E1.1, E1.5), przelewy z kaskadą A↔B (E2.3), Paczki importu z poprawkami użytkownika (E4.1).
+- Usuwanie dziś: Walor w użyciu → 409 ze starym kodem (`backend/app/modules/assets/exceptions.py:89`); Portfel usuwa kaskadowo Operacje i Pozycje w ORM (`portfolio.py:60-65`), bez ochrony przed powiązaniami; brak soft-delete — ADR-0011 świadomie odłożył audyt ([ADR-0011](../../technical/adr/0011-audyt-odlozony.md)).
+- Nowe zależności: ceny historyczne i ręczne (E1.1, E1.5), przelewy jako jeden wiersz z `counter_portfolio_id` (E2.3), Paczki importu z poprawkami użytkownika (E4.1).
 
 ## Decyzja
 
@@ -31,11 +31,11 @@ Rekomendacja: Walory, ceny ręczne, tagi i benchmarki są **globalne w instancji
 | Obiekt | Zasada | Kod błędu / skutek |
 |---|---|---|
 | Walor bez Operacji, Pozycji i cen | usuwany fizycznie | — |
-| Walor z historią (Operacje, Pozycje lub ceny) | **archiwizacja**: `archived_at` `DateTime(tz)`, nullable; znika z wyszukiwarki i formularzy nowych Operacji, zostaje w historii i wycenie istniejących Pozycji; ceny przestają być odświeżane; odwracalna | DELETE → `409 ASSET_HAS_HISTORY` z podpowiedzią archiwizacji (zastępuje dzisiejszy `ASSET_IN_USE`) |
+| Walor z historią (Operacje, Pozycje lub ceny) | **archiwizacja**: `archived_at` `DateTime(tz)`, nullable; znika z wyszukiwarki i formularzy nowych Operacji, zostaje w historii i wycenie istniejących Pozycji; ceny przestają być odświeżane; odwracalna | DELETE → `409 ASSET_HAS_HISTORY` z podpowiedzią archiwizacji (zastępuje dzisiejszy kod sprzed zmiany) |
 | Paczka importu | **cofnięcie** usuwa jej Operacje i przebudowuje Portfel jedną transakcją; Operacje z `edited_at` ≠ NULL **blokują** cofnięcie i są wymienione na liście; wynik przebudowy niespójny (np. brak ilości do sprzedaży) → cofnięcie odrzucone w całości | `409 IMPORT_BATCH_HAS_EDITS`, `409 IMPORT_BATCH_REVERT_INVALID` |
-| Portfel z przelewami (strona kontrahenta) | **blokada** usunięcia, dopóki istnieją przelewy łączące go z innym Portfelem | `409 PORTFOLIO_HAS_TRANSFERS` z listą Portfeli |
+| Portfel z przelewami | **blokada** usunięcia, dopóki istnieją wiersze przelewu, w których jest źródłem (`portfolio_id`) lub celem (`counter_portfolio_id`) | `409 PORTFOLIO_HAS_TRANSFERS` z listą Portfeli |
 | Portfel bez przelewów | jak dziś: usunięcie kaskadowe Operacji i Pozycji (po potwierdzeniu w UI) | — |
-| Usunięcie jednej Operacji przelewu | usuwa obie nogi w jednej transakcji, z walidacją przebudowy obu Portfeli (E2.3) **[propozycja]** | `400` błąd walidacji przebudowy, wycofanie |
+| Usunięcie Operacji przelewu | przelew to jeden wiersz: usunięcie go przebudowuje Portfel źródłowy i docelowy w jednej transakcji z walidacją (E2.3, [ADR 0020](../../technical/adr/0020-plaski-model-operacji.md)) **[propozycja]** | `400` błąd walidacji przebudowy, wycofanie |
 
 Archiwizacja dotyczy **tylko Waloru** — nie wprowadza audytu ani soft-delete Operacji (ADR-0011 pozostaje w mocy).
 
@@ -61,7 +61,7 @@ Archiwizacja dotyczy **tylko Waloru** — nie wprowadza audytu ani soft-delete O
 - Archiwizowany Walor zostaje w bazie na zawsze; lista wymaga filtra „pokaż zarchiwizowane”.
 - Użytkownik z edytowaną Operacją z paczki nie cofnie paczki jednym kliknięciem — musi najpierw ją usunąć lub przywrócić (wymaga `edited_at`, nowej kolumny pochodnej od edycji).
 - Blokada usunięcia Portfela wymusza ręczne rozwiązanie przelewów przed usunięciem.
-- Zmiana kodu błędu `ASSET_IN_USE` → `ASSET_HAS_HISTORY` wymaga aktualizacji testów (`test_asset_service.py:227`) i mapowania w UI.
+- Zmiana dzisiejszego kodu błędu usuwania Waloru na `ASSET_HAS_HISTORY` wymaga aktualizacji testów (`test_asset_service.py:227`) i mapowania w UI.
 
 ## Zmiany słownika po akceptacji
 
@@ -70,7 +70,7 @@ Archiwizacja dotyczy **tylko Waloru** — nie wprowadza audytu ani soft-delete O
 | **Właściciel instancji** | Użytkownik z prawem zapisu danych referencyjnych (Walory, kursy, ceny, tagi, benchmarki). _Unikać_: admin, superużytkownik |
 | **Archiwizacja Waloru** | Ukrycie Waloru z historią przed nowymi Operacjami, bez usuwania danych. _Unikać_: usunięcie, dezaktywacja (dla Waloru) |
 | **Paczka importu** | Zbiór Operacji zatwierdzonych z jednego pliku; cofalna jako całość, o ile nieedytowana. _Unikać_: batch (w UI), import (jako rzecz) |
-| **Przelew** | Para Operacji między dwoma Portfelami; usuwana razem; blokuje usunięcie Portfela. _Unikać_: transfer (w UI), wymiana |
+| **Przelew** | Jedna Operacja (jeden wiersz) między dwoma Portfelami: `amount` = noga wychodząca, `counter_*` = przychodząca; blokuje usunięcie Portfela. _Unikać_: transfer (w UI), wymiana |
 
 ## Otwarte
 
