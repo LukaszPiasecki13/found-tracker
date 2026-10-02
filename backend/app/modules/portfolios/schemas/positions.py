@@ -20,7 +20,7 @@ from app.modules.assets.schemas.assets import AssetDetailResponse
 _QUANTIZE_CONTEXT = Context(prec=60)
 
 
-def _rounded_to(places: int) -> Callable[[Decimal], Decimal]:
+def rounded_to(places: int) -> Callable[[Decimal], Decimal]:
     exponent = Decimal(1).scaleb(-places)
 
     def round_value(value: Decimal) -> Decimal:
@@ -32,9 +32,9 @@ def _rounded_to(places: int) -> Callable[[Decimal], Decimal]:
 
 
 # Computed read-model figures, serialized as JSON numbers.
-RoundedValue = Annotated[DecimalNumber, AfterValidator(_rounded_to(3))]
-RoundedPercent = Annotated[DecimalNumber, AfterValidator(_rounded_to(4))]
-RoundedFees = Annotated[DecimalNumber, AfterValidator(_rounded_to(2))]
+RoundedValue = Annotated[DecimalNumber, AfterValidator(rounded_to(3))]
+RoundedPercent = Annotated[DecimalNumber, AfterValidator(rounded_to(4))]
+RoundedFees = Annotated[DecimalNumber, AfterValidator(rounded_to(2))]
 
 
 class PositionListQuery(BaseModel):

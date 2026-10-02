@@ -13,7 +13,7 @@ of silently at 1.
 
 from collections.abc import Iterable
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Protocol
 
 from app.modules.assets.constants import DEFAULT_CURRENCY_CODE
 from app.modules.assets.exceptions import CurrencyNotFoundError
@@ -23,7 +23,18 @@ from app.modules.portfolios.exceptions import RateMissingError
 from app.modules.portfolios.schemas.fx_rates import FxRateResponse
 
 _ONE = Decimal("1")
-_RATE_PLACES = Decimal("1e-9")
+
+
+class _CurrencyLike(Protocol):
+    """What the map reads of an `assets` currency."""
+
+    @property
+    def id(self) -> int: ...
+    @property
+    def code(self) -> str: ...
+    @property
+    def exchange_rate(self) -> Decimal: ...
+
 
 type Via = Literal["identity", "direct", "inverse", "cross"]
 
@@ -47,9 +58,16 @@ class FxMapBuilder:
     def build(self, base_currency_ids: Iterable[int]) -> FxMap:
         """Rates into each of the given base currencies, from every other
         currency that has a rate. A base without a rate gets none."""
+        return self.build_from(self._currencies.list_currencies(), base_currency_ids)
+
+    @staticmethod
+    def build_from(
+        currencies: Iterable[_CurrencyLike], base_currency_ids: Iterable[int]
+    ) -> FxMap:
+        """`build` over currencies the caller has already read."""
         bases = set(base_currency_ids)
         usd_rates = {}
-        for currency in self._currencies.list_currencies():
+        for currency in currencies:
             rate = _usd_rate(currency.code, currency.exchange_rate)
             if rate is not None:
                 usd_rates[currency.id] = rate
@@ -75,7 +93,8 @@ class FxRateService:
         """The rate turning one unit of `from_code` into `to_code`. Raises
         CurrencyNotFoundError for an unknown code and RateMissingError when
         either currency has no quote."""
-        by_code = {c.code: c for c in self._currencies.list_currencies()}
+        currencies = self._currencies.list_currencies()
+        by_code = {c.code: c for c in currencies}
         source = by_code.get(from_code.strip().upper())
         target = by_code.get(to_code.strip().upper())
         if source is None or target is None:
@@ -84,7 +103,9 @@ class FxRateService:
         if source.id == target.id:
             rate, via = _ONE, "identity"
         else:
-            found = self._fx.build([target.id]).get((source.id, target.id))
+            found = self._fx.build_from(currencies, [target.id]).get(
+                (source.id, target.id)
+            )
             if found is None:
                 raise RateMissingError
             rate = found
@@ -92,7 +113,7 @@ class FxRateService:
         return FxRateResponse(
             from_currency=source.code,
             to_currency=target.code,
-            rate=rate.quantize(_RATE_PLACES),
+            rate=rate,
             via=via,
         )
 
