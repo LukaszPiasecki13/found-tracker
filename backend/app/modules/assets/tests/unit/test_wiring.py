@@ -6,7 +6,9 @@ from app.modules.assets.services import (
     AssetClassService,
     AssetService,
     CurrencyService,
+    FxRateService,
     MarketDataService,
+    PriceService,
 )
 
 
@@ -19,12 +21,20 @@ def test_builders_assemble_every_service_on_one_session() -> None:
     assert isinstance(wiring.build_asset_class_service(session), AssetClassService)
     assert isinstance(wiring.build_currency_service(session), CurrencyService)
     assert isinstance(wiring.build_market_data_service(session), MarketDataService)
+    assert isinstance(wiring.build_price_service(session), PriceService)
+    assert isinstance(wiring.build_fx_rate_service(session), FxRateService)
     # Every repository in the graph shares the request session (ADR-0001).
     assert asset_service._repo.session is session
     assert asset_service._asset_classes._repo.session is session
     assert asset_service._currencies._repo.session is session
     assert asset_service._market_data._asset_repo.session is session
     assert asset_service._market_data._currency_repo.session is session
+    assert asset_service._prices._prices.session is session
+    assert asset_service._prices._assets.session is session
+    assert asset_service._market_data._prices._prices.session is session
+    assert asset_service._market_data._fx_rates._rates.session is session
+    assert asset_service._market_data._fx_rates._currencies.session is session
+    assert asset_service._currencies._fx_rates._rates.session is session
 
 
 def test_production_provider_is_yahoo_finance() -> None:

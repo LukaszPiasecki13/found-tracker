@@ -25,6 +25,20 @@ class CurrencyNotFoundError(NotFoundError):
         super().__init__("Currency not found", code="CURRENCY_NOT_FOUND")
 
 
+class PriceNotFoundError(NotFoundError):
+    """No manual price exists for the asset on that day."""
+
+    def __init__(self) -> None:
+        super().__init__("Price not found", code="PRICE_NOT_FOUND")
+
+
+class RateMissingError(NotFoundError):
+    """No stored rate, direct or inverse, links the two currencies."""
+
+    def __init__(self) -> None:
+        super().__init__("No exchange rate available", code="RATE_MISSING")
+
+
 class AssetNotFoundOnProviderError(NotFoundError):
     """The market-data provider knows no instrument with this ticker."""
 
@@ -53,14 +67,43 @@ class UnknownBaseCurrencyError(BadRequestError):
         super().__init__("Base currency not found", code="BASE_CURRENCY_NOT_FOUND")
 
 
+class InvalidDateRangeError(BadRequestError):
+    """`from` is after `to`, or the range is too long to serve."""
+
+    def __init__(self, message: str = "Invalid date range") -> None:
+        super().__init__(message, code="INVALID_DATE_RANGE")
+
+
+class PriceCurrencyMismatchError(BadRequestError):
+    """A price must be quoted in the asset's own currency."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Price currency must match the asset currency",
+            code="PRICE_CURRENCY_MISMATCH",
+        )
+
+
+class FutureDateError(BadRequestError):
+    """Manual prices and rates record what happened; they cannot be dated ahead."""
+
+    def __init__(self) -> None:
+        super().__init__("Date cannot be in the future", code="DATE_IN_FUTURE")
+
+
+class InvalidIdentifierError(BadRequestError):
+    """An ISIN, MIC or country code that does not have the standard's shape."""
+
+    def __init__(self, field: str) -> None:
+        super().__init__(f"Invalid {field}", code="INVALID_IDENTIFIER")
+
+
 # --- Conflict (409): uniqueness ---
 
 
 class AssetAlreadyExistsError(ConflictError):
-    def __init__(self) -> None:
-        super().__init__(
-            "Asset with this ticker already exists", code="ASSET_ALREADY_EXISTS"
-        )
+    def __init__(self, message: str = "Asset with this ticker already exists") -> None:
+        super().__init__(message, code="ASSET_ALREADY_EXISTS")
 
 
 class AssetClassAlreadyExistsError(ConflictError):
@@ -81,13 +124,22 @@ class CurrencyAlreadyExistsError(ConflictError):
 # --- Conflict (409): delete blocked by rows that still reference the resource ---
 
 
-class AssetInUseError(ConflictError):
-    """Positions or operations still reference the asset."""
+class AssetHasHistoryError(ConflictError):
+    """Operations, positions or prices still reference the asset; archive it
+    instead of deleting."""
 
     def __init__(self) -> None:
         super().__init__(
-            "Asset is used by positions or operations", code="ASSET_IN_USE"
+            "Asset has history (operations, positions or prices); archive it instead",
+            code="ASSET_HAS_HISTORY",
         )
+
+
+class AssetArchivedError(ConflictError):
+    """The asset is archived: no new operations or prices."""
+
+    def __init__(self) -> None:
+        super().__init__("Asset is archived", code="ASSET_ARCHIVED")
 
 
 class AssetClassInUseError(ConflictError):

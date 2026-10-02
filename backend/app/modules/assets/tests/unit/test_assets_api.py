@@ -25,7 +25,9 @@ from app.modules.assets.exceptions import (
     AssetNotFoundError,
 )
 from app.modules.assets.schemas.assets import (
+    AssetDetailResponse,
     AssetFromProviderRequest,
+    AssetResponse,
     AssetSearchResponse,
     AssetUpdateRequest,
     ProviderQuoteResponse,
@@ -67,9 +69,11 @@ class Services(SimpleNamespace):
 
 @pytest.fixture
 def services() -> Services:
-    return Services(
-        assets=MagicMock(), asset_classes=MagicMock(), currencies=MagicMock()
-    )
+    assets = MagicMock()
+    # The read models are plain mappings of the entity, as the real service does.
+    assets.to_response.side_effect = AssetResponse.model_validate
+    assets.to_detail.side_effect = AssetDetailResponse.model_validate
+    return Services(assets=assets, asset_classes=MagicMock(), currencies=MagicMock())
 
 
 def build_client(
@@ -117,14 +121,14 @@ def test_static_paths_are_never_captured_by_asset_id(
     assert client.get("/assets/asset-classes").json() == [{"id": 1, "name": "ETF"}]
     assert client.get("/assets/currencies").status_code == 200
     assert client.get("/assets/search-yahoo", params={"q": "aa"}).status_code == 200
-    services.assets.get_by_id.assert_not_called()
+    services.assets.get_detail.assert_not_called()
 
 
 def test_non_numeric_asset_id_is_not_routed(services: Services) -> None:
     response = build_client(services).get("/assets/not-a-number")
 
     assert response.status_code == 404
-    services.assets.get_by_id.assert_not_called()
+    services.assets.get_detail.assert_not_called()
 
 
 def test_every_endpoint_requires_authentication(services: Services) -> None:
@@ -140,7 +144,9 @@ def test_every_endpoint_requires_authentication(services: Services) -> None:
 
 
 def test_asset_detail_serializes_decimals_as_json_numbers(services: Services) -> None:
-    services.assets.get_by_id.return_value = _asset()
+    services.assets.get_detail.return_value = AssetDetailResponse.model_validate(
+        _asset()
+    )
 
     response = build_client(services).get("/assets/1")
 
@@ -155,21 +161,29 @@ def test_asset_detail_serializes_decimals_as_json_numbers(services: Services) ->
         "base_currency_id": None,
     }
     assert body["asset_class"] == {"id": 3, "name": "Stock"}
-    services.assets.get_by_id.assert_called_once_with(1)
+    services.assets.get_detail.assert_called_once_with(1)
 
 
 def test_list_assets_passes_search_query(services: Services) -> None:
-    services.assets.list_assets.return_value = [_asset()]
+    services.assets.list_responses.return_value = [
+        AssetResponse.model_validate(_asset())
+    ]
 
     response = build_client(services).get("/assets/", params={"search": "app"})
 
     assert response.status_code == 200
     assert response.json()[0]["asset_class_id"] == 3
-    services.assets.list_assets.assert_called_once_with("app")
+    services.assets.list_responses.assert_called_once_with(
+        "app",
+        asset_type=None,
+        asset_class_id=None,
+        country=None,
+        include_archived=False,
+    )
 
 
 def test_not_found_is_returned_with_code(services: Services) -> None:
-    services.assets.get_by_id.side_effect = AssetNotFoundError
+    services.assets.get_detail.side_effect = AssetNotFoundError
 
     response = build_client(services).get("/assets/999")
 

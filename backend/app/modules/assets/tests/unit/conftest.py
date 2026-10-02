@@ -35,3 +35,13 @@ def asset_class_repo(session: MagicMock) -> MagicMock:
 @pytest.fixture
 def currency_repo(session: MagicMock) -> MagicMock:
     return _transactional_repo(session)
+
+
+@pytest.fixture
+def price_repo(session: MagicMock) -> MagicMock:
+    return _transactional_repo(session)
+
+
+@pytest.fixture
+def fx_repo(session: MagicMock) -> MagicMock:
+    return _transactional_repo(session)

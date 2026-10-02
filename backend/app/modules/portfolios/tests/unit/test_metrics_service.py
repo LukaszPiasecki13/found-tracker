@@ -389,7 +389,9 @@ def test_market_data_service_satisfies_the_price_port(
             "AAA": make_quote("AAA", current_price=None, regular_market_price=D("25"))
         },
     )
-    market_data = MarketDataService(MagicMock(), MagicMock(), provider)
+    market_data = MarketDataService(
+        MagicMock(), MagicMock(), provider, MagicMock(), MagicMock()
+    )
     operations = [_op("buy", _at(6), ticker="AAA", quantity="2", price="20")]
     operation_repo.list_by_owner.return_value = operations
 

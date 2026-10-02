@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from sqlalchemy.exc import IntegrityError
 
 from app.core.entities import apply_changes
+from app.modules.assets.exceptions import AssetArchivedError
 from app.modules.assets.services.assets import AssetService
 from app.modules.portfolios.domain import (
     LedgerState,
@@ -86,7 +87,7 @@ class OperationService:
         """Store a new operation and rebuild the portfolio from its whole history
         (the operation may be back-dated), under a row lock on the portfolio.
 
-        Raises PortfolioNotFoundError, UnknownAssetError,
+        Raises PortfolioNotFoundError, UnknownAssetError, AssetArchivedError,
         AssetClassRequiredError, OperationRejectedError (ledger rules,
         insufficient cash or quantity); nothing is stored then - including an
         asset created for an unknown ticker. A unique-constraint race with a
@@ -161,6 +162,8 @@ class OperationService:
             asset = self._assets.find_by_id(data.asset_id)
             if asset is None:
                 raise UnknownAssetError
+            if asset.archived_at is not None:
+                raise AssetArchivedError
             return asset.id
         if data.ticker is None:
             return None
@@ -173,6 +176,9 @@ class OperationService:
                 asset_class_name=data.asset_class,
                 fallback_currency_id=portfolio.base_currency_id,
             )
+        # An archived asset takes no new operations (its history stays).
+        if asset.archived_at is not None:
+            raise AssetArchivedError
         return asset.id
 
     def _rebuild(self, portfolio_id: int, owner_id: int) -> None:
