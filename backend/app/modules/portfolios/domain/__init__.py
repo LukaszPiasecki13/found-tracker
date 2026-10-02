@@ -40,6 +40,7 @@ from app.modules.portfolios.domain.ledger import (
     PositionState,
 )
 from app.modules.portfolios.domain.valuation import (
+    FxMap,
     PortfolioValuation,
     PortfolioValuator,
     PositionValuation,
@@ -51,6 +52,7 @@ __all__ = [
     "TRADE_OPERATIONS",
     "AssetNotAllowedError",
     "AssetRequiredError",
+    "FxMap",
     "InsufficientCashError",
     "InsufficientQuantityError",
     "InvalidOperationError",

@@ -14,6 +14,7 @@ from app.modules.portfolios.domain import PortfolioLedger, PortfolioValuator
 from app.modules.portfolios.repositories.operations import OperationRepository
 from app.modules.portfolios.repositories.portfolios import PortfolioRepository
 from app.modules.portfolios.repositories.positions import PositionRepository
+from app.modules.portfolios.services.fx import FxMapBuilder
 from app.modules.portfolios.services.metrics import MetricsService
 from app.modules.portfolios.services.operations import OperationService
 from app.modules.portfolios.services.portfolios import PortfolioService
@@ -26,6 +27,10 @@ def build_portfolio_valuator() -> PortfolioValuator:
 
 def build_portfolio_ledger() -> PortfolioLedger:
     return PortfolioLedger()
+
+
+def build_fx_map_builder(session: Session) -> FxMapBuilder:
+    return FxMapBuilder(assets_wiring.build_currency_service(session))
 
 
 def build_portfolio_service(session: Session) -> PortfolioService:
