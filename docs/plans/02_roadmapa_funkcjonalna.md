@@ -125,6 +125,35 @@ Decyzje nieodwracalne lub zmieniające model danych. Rekomendacje pochodzą z do
 | D15 | Semantyka usuwania | walor z historią cen lub operacjami — tylko archiwizacja; paczka importu — cofnięcie usuwa jej operacje, chyba że były edytowane (wtedy blokada z listą); Portfel z przelewami — blokada lub kaskadowe przeliczenie powiązanych | twarde usuwanie z kaskadą | techniczny | E2.3, E4.1 |
 | D16 | Migracje danych | migracje schematu tylko `autogenerate`; nowe kolumny nullable albo z `server_default`; **dane istniejące wypełnia komenda `rebuild-all`** (`portfolios/entrypoints.py`) | ręczna edycja migracji (zakazana) | techniczny | E2.0 |
 
+### Dokumenty projektowe i ADR-y (wszystkie `Proposed`/`draft` do akceptacji właściciela)
+
+Plan mówi **co** i **w jakiej kolejności**; **jak** (kolumny, endpointy, ekrany, algorytmy) opisują dokumenty projektowe — powstały po przeglądzie wykonalności roadmapy 2026-10-02.
+
+| Dokument | Zakres |
+|---|---|
+| [schemat danych — core_data, assets, portfolios](../technical/backend/07_schemat_danych_docelowy.md) | tabele i kolumny: dziś → docelowo, migracje |
+| [schemat danych — nowe moduły](../technical/backend/08_schemat_danych_nowe_moduly.md) | security (tokeny), import, taxes, planning, notifications |
+| [kontrakt API](../technical/backend/09_kontrakt_api_docelowy.md) | ścieżki, parametry, koperty, paginacja, kody błędów |
+| [IA i konwencje UI](../technical/frontend/ia-i-konwencje-ui.md) | trasy, nawigacja, formatowanie, flagi jakości danych, kreator importu |
+
+| Decyzja | ADR (Proposed) |
+|---|---|
+| D1 | [biznesowy 0001 — Portfel jest rachunkiem](../business/adr/0001-portfel-jest-rachunkiem.md) |
+| D2, D3 | [biznesowy 0002 — koszt nabycia, partie FIFO](../business/adr/0002-koszt-nabycia-partie-fifo.md) |
+| D4 | [biznesowy 0003 — gotówka wielowalutowa](../business/adr/0003-gotowka-wielowalutowa.md) |
+| D6 | [biznesowy 0004 — metodologia stóp zwrotu](../business/adr/0004-metodologia-stop-zwrotu.md) |
+| D12, D13 | [biznesowy 0005 — daty operacji i zdarzenie podatkowe](../business/adr/0005-daty-operacji-i-zdarzenie-podatkowe.md); część techniczna D13 w [0019](../technical/adr/0019-migracje-danych-i-kolumny-dat.md) |
+| (zakres E6) | [biznesowy 0006 — zakres modułu podatkowego](../business/adr/0006-zakres-modulu-podatkowego.md) |
+| D14, D15 | [biznesowy 0007 — dane referencyjne i usuwanie](../business/adr/0007-dane-referencyjne-i-usuwanie.md) |
+| D10 | [techniczny 0013 — kierunki zależności nowych modułów](../technical/adr/0013-kierunki-zaleznosci-nowych-modulow.md); import: [0018](../technical/adr/0018-architektura-importu.md) |
+| D11 | [techniczny 0014 — numeryka statystyk](../technical/adr/0014-numeryka-statystyk-float-i-numpy.md) |
+| D5, D7 | [techniczny 0015 — historia cen i kursów](../technical/adr/0015-historia-cen-i-kursow.md); [0016 — snapshoty i przebudowa](../technical/adr/0016-snapshoty-dzienne-i-przebudowa.md) |
+| D8 | [techniczny 0017 — zadania w tle i CLI](../technical/adr/0017-zadania-w-tle-i-cli.md) |
+| D9 | pola Operacji w [schemacie](../technical/backend/07_schemat_danych_docelowy.md); przebudowa w 0016, import w 0018 |
+| D16 | [techniczny 0019 — migracje danych i kolumny dat](../technical/adr/0019-migracje-danych-i-kolumny-dat.md) |
+
+**Blokady zewnętrzne (od właściciela):** próbka eksportu myfund (E4.2a), zanonimizowane wyciągi brokerów (E4.3), PIT-8C (E6.2). Bez nich kroki importu i zgodności z PIT-8C nie mają danych testowych.
+
 ## 5. Definicja ukończenia kroku (wspólna)
 
 1. Zgodność z architekturą (warstwy, `wiring.py`, `transaction()`, błędy z `code`, `Decimal`, `extra="forbid"`, `domain/` bez I/O); test architektury zielony.
