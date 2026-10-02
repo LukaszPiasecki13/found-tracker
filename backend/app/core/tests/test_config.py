@@ -10,6 +10,14 @@ from app.core.config import Settings
 _STRONG_KEY = "k" * 32
 
 
+@pytest.fixture(autouse=True)
+def _clean_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`conftest` loads the developer's `.env` into the process environment;
+    without this, a local CORS_ORIGINS/ADMIN_EMAILS leaks into these tests."""
+    for name in ("CORS_ORIGINS", "ADMIN_EMAILS", "TRUST_PROXY_HEADERS"):
+        monkeypatch.delenv(name, raising=False)
+
+
 def _settings(**overrides: object) -> Settings:
     values: dict[str, object] = {
         "database_url": "sqlite+pysqlite:///:memory:",
@@ -80,3 +88,13 @@ def test_production_with_safe_values_disables_docs() -> None:
 
     assert settings.is_production
     assert not settings.docs_enabled
+
+
+def test_list_settings_accept_comma_separated_and_json_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CORS_ORIGINS", "http://a.test, http://b.test")
+    monkeypatch.setenv("ADMIN_EMAILS", '["root@a.test"]')
+    settings = _settings()
+    assert settings.cors_origins == ["http://a.test", "http://b.test"]
+    assert settings.admin_emails == ["root@a.test"]

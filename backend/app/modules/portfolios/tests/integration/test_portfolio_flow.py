@@ -45,6 +45,9 @@ class Api:
     def get(self, path: str, **params: Any) -> Any:
         return self.client.get(path, headers=self.headers, params=params)
 
+    def post_query(self, path: str, **params: Any) -> Any:
+        return self.client.post(path, headers=self.headers, params=params)
+
     def patch(self, path: str, payload: dict[str, Any]) -> Any:
         return self.client.patch(path, headers=self.headers, json=payload)
 
@@ -206,9 +209,13 @@ def test_full_portfolio_flow(
     assert summary["total_value"] == 858
     assert summary["total_profit_loss"] == -42
 
-    # Positions refresh prices through the (fake) provider before valuing.
+    # GET values at the stored prices (no side effects); only POST /refresh
+    # pulls prices from the (fake) provider.
     fake_provider.quotes[ticker] = make_quote(ticker, current_price=D("120"))
-    positions = api.get("/portfolios/positions", portfolio_name=name)
+    stored = api.get("/portfolios/positions", portfolio_name=name)
+    assert stored.status_code == 200, stored.text
+    assert stored.json()[0]["asset"]["current_price"] == 0
+    positions = api.post_query("/portfolios/positions/refresh", portfolio_name=name)
     assert positions.status_code == 200, positions.text
     [valued] = positions.json()
     assert valued["asset"]["current_price"] == 120
