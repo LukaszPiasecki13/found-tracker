@@ -110,6 +110,7 @@ Osobny zbiór od tej mapy: zdiagnozowane, potwierdzone zaskoczenia, jeden plik n
 | [roadmapa funkcjonalna](./plans/02_roadmapa_funkcjonalna.md) | `draft` — etapy E0–E11, decyzje D1–D16 do ADR-ów; czeka na akceptację właściciela |
 | [roadmapa — etapy E0–E5](./plans/03_roadmapa_etapy_E0-E5.md) | `draft` — naprawy, dane rynkowe, księga v2, analityka, import, instrumenty PL |
 | [roadmapa — etapy E6–E11](./plans/04_roadmapa_etapy_E6-E11.md) | `draft` — PIT-38, ryzyko, zdarzenia korporacyjne, planowanie, powiadomienia, jakość |
+| [plan wycinka E0.1 — wycena walut obcych](./plans/05_plan_wycinka_e0-1_wycena_walut_obcych.md) | `draft` — pierwszy mały wycinek implementacji (adaptacja `assets` + `portfolios`) |
 | [archiwum: dawny plan architektury](./plans/archive/backend-architecture-plan.md) | Zastąpiony przez L2; do usunięcia za zgodą |
 
 ## L4 — Dowody
