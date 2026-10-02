@@ -313,7 +313,7 @@ zdarzenia); wiersz stanu synchronizacji per walor; FX jako kolejny wyceniany wal
 | # | Luka | Szczegóły |
 |---|---|---|
 | 1 | Silnik PIT-38 / PIT-ZG | FIFO per rachunek papierów, średni kurs NBP z dnia roboczego przed zdarzeniem dla sprzedaży i zakupu, opłaty jako koszty, zagraniczny podatek u źródła vs 19% podatek Belki. Żadne narzędzie open source tego nie robi; myfund tylko w planie Expert |
-| 2 | Detaliczne obligacje skarbowe (EDO, COI, TOS, ROR, DOR) | Wycena z warunków emisji + CPI GUS i stopy referencyjnej NBP zamiast ręcznego wpisu; wg źródeł trzecich większość aplikacji wymaga ręcznej aktualizacji co 6–12 miesięcy (Freenance **[niezweryfikowane]**) |
+| 2 | Detaliczne obligacje skarbowe (EDO, COI, TOS, ROR, DOR) | Wycena ze wzorów listu emisyjnego i ogłoszonej stopy każdego okresu (nie wyliczanej z CPI GUS — `../03_rynek_pl_dane_i_obligacje.md`) zamiast ręcznego wpisu; wg źródeł trzecich większość aplikacji wymaga ręcznej aktualizacji co 6–12 miesięcy (Freenance **[niezweryfikowane]**) |
 | 3 | IKE / IKZE / PPK | Rachunki zwolnione z podatku, limity wpłat, osobne pule FIFO |
 | 4 | Ekstraktory polskich brokerów | XTB, mBank eMakler, Bossa, BOŚ, PKO BP DM, Santander BM — podejście DSL + fikstury z PP |
 | 5 | Domyślny benchmark WIG/WIG20 | Waluta bazowa PLN, widok zwrotu realnego vs polski CPI |

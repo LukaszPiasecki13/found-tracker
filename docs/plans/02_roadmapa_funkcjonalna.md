@@ -53,28 +53,28 @@ myfund wygrywa **szerokością polskich przypadków brzegowych**; przegrywa **UX
 
 | Etap | Nazwa | Co daje użytkownikowi | Parytet z myfund (plan) | Zależy od | Rozmiar **[wniosek]** |
 |---|---|---|---|---|---|
-| **E0** | Naprawy i ustawienia | wiarygodne liczby dla portfeli wielowalutowych; edycja operacji i dywidendy w UI; ustawienia użytkownika | — (higiena) | — | L |
+| **E0** | Naprawy i ustawienia | wiarygodne liczby dla portfeli wielowalutowych; edycja operacji i dywidendy w UI; ustawienia użytkownika | — (higiena) | — | XL |
 | **E1** | Dane rynkowe i historia | historia cen i kursów w bazie, NBP, wyszukiwanie po nazwie, benchmarki, odświeżanie w tle, kalendarz sesji | notowania, wyceny dzienne | E0 | XL |
 | **E2** | Księga v2 | rachunki IKE/IKZE, gotówka wielowalutowa, nowe typy operacji, partie FIFO, zysk zrealizowany, snapshoty | operacje Basic | E0, E1 | XL |
 | **E3** | Analityka podstawowa | TWR, XIRR, zysk w okresach, struktura, benchmark, kokpit, widok waloru, dywidendy | Basic/Standard | E1, E2 | XL |
 | **E4** | Import i eksport | CSV, eksport myfund, XTB, mBank, IBKR, DEGIRO, Trading212, Revolut; kopia zapasowa | Pro (import) | E2.3 | XL |
-| **E5** | Polskie instrumenty | obligacje skarbowe z wyceną z listów emisyjnych, TFI, PPK, lokaty, limity IKE/IKZE | Basic (PL) | E1, E2.4 | L |
+| **E5** | Polskie instrumenty | obligacje skarbowe z wyceną z listów emisyjnych, TFI, PPK, lokaty, limity IKE/IKZE | Basic (PL) | E1, E2.4 | XL |
 | **E6** | Podatki PIT-38 | rozliczenie roczne z partii FIFO i kursów NBP, dywidendy zagraniczne, krypto, straty, optymalizator | Expert (podatki) | E2.4, E1.2; E6.3 też E5 | XL |
-| **E7** | Ryzyko i analityka zaawansowana | zmienność, Sharpe/Sortino, MDD, TUW, beta, VaR, kondycja portfela | Expert (statystyki, Snowball) | E3, E1.9 | L |
-| **E8** | Zdarzenia korporacyjne i dywidendy | prawa poboru, spin-off, zmiany tickera, propozycje dywidend, kalendarz i prognoza | Basic/Pro | E2, E1; E8.6 też E5.2 | L |
+| **E7** | Ryzyko i analityka zaawansowana | zmienność, Sharpe/Sortino, MDD, TUW, beta, VaR, kondycja portfela | Expert (statystyki, Snowball) | E3, E1.9 | XL |
+| **E8** | Zdarzenia korporacyjne i dywidendy | prawa poboru, spin-off, zmiany tickera, propozycje dywidend, kalendarz i prognoza | Basic/Pro | E2, E1; E8.6 też E5.2 | XL |
 | **E9** | Planowanie | portfel wzorcowy, rebalancing, cele, FIRE, Monte Carlo, operacje cykliczne | Expert (wzorce, cele) | E3, E7; E9.2 też E6 | L |
-| **E10** | Powiadomienia i automatyzacja | alerty, raport e-mail, import z e-maila, token API, asystent AI | Pro (alerty) | E1, E3, E4; E10.2 też E5.2, E8.6 | L |
+| **E10** | Powiadomienia i automatyzacja | alerty, raport e-mail, import z e-maila, token API, asystent AI | Pro (alerty) | E1, E3, E4; E10.2 też E5.2, E8.6 | XL |
 | **E11** | Jakość i eksploatacja | PWA, UX, tryb prywatności, kopie, audyt, wydajność | — (przewaga) | ciągle | ciągły |
 
-Rozmiary etapów są sumą rozmiarów kroków (S ≤ 1 dzień, M 2–4 dni, L 1–2 tyg., XL > 2 tyg.; jedna osoba).
+Rozmiary etapów wynikają z sumy kroków (S ≤ 1 dzień, M 2–4 dni, L 1–2 tyg., XL > 2 tyg.; jedna osoba, dni robocze). Czasy kamieni milowych są liczone z tej samej sumy, bez buforu.
 
 ### Kolejność realizacji i kamienie milowe
 
 | Kamień | Kroki (w tej kolejności) | Kryterium akceptacji | Orientacyjnie **[wniosek]** |
 |---|---|---|---|
-| **M0 — rdzeń** | E0 → E1.1–E1.4 → E2.0–E2.4 + E8.1 (split ręczny) → E4.1, E4.2, E4.2a → E3.1 | Wprowadzam historię jednego rachunku z myfund/CSV; ilości walorów i salda gotówki zgadzają się **dokładnie** z wyciągiem brokera; TWR i XIRR liczą się z testami złotymi | 6–10 tyg. |
-| **M1 — używalny na co dzień** | E1.5–E1.9, E2.5–E2.7, E3.2–E3.8 (z E7.4), E5.6, E4.3 (brokerzy właściciela), E5.1 jeśli właściciel ma obligacje skarbowe | Prowadzę wszystkie swoje rachunki; wartość portfela przeliczona **cenami i kursami brokera** zgadza się z wyciągiem ±0,01 zł; widzę TWR/XIRR vs WIG, strukturę i dochód z dywidend | +2–3 mies. |
-| **M2 — parytet z myfund (PL)** | E5 (reszta), E6 (cel: **luty 2027** — szkic PIT-38 za 2026), E4.4, E8.2–E8.6 | Obligacje skarbowe wyceniają się same (testy na Tabelach odsetkowych); PIT-38 części krajowej zgadza się z PIT-8C | +2–3 mies. |
+| **M0 — rdzeń** | E0 → E1.1–E1.4 → E2.0–E2.5 + E8.1 (split ręczny) → E4.1, E4.2, E4.2a → E3.1 (bez TWR realnego — ten po E1.6) | Wprowadzam historię jednego rachunku z myfund/CSV; ilości walorów i salda gotówki zgadzają się **dokładnie** z wyciągiem brokera; TWR i XIRR liczą się z testami złotymi | 3–5 mies. |
+| **M1 — używalny na co dzień** | E1.5–E1.9, E2.6–E2.7, E3.2–E3.8 (z E7.4), E5.6, E4.3 (brokerzy właściciela), E5.1 jeśli właściciel ma obligacje skarbowe | Prowadzę wszystkie swoje rachunki; wartość portfela przeliczona **cenami i kursami brokera** zgadza się z wyciągiem ±0,01 zł; widzę TWR/XIRR vs WIG, strukturę i dochód z dywidend | +3–4 mies. |
+| **M2 — parytet z myfund (PL)** | E5 (reszta), E6 (cel: **luty 2027** — szkic PIT-38 za 2026), E4.4, E8.2–E8.6 | Obligacje skarbowe wyceniają się same (testy na Tabelach odsetkowych); PIT-38 części krajowej zgadza się z PIT-8C | +3–4 mies. |
 | **M3 — lepszy niż myfund** | E7, E9, E10, E11 | pełna analityka ryzyka, planowanie, alerty, PWA | ciągle |
 
 ```mermaid
@@ -99,6 +99,7 @@ graph LR
   E3 --> E10[E10 powiadomienia]
   E4 --> E10
   E8 -->|E10.2| E10
+  E5 -->|E10.2| E10
 ```
 
 ## 4. Decyzje do podjęcia (kandydaci na ADR)
@@ -115,13 +116,13 @@ Decyzje nieodwracalne lub zmieniające model danych. Rekomendacje pochodzą z do
 | D6 | Metodologia stóp zwrotu | **TWR dzienny (konwencja PP) + XIRR**; brak annualizacji < 365 dni; ryzyko z szeregu TWR; klasyfikacja przepływów zależna od zakresu (Portfel / Grupa) | jednostki jak w funduszu (myfund) — równoważne TWR | biznesowy | E3.1 |
 | D7 | Historia cen i snapshoty | tabele `assets_price`, `assets_fx_rate` (ceny **nieskorygowane**, źródło, `is_synthetic`) oraz `portfolios_daily`, `portfolios_position_daily`; `twr_index` jako `Decimal`. **Unieważnianie orkiestruje `portfolios`** (entrypoint porównuje znacznik `last_price_change_at` z `assets`) — `assets` nie zależy od `portfolios` ([ADR-0006](../technical/adr/0006-cross-module-wylacznie-przez-serwisy.md)) | liczenie na żądanie z dostawcy (dziś) | techniczny | E1.1, E2.5 |
 | D8 | Zadania w tle | **CLI `python -m app.cli <zadanie>` przez `entrypoints.py` + harmonogram systemowy** (cron/systemd/kontener), zgodnie z ADR-0002 | Celery/Redis — za ciężkie | techniczny | E1.4 |
-| D9 | Model Operacji | **płaska Operacja** z polami: `settlement_date`, `currency_id`, `fx_rate_tax` (+ tabela, data), `counter_portfolio_id`, `counter_amount`, `counter_currency_id`, `import_batch_id`, `external_ref`, `status` (zaksięgowana/szkic/unieważniona), `sequence` | nagłówek + nogi (PP/Wealthfolio) | techniczny | E2.3 |
-| D10 | Moduły | nowe: `taxes`, `planning`, `notifications`; **import w `portfolios`** (tabela partii importu i parsery jako adaptery w `infrastructure/`) — moduł `imports` tylko, jeśli nie powstaje cykl FK; obligacje i szeregi stóp w `assets`; wydajność i ryzyko w `portfolios` | moduł „analytics” — nazwa zakazana w [CONTEXT](../business/CONTEXT.md) | techniczny | E4, E6, E9, E10 |
-| D11 | float w statystykach | statystyki ryzyka, XIRR i Monte Carlo na `float` (numpy w `services/`), księga i `twr_index` na `Decimal` — **wymaga uzupełnienia [ADR-0010](../technical/adr/0010-decimal-i-precyzja-pieniedzy.md)** (dziś float tylko w wektorach wykresów) | numpy w `domain/` | techniczny | E3.1, E7 |
-| D12 | Data zdarzenia podatkowego | Operacja ma `trade_date` i `settlement_date`; **podatek i kurs D−1 liczone od daty rozrachunku** (art. 17 ust. 1ab — przeniesienie własności, [dowód](../research/04_rynek_pl_podatki_i_brokerzy.md)), z ustawieniem per rachunek; dywidenda — dzień wypłaty | data zawarcia transakcji | biznesowy | E2.3 |
+| D9 | Model Operacji | **płaska Operacja**: `operation_date` = data zawarcia; pola: `settlement_date`, `currency_id`, `fx_rate_tax` (+ tabela, data), `counter_portfolio_id`, `counter_amount`, `counter_currency_id`, `import_batch_id`, `external_ref`, `status` (zaksięgowana/szkic/unieważniona), `sequence` | nagłówek + nogi (PP/Wealthfolio) | techniczny | E2.3 |
+| D10 | Moduły | nowe: `taxes`, `planning`, `notifications`; **import w `portfolios`** (tabela paczek importu (`import_batch`) i parsery jako adaptery w `infrastructure/`) — moduł `imports` tylko, jeśli nie powstaje cykl FK; obligacje i szeregi stóp w `assets`; wydajność i ryzyko w `portfolios` | moduł „analytics” — nazwa zakazana w [CONTEXT](../business/CONTEXT.md) | techniczny | E4, E6, E9, E10 |
+| D11 | float w statystykach | statystyki ryzyka, XIRR i Monte Carlo na `float` (numpy w `services/`), księga i `twr_index` na `Decimal` — **wymaga uzupełnienia [ADR-0010](../technical/adr/0010-decimal-i-precyzja-pieniedzy.md)** (dziś float tylko w wektorach wykresów) | numpy w `domain/` | techniczny | E3.1, E7, E9.5 |
+| D12 | Data zdarzenia podatkowego | Operacja ma datę zawarcia (`operation_date`) i `settlement_date`; **podatek i kurs D−1 liczone od daty rozrachunku** (art. 17 ust. 1ab — przeniesienie własności, [dowód](../research/04_rynek_pl_podatki_i_brokerzy.md)), z ustawieniem per rachunek; dywidenda — dzień wypłaty | data zawarcia transakcji | biznesowy | E2.3 |
 | D13 | Daty i strefa czasowa | `operation_date` jako **data kalendarzowa w strefie Europe/Warsaw** + opcjonalna godzina i `sequence` do kolejności w dniu; snapshoty dzienne w tej samej strefie | znacznik czasu UTC (dziś, bez godziny z UI) | techniczny | E2.0, E2.3 |
-| D14 | Własność danych referencyjnych | walory, ceny ręczne, tagi i benchmarki globalne w instancji (single-user), zapisy tylko dla właściciela; rejestracja zamknięta | dane per użytkownik | techniczny | E0.6, E1.5 |
-| D15 | Semantyka usuwania | walor z historią cen lub operacjami — tylko archiwizacja; partia importu — cofnięcie usuwa jej operacje, chyba że były edytowane (wtedy blokada z listą); Portfel z przelewami — blokada lub kaskadowe przeliczenie powiązanych | twarde usuwanie z kaskadą | techniczny | E2.3, E4.1 |
+| D14 | Własność danych referencyjnych | walory, ceny ręczne, tagi i benchmarki globalne w instancji (single-user), zapisy tylko dla właściciela; rejestracja zamknięta (E0.6 — konfiguracja, bez ADR) | dane per użytkownik | techniczny | E1.5 |
+| D15 | Semantyka usuwania | walor z historią cen lub operacjami — tylko archiwizacja; paczka importu — cofnięcie usuwa jej operacje, chyba że były edytowane (wtedy blokada z listą); Portfel z przelewami — blokada lub kaskadowe przeliczenie powiązanych | twarde usuwanie z kaskadą | techniczny | E2.3, E4.1 |
 | D16 | Migracje danych | migracje schematu tylko `autogenerate`; nowe kolumny nullable albo z `server_default`; **dane istniejące wypełnia komenda `rebuild-all`** (`portfolios/entrypoints.py`) | ręczna edycja migracji (zakazana) | techniczny | E2.0 |
 
 ## 5. Definicja ukończenia kroku (wspólna)

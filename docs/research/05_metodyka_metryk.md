@@ -182,12 +182,12 @@ GIPS 2.A.18: okresowość i metodologia ryzyka dla kompozytu i benchmarku muszą
 | Kandydat | Zalety | Wady | Status |
 |---|---|---|---|
 | Stopa referencyjna NBP | oficjalna, prosta, funkcja schodkowa | stopa polityki, nie inwestowalny zwrot | źródła wtórne: 3.75 % w lipcu 2026 (**[niezweryfikowane]**: nbp.pl blokował automatyczny dostęp) |
-| WIBOR 3M | długa historia | wygaszany; komunikat GPW Benchmark z 18.05.2026: WIBOR O/N kończy się 2026-10-01, ostatni fixing 1M/3M/6M 31.12.2036 (**[niezweryfikowane]**, wtórne) | |
+| WIBOR 3M | długa historia | wygaszany; komunikat GPW Benchmark z 18.05.2026: WIBOR O/N nie jest opracowywany od 2026-10-01, ostatni fixing 1M/3M/6M 31.12.2036 (**[niezweryfikowane]**, wtórne) | |
 | WIRON → POLSTR | stopa overnight typu risk-free (GPW Benchmark) | krótka historia; KS NGR w listopadzie–grudniu 2024 wybrał WIRF-, a ostateczną decyzję o **POLSTR** jako indeksie docelowym w miejsce WIRON podjął 30.01.2025 (wtórne) | |
 | Rentowność 52-tyg. bonów / krótkich obligacji | inwestowalna | nieregularne emisje | |
 | 0 % | proste | zawyża Sharpe'a przy wysokich stopach | |
 
-**rekomendacja:** stopa jako szereg czasowy `rate_series(code, date, annual_rate)`, kapitalizowana dziennie `rf_d = (1 + rf_annual)^(1/365 or 1/252) − 1` (ta sama baza dni co zwroty); domyślnie POLSTR/WIRON, fallback stopa referencyjna NBP, wybór widoczny w UI; dla innych walut bazowych €STR (EUR) lub SOFR (USD) (**[niezweryfikowane]** przydatność).
+**rekomendacja:** stopa jako szereg czasowy `rate_series(code, date, annual_rate)`, kapitalizowana dziennie `rf_d = (1 + rf_annual)^(1/365 or 1/252) − 1` (ta sama baza dni co zwroty); domyślnie stopa referencyjna NBP (darmowa); POLSTR, jeśli licencja pozwala (dane WIBOR/WIRON GPW Benchmark są płatne — `./03_rynek_pl_dane_i_obligacje.md`), wybór widoczny w UI; dla innych walut bazowych €STR (EUR) lub SOFR (USD) (**[niezweryfikowane]** przydatność).
 ## 5. Benchmarking
 - TWR Portfela vs zwrot całkowity indeksu w tym samym [s, e] i tej samej okresowości (GIPS 2.A.18). Indeks **total return** (dywidendy reinwestowane), gdy istnieje — indeks cenowy zaniża benchmark. Osobne wytyczne GIPS o benchmarkach (nieczytane szczegółowo): https://www.gipsstandards.org/wp-content/uploads/2023/08/gs_benchmarks_firms.pdf
 - **PP** (`SecurityIndex.java`): benchmark to **szereg cen** waloru, przeliczany na walutę Portfela kursem z wybranej daty (nie daty notowania — ważne w weekendy), wyrównany do pierwszego punktu Portfela, łączony dziennie `accumulated = (acc_{t−1} + 1) × (1 + delta_t) − 1` — czyli cenowy TWR; dywidendy tylko w indeksie TR.
@@ -230,7 +230,7 @@ Bench_MV_t = units × P_bench,t × FX_t
 ### 6.2 Dlaczego FIFO ma znaczenie w Polsce (PIT-38)
 - **Art. 24 ust. 10 ustawy o PIT** (tekst jednolity Dz.U. 2026 poz. 592; pełny cytat w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)): FIFO stosuje się, „jeżeli … nie jest możliwe określenie ceny nabycia zbywanych papierów wartościowych”, „odrębnie dla każdego rachunku papierów wartościowych”. FIFO jest więc regułą domyślną, nie zakazem identyfikacji: gdy broker identyfikuje sprzedawaną partię, można przyjąć jej cenę. Przykład: myfund w maju 2026 dodał wybór konkretnej transakcji kupna dla XTB (https://myfund.pl/index.php?raport=pomoc&helpID=20). **[wniosek]:** model partii musi dopuszczać wskazanie partii obok FIFO; czy FundTracker to obsłuży — decyduje biznesowy ADR. `Portfolio` w FundTracker może nie odpowiadać 1:1 rachunkowi.
 - Koszty i przychody walutowe → PLN po średnim kursie NBP z ostatniego dnia roboczego przed (art. 11a; cytat w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)).
-- Zaokrąglenie podstawy i podatku: art. 63 §1 Ordynacji podatkowej (do pełnych złotych, od 50 gr w górę) (**[niezweryfikowane]**) — dotyczy deklarowanej podstawy i podatku, nie rejestru partii.
+- Zaokrąglenie podstawy i podatku: art. 63 §1 Ordynacji podatkowej (do pełnych złotych, od 50 gr w górę) (**[niezweryfikowane]**) — dotyczy deklarowanej podstawy i podatku, nie rejestru partii. Wyjątek (broszura MF, art. 63 § 1a Ordynacji): podatek z art. 30a ust. 1 pkt 1–3 zaokrągla się do pełnych groszy w górę — szczegóły i sprzeczność z przykładami PKO BP w `./04_rynek_pl_podatki_i_brokerzy.md`.
 - To nie jest porada podatkowa. **rekomendacja:** eksport PIT-38 oznaczać jako „szkic do sprawdzenia”.
 
 **Konsekwencja:** obecna domena (`PositionState.average_buy_price`, `average_fx_rate`) to średni koszt — dobry dla „średniej ceny” w UI, ale zrealizowany P/L podatkowy musi pochodzić z rejestru partii (FIFO domyślnie) z przeliczeniem na PLN kursem NBP z D−1 **każdej partii**. Średni FX × średnia cena ≠ suma kosztów PLN per partia.
