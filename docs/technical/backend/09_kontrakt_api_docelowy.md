@@ -132,7 +132,7 @@ Istniejące kody (m.in. `*_NOT_FOUND`, `*_ALREADY_EXISTS`, `INSUFFICIENT_CASH`, 
 | `PORTFOLIO_HAS_TRANSFERS` | 409 | DELETE Portfela z przelewami; `params.portfolio_ids` | biz. 0007, tech. 0016 |
 | `PORTFOLIO_SELECTOR_AMBIGUOUS` | 400 | `portfolio_id` i `portfolio_name` naraz | 1.1 [propozycja] |
 | `ASSET_HAS_HISTORY` / `ASSET_ARCHIVED` | 409 | DELETE Waloru z historią (zastępuje `ASSET_IN_USE`) / Operacja na zarchiwizowanym | biz. 0007 |
-| `RATE_MISSING` | 404 (200 inline) | `GET /assets/currencies/rate` bez kursu; w wycenie jako `issues[]` | E0.1 |
+| `RATE_MISSING` | 404 (200 inline; wdrożone: `rate_missing: bool` + puste pola wyceny, bez `issues[]`) | `GET /assets/currencies/rate` bez kursu; w wycenie jako `issues[]` | E0.1 |
 | `LOT_SELECTION_INVALID` | 400 | `lot_pick` wskazuje brak/za małą Partię | biz. 0002 |
 | `TRANSFER_SAME_PORTFOLIO`, `TRANSFER_CROSS_OWNER` | 400 | przelew A→A / do cudzego Portfela | tech. 0016 |
 | `OPERATION_EXTERNAL_REF_EXISTS` / `OPERATION_STATE_INVALID` | 409 | UNIQUE `(portfolio_id, external_ref)` (doc 07 5.4) / `accept` na nie-`draft`, `void` na `void` | [propozycja] |

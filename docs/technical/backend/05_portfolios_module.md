@@ -1,7 +1,7 @@
 ---
 id: be-portfolios-module
 status: current
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-02
 type: mixed
 scope: backend/portfolios
 applies_to:
@@ -84,7 +84,7 @@ Reguły z §3 i wycena to czysta arytmetyka na `Decimal` — `portfolios/domain/
 | 0 — słownik | `errors.py` | `PortfolioDomainError(ValueError)` z klasowym `code`; podklasy `InvalidOperationError` (z `field`), `AssetRequiredError`, `AssetNotAllowedError`, `InsufficientCashError`, `InsufficientQuantityError`, `PositionNotFoundError` |
 | 1 — granica ORM | `protocols.py` | `Protocol`y (DOM-8): `OperationLike`, `PositionLike`, `PortfolioBalanceLike`, `HoldingLike`, `QuotedAssetLike`, `ValuedPortfolioLike` — wiersze ORM spełniają je strukturalnie |
 | 2 — komponent | `ledger.py` | `PortfolioLedger`: `validate(op)`, `apply(state, op) -> LedgerState`, `rebuild(ops) -> LedgerState`; wartości `OperationInput`, `PositionState`, `LedgerState` (`LedgerState.of(portfolio, positions)`, `OperationInput.from_operation(row)`) |
-| 2 — komponent | `valuation.py` | `PortfolioValuator.value(portfolio, holdings) -> PortfolioValuation` (z `PositionValuation` per pozycja) |
+| 2 — komponent | `valuation.py` | `PortfolioValuator.value(portfolio, holdings, fx_rates: FxMap) -> PortfolioValuation` (z `PositionValuation` per pozycja) |
 
 Publiczne API wyłącznie przez `domain/__init__.py` (`__all__`, DOM-11). Komponenty buduje `wiring.py` (`build_portfolio_ledger`, `build_portfolio_valuator`) i wstrzykuje przez konstruktor (DOM-10). Serwis tłumaczy każdy `PortfolioDomainError` w jednym miejscu (`_ledger_errors_rejected` w `services/operations.py`) na `OperationRejectedError` (400) z `code` domeny. Czystość, warstwy i import tylko przez `__init__` sprawdza `tests/unit/test_domain_purity.py`.
 
@@ -123,11 +123,11 @@ Zależności zewnętrzne: `assets` (`CurrencyService`, `AssetService`, `MarketDa
 
 ```text
 portfolios/
-├─ api/{portfolios,positions,operations,metrics}.py   # __init__.py: wspólny `router` dla main.py
-├─ services/{portfolios,positions,operations,metrics}.py
+├─ api/{portfolios,positions,operations,metrics,fx_rates}.py   # __init__.py: wspólny `router` dla main.py
+├─ services/{portfolios,positions,operations,metrics,fx}.py
 ├─ domain/{enums,errors,protocols,ledger,valuation}.py # + __init__.py z __all__
 ├─ repositories/{portfolios,positions,operations}.py
-├─ schemas/{portfolios,positions,operations,metrics}.py
+├─ schemas/{portfolios,positions,operations,metrics,fx_rates}.py
 ├─ models/{portfolio,position,operation}.py
 ├─ exceptions.py  dependencies.py  wiring.py
 └─ tests/unit/        # domena (w tym parytet z Django), serwisy, API, wiring, czystość domain/
@@ -161,5 +161,6 @@ Testy parytetu (`tests/unit/test_ledger_parity.py`) odtwarzają scenariusze test
 | Struktura, wiring, błędy z `code`, `transaction()`, `find_`/`get_`, testy `unit/` + `integration/` | zgodne z celem | — | R-07 (domknięty) |
 | `domain/` (księga, wycena), typowane argumenty, `Decimal` do granicy schematu, port cen, testy parytetu | zgodne z celem; wariant (a) ADR-0005 czeka na akceptację | — | R-08 (domknięty) |
 | Rejestracja operacji z datą wcześniejszą niż istniejące | stosowana do bieżącego stanu; późniejsza przebudowa (edycja/usunięcie) układa historię wg dat i może ją odrzucić | decyzja właściciela: walidować `POST` przebudową całej historii albo zostawić | — (otwarte) |
+| Kurs waluty = heurystyka (`exchange_rate` ≠ 1 lub USD), kursy bez historii; `CURRENCY_NOT_FOUND` ma tu dwa statusy (400 w ciele operacji, 404 w `GET /portfolios/fx-rate`) | tabela kursów z historią i źródłem ([ADR-0015](../adr/0015-historia-cen-i-kursow.md)) | E1.1 |
 | Odświeżanie kursów/cen | synchronicznie w `GET /portfolios/positions` | entrypoint + harmonogram ([`04_assets_module.md`](./04_assets_module.md)) | — (poza planem) |
 | `mypy` | nieuruchamiany | `mypy app` zielone | R-10 |
