@@ -1,7 +1,7 @@
 ---
 id: business-context
 status: current
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-02
 type: reference
 scope: business/vocabulary
 ---
@@ -47,6 +47,14 @@ _Unikać_: typ waloru, kategoria
 **Waluta** (`assets_currency`)
 Waluta notowania Waloru lub bazowa Portfela. Niesie kurs wymiany względem waluty bazowej systemu (USD), odświeżany z danych rynkowych; kurs między dwiema dowolnymi walutami to iloraz ich kursów. Waluta bez notowania nie ma kursu — wycena pozycji, która go wymaga, pokazuje „brak kursu” zamiast wartości policzonej po kursie 1.
 _Unikać_: kurs (kurs to `exchange_rate`, nie Waluta)
+
+**Kurs krzyżowy**
+Kurs między dwiema dowolnymi Walutami, liczony jako iloraz ich kursów względem waluty bazowej systemu; nie jest zapisany w bazie. Służy do wyceny pozycji w walucie Portfela.
+_Unikać_: kurs wymiany (bez przymiotnika)
+
+**Brak kursu**
+Stan Waluty bez notowania: wycena pozycji, która go wymaga, nie jest liczona (wartości puste, `rate_missing`), zamiast być liczona po kursie 1.
+_Unikać_: kurs zerowy, kurs domyślny
 
 **Kurs walutowy operacji** (`fx_rate`)
 Kurs zastosowany w momencie Operacji do przeliczenia wartości z waluty Waloru na walutę bazową Portfela. Zapisany w Operacji, nie wyliczany wstecznie.
