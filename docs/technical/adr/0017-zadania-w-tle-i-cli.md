@@ -10,7 +10,7 @@ last_reviewed: 2026-10-02
 
 `app/cli.py` jest driverem ([ADR-0002](0002-sesja-poza-zadaniem-entrypointy-i-wiring.md), R8): parsuje argumenty, woła funkcję z `entrypoints.py` modułu, drukuje wynik i ustala kod wyjścia. Nie importuje serwisów, repozytoriów ani `wiring`. Harmonogram (cron, timer systemd, kontener) jest poza kodem aplikacji; repo dokumentuje, jak go ustawić. Brak Celery/Redis.
 
-**Rozstrzyga:** D8 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E0.6 (`create-user`), E0.8, E1.4, E2.0 (`rebuild-all`).
+**Rozstrzyga:** D8 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E0.6 (`create-user`, `set-owner`), E0.8, E1.4, E2.0 (`rebuild-all`), E4.5, E5.1, E5.6, E9.6.
 
 ## Kontekst
 
@@ -35,6 +35,11 @@ last_reviewed: 2026-10-02
 | `create-user` | `core_data.entrypoints.create_user` | E0.6 | hasło z `getpass`/zmiennej środowiskowej, nigdy z argumentu |
 | `report-suspect-data` | `portfolios.entrypoints.report_suspect_data` | E0.8 | raport tylko do odczytu (waluta waloru = waluta Portfela przy giełdzie zagranicznej; `fx_rate` = 1 przy różnych walutach) |
 | `evaluate-alerts` | `notifications.entrypoints.evaluate_alerts` | E10.1 | po `refresh-prices`; moduł [ADR-0013](0013-kierunki-zaleznosci-nowych-modulow.md) |
+| `set-owner` (albo `create-user --owner`) | `core_data.entrypoints.set_owner` | E0.6 | ustawia `is_owner` wskazanemu kontu ([ADR-0007 biz.](../../business/adr/0007-dane-referencyjne-i-usuwanie.md)) |
+| `load-limits` | `portfolios.entrypoints.load_limits` | E5.6 | limity IKE/IKZE z pliku konfiguracji (`source_ref`, etykieta [niezweryfikowane]) |
+| `load-bond-rates` | `assets.entrypoints.load_bond_rates` | E5.1 | serie i okresy odsetkowe obligacji z pliku |
+| `generate-recurring` | `planning.entrypoints.generate_recurring` | E9.6 | szkice Operacji z szablonów cyklicznych (idempotentne przez `external_ref`) |
+| `export-all` / `import-all` | kolejno `<moduł>.entrypoints.export_data` / `import_data` | E4.5, E11.3 | pełna kopia i restore instancji; driver woła `entrypoints` modułów po kolei, więc moduły nie zależą od siebie |
 
 **3. Podział polityk błędów** (R7): *domenowa* w entrypoincie — błąd jednej waluty/waloru nie przerywa reszty (wzorzec już w `MarketDataService`, `backend/app/modules/assets/services/market_data.py:131`, `:142`), wynik zwraca liczniki `ok`/`failed`; *procesowa* w driverze — kod wyjścia: `0` wszystko zrobione, `1` błąd niedomenowy lub `--check` z różnicami, `2` błędne argumenty (argparse), `3` zadanie ukończone z częściowymi niepowodzeniami **[propozycja]**. Logi przez `configure_logging` (jak `backend/app/main.py:19`).
 
@@ -45,19 +50,21 @@ last_reviewed: 2026-10-02
 - `test_cli`: każda wartość `COMMANDS` pochodzi z modułu `…entrypoints` (`__module__`), a polecenie zwraca kod z pkt 3.
 - Obowiązuje dalej R5 (`test_architecture.py:273`): entrypoint bez repozytoriów, `fastapi` i `dependencies.py`.
 
-**6. Opcjonalnie APScheduler** w `lifespan` drivera `main.py`: dopuszczalny (woła entrypointy), ale uruchamiałby zadania w każdym workerze `uvicorn` i wymaga zgody na nową zależność. Nie jest domyślny; rozważyć tylko przy jednym procesie.
+**6. Wyjątek: ręczne odświeżenie ceny.** `POST /assets/refresh-prices` (przycisk w UI) zwraca `202` i rejestruje w `BackgroundTasks` **wyłącznie** `assets.entrypoints.refresh_prices`; żądanie HTTP nie woła dostawcy synchronicznie. Kryterium E1.4 dostaje ten wyjątek.
+
+**7. Opcjonalnie APScheduler** w `lifespan` drivera `main.py`: dopuszczalny (woła entrypointy), ale uruchamiałby zadania w każdym workerze `uvicorn` i wymaga zgody na nową zależność. Nie jest domyślny; rozważyć tylko przy jednym procesie.
 
 ## Rozpatrywane alternatywy
 
 - **Celery/Redis.** Dodatkowe procesy i broker dla jednego użytkownika (D8). Odrzucone.
 - **`click`/`typer`.** `click` jest przechodnią zależnością niedeklarowaną; `typer` to nowa zależność. Odrzucone na rzecz `argparse`.
 - **Zadania wywoływane endpointem HTTP.** Otwierałyby drugą sesję w żądaniu (zakaz w `06_wiring_i_entrypointy.md` §4) i wymagały auth dla crona. Odrzucone.
-- **Harmonogram w aplikacji domyślnie.** Duplikaty przy wielu workerach. Odrzucone (pkt 6).
+- **Harmonogram w aplikacji domyślnie.** Duplikaty przy wielu workerach. Odrzucone (pkt 7).
 
 ## Konsekwencje
 
 **Pozytywne**
-- Jedno miejsce wejścia dla zadań; żądania HTTP nie wołają dostawcy (kryterium E1.4); polecenia są testowalne przez parametr `scope`.
+- Jedno miejsce wejścia dla zadań; żądania HTTP nie wołają dostawcy synchronicznie (kryterium E1.4; jedyny wyjątek: pkt 6, 202 w tle); polecenia są testowalne przez parametr `scope`.
 - Te same funkcje służą CLI, `BackgroundTasks` i testom.
 
 **Negatywne**

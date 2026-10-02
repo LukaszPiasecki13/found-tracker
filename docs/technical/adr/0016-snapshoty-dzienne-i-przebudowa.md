@@ -22,12 +22,12 @@ last_reviewed: 2026-10-02
 ## Decyzja
 
 **1. Tabele (pochodne, odtwarzalne; migracja `autogenerate`)**
-- `portfolios_daily` (PK `portfolio_id`, `snapshot_date` `Date`): wartość, gotówka, przepływy zewn. we/wy, dochody, opłaty, podatki, `r_day`, `twr_index` `Numeric(24,12)`, skumulowane przepływy, `data_quality`.
-- `portfolios_position_daily` (PK `portfolio_id`, `asset_id`, `snapshot_date`): `qty`, `price_local`, `mv_local`, `fx`, `mv_base`, przepływy, `r_day` — wartość w walucie waloru i kurs są niezbędne dla efektu walutowego (E7.4).
-- `portfolios_portfolio.dirty_from` `Date` null: wiersze o `snapshot_date ≥ dirty_from` są nieaktualne; `null` = aktualne.
+- `portfolios_daily` (PK `portfolio_id`, `day` `Date`): wartość, gotówka, przepływy zewn. we/wy, dochody, opłaty, podatki, `r_day`, `twr_index` `Numeric(24,12)`, skumulowane przepływy, `data_quality`.
+- `portfolios_position_daily` (PK `portfolio_id`, `asset_id`, `day`): `quantity`, `price_local`, `mv_local`, `fx`, `mv_base`, przepływy, `r_day` — wartość w walucie waloru i kurs są niezbędne dla efektu walutowego (E7.4).
+- `portfolios_portfolio.dirty_from` `Date` null: wiersze o `day ≥ dirty_from` są nieaktualne; `null` = aktualne. Kolumna powstaje w **E2.0** (nie dopiero w E2.5), bo korzysta z niej już przebudowa księgi.
 - Typy: `Decimal` ([ADR-0014](0014-numeryka-statystyk-float-i-numpy.md)).
 
-**2. Globalna kolejność zdarzeń:** (`operation_day`, `sequence`, `id`) ([ADR-0019](0019-migracje-danych-i-kolumny-dat.md)) — jeden porządek całkowity dla wszystkich Portfeli właściciela, zastępuje `operation_date`/`created_at`. Nowa operacja dostaje `sequence` = następny wolny numer dnia, chyba że klient poda własny **[propozycja]**.
+**2. Globalna kolejność zdarzeń:** (`operation_day`, `sequence`, `id`) ([ADR-0019](0019-migracje-danych-i-kolumny-dat.md)) — jeden porządek całkowity dla wszystkich Portfeli właściciela, zastępuje `operation_date`/`created_at`. `sequence` to numer w obrębie (Portfel, `operation_day`), nadawany automatycznie przy zapisie; backfill z kolejności `(operation_date, created_at, id)`, więc dzisiejsza kolejność zostaje zachowana; `id` rozstrzyga remisy między Portfelami.
 
 **3. Unieważnianie od daty najstarszej zmiany**
 
@@ -53,14 +53,14 @@ Nowy dzień (nocny dopis ceny z datą > ostatnia znana) nie unieważnia; przebie
 - `dirty_from` składowej = minimum po jej członkach; po przebiegu wszystkie dostają `null`.
 - Błędy (`code`, 400): `TRANSFER_SAME_PORTFOLIO` (A = B), `TRANSFER_CROSS_OWNER` (inny właściciel **[propozycja]**), `INSUFFICIENT_QUANTITY`/`INSUFFICIENT_CASH` z ledgera; każdy cofa całą składową (ADR-0001).
 - Usunięcie Portfela z przelewami: blokada 409 `PORTFOLIO_HAS_TRANSFERS` (D15) **[propozycja]**; edycja/usunięcie przelewu w A przebudowuje składową z B.
-- Współbieżność: `SELECT … FOR UPDATE` na wierszach `portfolios_portfolio` składowej w kolejności `id`.
+- Współbieżność (TOCTOU): samo `FOR UPDATE` po wyznaczeniu składowej nie wystarcza — przelew dodany w międzyczasie zmienia składową. Kolejność: (1) wyznacz składową, (2) zablokuj wszystkie jej Portfele `SELECT … FOR UPDATE` w stałej kolejności `id`, (3) **potwierdź składową ponownie**; gdy się zmieniła — zwolnij blokady i powtórz od (1).
 
 **7. Idempotencja.** `rebuild` jest funkcją (Operacje, ceny, kursy, ustawienia): kasuje wiersze `≥ dirty_from`, wstawia nowe, zeruje `dirty_from`. Test (DoD pkt 8): dwa przebiegi → identyczne wiersze, bez kolumn `created_at`/`updated_at`; drugi przebieg bez zmian = 0 zapisów.
 
 ## Rozpatrywane alternatywy
 
 - **Przebudowa Portfel po Portfelu w kolejności topologicznej.** Wymaga acyklicznego grafu; przelewy w obie strony w różnych dniach go łamią. Odrzucone.
-- **Znacznik czasu `last_price_change_at` zamiast daty.** Nie wie, od kiedy liczyć. Odrzucone.
+- **Znacznik czasu zamiast daty (jedna kolumna „ostatnia zmiana ceny” na Portfelu).** Nie wie, od kiedy liczyć. Odrzucone.
 - **Liczenie na żądanie (dziś).** Brak limitu wydajności, sieć w żądaniu. Odrzucone.
 - **Zawsze asynchronicznie.** Użytkownik widziałby nieaktualne liczby po każdej operacji. Odrzucone.
 

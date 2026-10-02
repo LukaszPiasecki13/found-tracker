@@ -8,7 +8,7 @@ last_reviewed: 2026-10-02
 
 # Księga, partie i wycena obligacji liczą się na `Decimal` w `domain/`; statystyki na `float` z `numpy` w `services/`
 
-Czysta numeryka ma dwa miejsca. **Pieniądze, ilości i koszt** (księga, partie FIFO, wycena obligacji, pule podatkowe, rebalansing) — `Decimal`, `domain/` tylko z biblioteki standardowej. **Statystyki** (XIRR, zmienność, Sharpe, VaR, korelacja, Monte Carlo) — `float` i `numpy` w `services/`. Granica jest jawna i jednokierunkowa. Zamyka wariant (a) z [ADR-0005](0005-warstwa-domeny.md) i uzupełnia [ADR-0010](0010-decimal-i-precyzja-pieniedzy.md) (bez edycji tamtych ADR-ów).
+Czysta numeryka ma dwa miejsca. **Pieniądze, ilości i koszt** (księga, partie FIFO, wycena obligacji, pule podatkowe, rebalansing) — `Decimal`, `domain/` tylko z biblioteki standardowej. **Statystyki** (XIRR, zmienność, Sharpe, VaR, korelacja, Monte Carlo) — `float` i `numpy` w `services/`. Granica jest jawna i jednokierunkowa. Zamyka wariant (a) z [ADR-0005](0005-warstwa-domeny.md), uzupełnia go o `assets/domain/bonds.py` (reguła DOM-7 mówiła „`assets` bez `domain/`”) i uzupełnia [ADR-0010](0010-decimal-i-precyzja-pieniedzy.md) (bez edycji tamtych ADR-ów).
 
 **Rozstrzyga:** D11 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)); wariant (a)/(b) ADR-0005. **Blokuje:** E3.1, E5.1, E6.1, E7.1, E9.2, E9.5.
 
@@ -46,7 +46,7 @@ Kalkulatory statystyk to klasy bez I/O (jak `_VectorCalculator`, `metrics.py:119
 
 **3. Egzekwowanie** (testy, [ADR-0013](0013-kierunki-zaleznosci-nowych-modulow.md) pkt 6 dla konwencji):
 - `numpy` importowany tylko w `*/services/` (wzór: test `yfinance`, `backend/app/core/tests/test_architecture.py:446`); `domain/`, `repositories/`, `api/` — nigdy.
-- Test czystości `domain/` przenosimy do `core/tests/test_domain_purity.py` i parametryzujemy po `modules/*/domain`; dozwolone moduły jak dziś plus `calendar` (arytmetyka miesięcy w okresach obligacji) i `itertools` **[propozycja]**. Warstwy (DOM-9) — słownik per moduł w teście.
+- Test czystości `domain/` przenosimy do `core/tests/test_domain_purity.py` i parametryzujemy po `modules/*/domain`; dozwolone moduły jak dziś plus `calendar` (arytmetyka miesięcy w okresach obligacji) i `itertools` **[propozycja]**. Warstwy (DOM-9) — słownik `DOMAIN_LAYERS` per moduł w tym teście; dopisujemy do niego `assets` (`bonds.py`) i `taxes` jako warstwy domenowe (`planning` — przy E9.2).
 - Brak `float` w `models/` i w polach `Decimal*` schematów (`DecimalNumber`, `backend/app/core/schemas.py`).
 
 ## Rozpatrywane alternatywy

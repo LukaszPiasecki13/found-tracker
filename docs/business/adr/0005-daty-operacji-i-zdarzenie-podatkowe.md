@@ -23,10 +23,10 @@ Rekomendacja: `operation_day` to data kalendarzowa zawarcia w strefie Europe/War
 ## Decyzja
 
 1. **`operation_day`** `Date`, **nowa** kolumna (nie zmieniamy typu `operation_date`), NOT NULL po wypełnieniu przez `rebuild-all` (D16): dzień kalendarzowy `operation_date` w Europe/Warsaw. `operation_date` zostaje jako znacznik czasu (godzina opcjonalna; bez godziny = 00:00 czasu Warszawy). Dzienny wektor, snapshoty (E2.5) i okresy ([ADR 0004](0004-metodologia-stop-zwrotu.md)) używają `operation_day`.
-2. **`sequence`** `Integer` NOT NULL, domyślnie 0: kolejność w obrębie dnia. Klucz porządkowy `(operation_day, sequence, operation_date, created_at, id)`. Dla danych dotychczasowych (`sequence = 0`) klucz daje **tę samą kolejność** co dziś, więc parytet i `rebuild` nie zmieniają wyniku.
-3. **`settlement_date`** `Date`, nullable, z `settlement_source` `String(10)` ∈ {`user`, `import`, `calendar`, `estimated`} **[propozycja]**. Wartość domyślna: `operation_day` + 2 sesje wg kalendarza E1.9 (`calendar`). **Przed E1.9** domyślnie +2 dni robocze pn–pt bez świąt (`estimated`), przeliczane po wdrożeniu kalendarza; import dostarcza datę (np. IBKR `Settle Date Target`, `import`). Dla funduszy (TFI) datą jest dzień otrzymania/postawienia środków do dyspozycji — wpisywana lub z importu.
+2. **`sequence`** `Integer` NOT NULL: numer kolejny w obrębie `(Portfel, operation_day)`, nadawany automatycznie przy zapisie. Klucz porządku księgi: **`(operation_day, sequence, id)`** (jedyny wariant). Backfill (`rebuild-all`) nadaje `sequence` z kolejności `(operation_date, created_at, id)`, więc dzisiejsza kolejność zostaje zachowana, a parytet i `rebuild` nie zmieniają wyniku.
+3. **`settlement_date`** `Date`, nullable, z `settlement_source` `String(10)` ∈ {`default`, `broker`, `manual`} **[propozycja]**. Wartość domyślna: `operation_day` + 2 sesje wg kalendarza E1.9 (`default`). **Przed E1.9** domyślnie +2 dni robocze pn–pt bez świąt (`default`, przeliczane po wdrożeniu kalendarza tylko dla `default`); import dostarcza datę (np. IBKR `Settle Date Target`, `broker`); ręczna zmiana użytkownika → `manual`. Dla funduszy (TFI) datą jest dzień otrzymania/postawienia środków do dyspozycji — wpisywana lub z importu.
 4. **Podstawa podatkowa** — ustawienie Portfela `tax_date_basis` ∈ {`settlement`, `trade`}, domyślnie `settlement` **[propozycja]**; jedna podstawa dla przychodu i kosztu (partii) Portfela, aby koszt i przychód były liczone spójnie. Dzień roboczy = dzień publikacji tabeli A NBP; algorytm cofania z dowodu `03_rynek_pl_dane_i_obligacje.md`.
-5. **Kurs podatkowy** zapisany w Operacji (D9): `fx_rate_tax`, numer tabeli, data tabeli. Gdy tabela dla dnia D−1 podstawy **jeszcze nie jest opublikowana** (rozrachunek w przyszłości), kurs jest „oczekujący” i uzupełnia go zadanie w tle (E1.4); raporty podatkowe odmawiają finalizacji z `TAX_RATE_PENDING`. Kurs brokera (`fx_rate`) pozostaje osobno ([ADR 0003](0003-gotowka-wielowalutowa.md)).
+5. **Kurs podatkowy** zapisany w Operacji (D9): `fx_rate_tax` `Numeric`, `fx_tax_date` `Date`, `fx_tax_table_no` `String(32)`. Gdy tabela dla dnia D−1 podstawy **jeszcze nie jest opublikowana** (rozrachunek w przyszłości), kurs jest „oczekujący” i uzupełnia go zadanie w tle (E1.4); raporty podatkowe odmawiają finalizacji z `TAX_RATE_PENDING`. Kurs brokera (`fx_rate`) pozostaje osobno ([ADR 0003](0003-gotowka-wielowalutowa.md)).
 6. **Dywidenda**: dzień wypłaty = `settlement_date` Operacji `dividend` (ma też `operation_day` wpisu); kurs NBP D−1 od dnia wypłaty (art. 11a ust. 1); WHT — kurs D−1 dnia zapłaty podatku, domyślnie ten sam dzień **[niezweryfikowane]**.
 7. Dzień kalendarzowy Warszawy dotyczy też zleceń na giełdach zagranicznych; zlecenie po północy czasu warszawskiego wymaga ręcznej korekty dnia (patrz Otwarte).
 
@@ -48,7 +48,7 @@ Rekomendacja: `operation_day` to data kalendarzowa zawarcia w strefie Europe/War
 
 **Negatywne**
 - Raport podatkowy opiera się na wniosku bez interpretacji; wynik może różnić się od brokera zagranicznego (data transakcji) — trzeba pokazać obie daty i podstawę.
-- Do czasu E1.9 `settlement_date` jest przybliżeniem (`estimated`); święta GPW mogą przesunąć rok podatkowy.
+- Do czasu E1.9 `settlement_date` jest przybliżeniem (`settlement_source = default`, bez świąt); święta GPW mogą przesunąć rok podatkowy.
 - Przed zapisem kursu NBP Operacje z przyszłym rozrachunkiem mają kurs „oczekujący”.
 - Dodatkowe kolumny (`operation_day`, `sequence`, `settlement_date`, `settlement_source`, `tax_date_basis`) — nowe pola w imporcie (E4).
 
