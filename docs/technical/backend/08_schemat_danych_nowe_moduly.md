@@ -95,13 +95,14 @@ Indeksy: `(owner_id, status)`, `(portfolio_id, created_at DESC)`. **Cofnięcie (
 | `batch_id` | `BigInteger` | nie | FK `portfolios_import_batch.id` ON DELETE CASCADE |
 | `row_no` | `Integer` | nie | numer w pliku; UNIQUE `(batch_id, row_no)` |
 | `raw_label` | `String(200)` | tak | **surowa etykieta typu** z pliku (np. „Kupno”) — wejście mapowania na `operation_type` |
-| `payload` | `JSONB` | nie | komórki wiersza bez zmian (podgląd, diagnostyka) |
+| `raw_cells` | `JSONB` | nie | surowy wiersz pliku bez zmian (podgląd, diagnostyka) |
+| `payload` | `JSONB` | nie | znormalizowane pola `ParsedRow` (po parsowaniu, przed nadpisaniami) |
 | `row_status` | `String(12)` | nie | `ok`, `duplicate`, `unrecognized`, `error`, `skip`; `CHECK` (E4.1); `skip` = wiersz pominięty (duplikat odwrócony, nadpisanie, decyzja użytkownika) |
 | `resolution` | `String(12)` | tak | **[propozycja]** po zatwierdzeniu: `created` (powstała Operacja), `skipped`; `NULL` w szkicu |
 | `error_code` / `error_detail` | `String(40)` / `String(200)` | tak | kod walidacji (waluta, brutto ≠ ilość × cena ± prowizja, data); bez danych osobowych |
 | `dedup_key` | `String(120)` | nie | hash (`operation_day`, `isin` lub `asset_id`, ilość, kwota); gdy jest `external_ref`, klucz = `external_ref` |
 | `match_key` | `String(120)` | nie | klucz nadpisań (4.4): `external_ref` albo `dedup_key` |
-| `trade_date`, `settlement_date` | `Date` | tak | wartości po parsowaniu i nałożeniu nadpisań |
+| `operation_day`, `settlement_date` | `Date` | tak | wartości po parsowaniu i nałożeniu nadpisań |
 | `operation_type` | `String(20)` | tak | wartość `OperationType` albo `NULL` przy `unrecognized` |
 | `asset_id` | `BigInteger` | tak | FK `assets_asset.id`; `NULL` = nierozpoznany walor |
 | `isin`, `ticker` | `String(12)`, `String(20)` | tak | rozpoznawanie waloru (E4.1) |
@@ -122,12 +123,13 @@ Poprawki ręczne (zmiana typu, przypisanie waloru, pominięcie wiersza) przeżyw
 |---|---|---|---|
 | `id` | `BigInteger` | nie | PK |
 | `portfolio_id` | `BigInteger` | nie | FK CASCADE |
+| `parser_id` | `String(40)` | nie | źródło, którego dotyczy nadpisanie |
 | `match_key` | `String(120)` | nie | `external_ref` albo `dedup_key` wiersza |
 | `field` | `String(40)` | nie | pole z białej listy (`operation_type`, `asset_id`, `skip`…; walidacja w serwisie) |
 | `value` | `String(255)` | nie | wartość jako tekst (`skip` = `true`) |
 | `updated_at` | `DateTime(tz)` | nie | `now()` |
 
-UNIQUE `(portfolio_id, match_key, field)`. Kolejność: parser → nadpisania → rozpoznanie waloru → walidacja → duplikaty. Zaksięgowana Operacja nigdy nie jest nadpisywana: różnice pokazuje podgląd (`CHANGED_AT_SOURCE`), domyślnie `skip`.
+UNIQUE `(portfolio_id, parser_id, match_key, field)`. Kolejność: parser → nadpisania → rozpoznanie waloru → walidacja → duplikaty. Zaksięgowana Operacja nigdy nie jest nadpisywana: różnice pokazuje podgląd (`CHANGED_AT_SOURCE`), domyślnie `skip`.
 
 ### 4.5 `portfolios_import_template` — zapisane mapowania CSV (E4.2)
 
@@ -144,6 +146,7 @@ Konfiguracja roczna, dane globalne (D14); ładowana komendą CLI, nie na sztywno
 | `account_type` | `String(10)` | nie | `CHECK IN ('ike','ikze')` |
 | `variant` | `String(16)` | nie (`'regular'`) | `regular`, `self_employed` (dla IKZE dwie wartości w dowodzie, [podatki](../../research/04_rynek_pl_podatki_i_brokerzy.md)) |
 | `limit_amount` | `Numeric(18,2)` | nie | `CHECK > 0`; wartości z dowodu, nie z pamięci |
+| `source_ref` | `String(200)` | tak | źródło limitu (np. numer obwieszczenia) — wymagane przez E5.6, ADR-0017, biznesowy 0006 |
 
 UNIQUE `(year, account_type, variant)`. Czyta tylko `portfolios` (wpłaty za rok z Operacji `deposit`/przelewów); wybór wariantu IKZE per Portfel — otwarty punkt.
 
@@ -205,7 +208,7 @@ Wiersz tworzy się leniwie; rachunki IKE/IKZE/PPK/PPE/OIPE są wyłączone z rap
 | `tax_year` | `SmallInteger` | nie | — | PK |
 | `pit_rate_pct` | `Numeric(5,2)` | nie | `19.00` | stawka dla pul a, b, c |
 | `loss_lump_cap` | `Numeric(18,2)` | nie | `5000000.00` | limit jednorazowego odliczenia straty (E6.5) |
-| `art30a_rounding` | `String(8)` | nie | `'grosz'` | `grosz` albo `zloty` — reguła zaokrąglenia podatku z art. 30a jako parametr, bo źródła są sprzeczne ([dowód](../../research/04_rynek_pl_podatki_i_brokerzy.md), E6.2) |
+| `rounding_rule_30a` | `String(16)` | nie | `'grosz_up'` | `grosz_up` albo `zloty_half_up` — reguła zaokrąglenia podatku z art. 30a jako parametr, bo źródła są sprzeczne ([dowód](../../research/04_rynek_pl_podatki_i_brokerzy.md), E6.2) |
 
 ### 5.5 Raport roczny — liczony na żądanie, migawka na żądanie
 
@@ -376,7 +379,7 @@ Indeksy: `(owner_id, created_at DESC)`, `(rule_id, created_at DESC)`. Retencja l
 | Zmiana | Źródło |
 |---|---|
 | Import wg kanonu: plik w `portfolios_import_batch` (`parser_id`, `sha256` UNIQUE → istniejąca Paczka), bez `portfolios_import_file` | B |
-| `portfolios_import_row`: `payload`, `row_status` z `skip`, `dedup_key`, `match_key`, `resolution`, `fx_rate`, `settlement_date`, `external_ref` `String(120)`; nadpisania jako `match_key`/`field`/`value` | B |
+| `portfolios_import_row`: `raw_cells`, `payload`, `row_status` z `skip`, `dedup_key`, `match_key`, `resolution`, `fx_rate`, `settlement_date`, `external_ref` `String(120)`; nadpisania jako `match_key`/`field`/`value` | B |
 | Błąd cofnięcia `IMPORT_BATCH_HAS_EDITS`; paginacja `limit`/`offset` z filtrem `row_status` | B, C |
 | Zależności: `planning→assets`, `notifications→planning`, usunięte `notifications→taxes`; dług `core_data` ↔ `security` | C |
 | `taxes_lot_attribute` po `origin_operation_id`; `variant` `regular` | A2, A8 |
