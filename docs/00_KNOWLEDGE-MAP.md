@@ -3,7 +3,7 @@ id: knowledge-map
 status: current
 type: reference
 scope: docs/knowledge-map
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-02
 ---
 
 # Mapa wiedzy — FundTracker
@@ -22,7 +22,7 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 | **L1 — Kanon** | słownik, decyzje produktowe | [`business/CONTEXT.md`](./business/CONTEXT.md), [`business/adr/`](./business/adr/README.md) |
 | **L2 — Kontrakty** | architektura, moduły, ADR-y techniczne | [`technical/`](./technical/) |
 | **L3 — Pamięć robocza** | plany zadań | [`plans/`](./plans/) |
-| **L4 — Dowody** | analizy, materiały źródłowe | brak (nie istnieje) |
+| **L4 — Dowody** | analizy, materiały źródłowe | [`research/`](./research/) |
 
 > **Plan nie opisuje stanu systemu.** Stan opisuje wyłącznie warstwa L2 i kod. Dokumenty modułów zawierają tabelę „Stan vs cel” z przypisaniem do kroku planu.
 
@@ -35,6 +35,7 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 | Nowa operacja lub reguła portfela | [`05_portfolios_module.md`](./technical/backend/05_portfolios_module.md) → [ADR-0005 (domain)](./technical/adr/0005-warstwa-domeny.md) → testy parytetu `portfolios/tests/unit/test_ledger_parity.py` |
 | Zmiana we frontendzie | [architektura frontendu](./technical/frontend/frontend-architecture.md) |
 | Decyzja techniczna | [ADR-y techniczne](#adr-y-techniczne) |
+| Nowa funkcja produktu (zakres „jak myfund, tylko lepiej”) | [roadmapa funkcjonalna](./plans/02_roadmapa_funkcjonalna.md) → etap w [E0–E5](./plans/03_roadmapa_etapy_E0-E5.md) / [E6–E11](./plans/04_roadmapa_etapy_E6-E11.md) → dowód L4 wskazany w kroku |
 
 ## L1 — Kanon
 
@@ -94,7 +95,23 @@ Osobny zbiór od tej mapy: zdiagnozowane, potwierdzone zaskoczenia, jeden plik n
 | Dokument | Status |
 |---|---|
 | [plan refaktoryzacji do wzorca waterworks](./plans/01_refaktoryzacja_do_wzorca_waterworks.md) | `draft` — kroki R-01…R-13 wykonane (2026-10-01) |
+| [roadmapa funkcjonalna](./plans/02_roadmapa_funkcjonalna.md) | `draft` — etapy E0–E11, decyzje D1–D11 do ADR-ów; czeka na akceptację właściciela |
+| [roadmapa — etapy E0–E5](./plans/03_roadmapa_etapy_E0-E5.md) | `draft` — naprawy, dane rynkowe, księga v2, analityka, import, instrumenty PL |
+| [roadmapa — etapy E6–E11](./plans/04_roadmapa_etapy_E6-E11.md) | `draft` — PIT-38, ryzyko, zdarzenia korporacyjne, planowanie, powiadomienia, jakość |
 | [archiwum: dawny plan architektury](./plans/archive/backend-architecture-plan.md) | Zastąpiony przez L2; do usunięcia za zgodą |
+
+## L4 — Dowody
+
+Badania z datą i źródłami; **nienormatywne** — rekomendacje stąd obowiązują dopiero przez ADR lub plan. Append-only: nowe badanie zastępuje stare dopiskiem, nie edycją.
+
+| Dokument | Co zawiera (stan na 2026-10-01/02) |
+|---|---|
+| [`research/competitors/01_myfund.md`](./research/competitors/01_myfund.md) | myfund.pl: model danych, operacje, analityka, podatki, import, cennik, słabości |
+| [`research/competitors/02_trackery_porownanie.md`](./research/competitors/02_trackery_porownanie.md) | Portfolio Performance, Ghostfolio, Wealthfolio, Sharesight, Snowball, Parqet, getquin i in.: macierz funkcji, pomysły do przejęcia, lekcje techniczne |
+| [`research/03_rynek_pl_dane_i_obligacje.md`](./research/03_rynek_pl_dane_i_obligacje.md) | źródła danych rynkowych PL (NBP, Stooq, GPW, GUS), obligacje skarbowe i algorytmy wyceny |
+| [`research/04_rynek_pl_podatki_i_brokerzy.md`](./research/04_rynek_pl_podatki_i_brokerzy.md) | PIT-38, FIFO, art. 11a, IKE/IKZE/PPK, formaty eksportu brokerów |
+| [`research/05_metodyka_metryk.md`](./research/05_metodyka_metryk.md) | TWR, XIRR, ryzyko, benchmark, FIFO, dywidendy, rebalancing, projekcje, testy złote |
+| [`research/06_stan_found-tracker_vs_cel.md`](./research/06_stan_found-tracker_vs_cel.md) | migawka kodu z 2026-10-01: defekty poprawności i luki G1…G25 względem myfund |
 
 ## Czego tu nie ma
 
