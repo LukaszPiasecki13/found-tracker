@@ -85,7 +85,7 @@ Część [roadmapy funkcjonalnej](./02_roadmapa_funkcjonalna.md) (L3, szkic). Po
 | **E10.2** Raport okresowy | e-mail tygodniowy/miesięczny: wartość, zysk, TWR vs benchmark, dywidendy, nadchodzące wykupy (E5.2) i dywidendy (E8.6) | podgląd w UI = treść e-maila | M |
 | **E10.3** Import z e-maila | IMAP: potwierdzenia transakcji → parser (E4) → szkic do akceptacji | test na zanonimizowanych wiadomościach | L |
 | **E10.4** Token API | osobisty token (odczyt / zapis), unieważnianie; dokumentacja OpenAPI | żądanie z unieważnionym tokenem → 401 | S |
-| **E10.5** Asystent AI (opcjonalnie) | serwer MCP lub czat tylko do odczytu własnych danych („ile dywidend w 2025?”); myfund ma asystenta bez dostępu do danych portfela ([dowód](../research/competitors/01_myfund.md)) | wymaga ADR (prywatność, dostawca modelu) | M |
+| **E10.5** Asystent AI (opcjonalnie) | serwer MCP lub czat tylko do odczytu własnych danych („ile dywidend w 2025?”); myfund ma asystenta bez dostępu do danych portfela ([dowód](../research/competitors/01_myfund.md)) | endpoint/serwer MCP wystawia wyłącznie odczyt danych właściciela (test: żądanie zapisu → 403); ADR o prywatności i dostawcy modelu zaakceptowany przed startem | M |
 
 ---
 
@@ -97,8 +97,8 @@ Część [roadmapy funkcjonalnej](./02_roadmapa_funkcjonalna.md) (L3, szkic). Po
 | **E11.2** Tryb prywatności | ukrycie kwot jednym przełącznikiem (wzorzec Ghostfolio) | brak kwot na wszystkich widokach | S |
 | **E11.3** Kopie zapasowe | automatyczny eksport (E4.5) i zrzut bazy; instrukcja odtworzenia | odtworzenie sprawdzone na czystej instancji | S |
 | **E11.4** Audyt zmian | historia zmian Operacji — dziś odłożona ([ADR-0011](../technical/adr/0011-audyt-odlozony.md)); powrót po E4 | ADR zastępujący ADR-0011 zaakceptowany przez właściciela | M |
-| **E11.5** Nazewnictwo frontendu | `Pocket` → `Portfolio` ([CONTEXT](../business/CONTEXT.md), „Sprzeczności”) | brak „Pocket” w `frontend/src` | S |
-| **E11.6** Testy frontendu | runner testów (np. Vitest) + e2e krytycznych ścieżek | CI frontendu uruchamia testy | M |
+| **E11.5** Nazewnictwo frontendu | przeniesione do **E0.10** (koszt rośnie z każdym nowym ekranem) | — | — |
+| **E11.6** Testy frontendu | runner (Vitest) wprowadzony w E0.7; tu: e2e krytycznych ścieżek (Playwright) | CI frontendu uruchamia testy jednostkowe i e2e | M |
 | **E11.7** Wydajność | pomiar na zbiorze 10 lat × 200 operacji × 30 walorów; indeksy; cache per `last_snapshot_date` | wykres < 300 ms, kokpit < 500 ms (p95, lokalnie) | S |
 | **E11.8** UX i pierwsze uruchomienie | system komponentów i wzorce widoków (progresywne ujawnianie), kreator pierwszego uruchomienia (Portfel → import → benchmark), stany puste z podpowiedzią | nowy Portfel z importem w ≤ 5 krokach | M |
 
