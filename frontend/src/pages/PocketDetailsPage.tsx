@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Typography,
   Paper,
@@ -20,6 +21,7 @@ import {
 import { usePocketByName } from '../hooks/usePockets';
 import { usePositions } from '../hooks/usePositions';
 import PositionsTable from '../components/PositionsTable';
+import RateMissingChip from '../components/RateMissingChip';
 import BuyAssetDialog from '../components/dialogs/BuyAssetDialog';
 import SellAssetDialog from '../components/dialogs/SellAssetDialog';
 import CashOperationDialog from '../components/dialogs/CashOperationDialog';
@@ -65,11 +67,20 @@ const PocketDetailsPage: React.FC = () => {
   };
 
   const cashBalance = Number(pocket.cash_balance) || 0;
-  const totalPositionsValue = positions?.reduce((sum, pos) => sum + (Number(pos.market_value) || 0), 0) || 0;
-  const totalValue = cashBalance + totalPositionsValue;
   const totalDeposited = Number(pocket.total_deposited) || 0;
-  const totalProfitLoss = Number(pocket.total_profit_loss) || (totalValue - totalDeposited);
-  const totalReturnPct = Number(pocket.total_return_pct);
+  // Totals come from the freshly valued positions; when any position has no currency rate
+  // they cannot be computed (null) rather than shown as a misleading partial sum.
+  const rateMissing =
+    pocket.rate_missing === true || (positions?.some((pos) => pos.rate_missing === true) ?? false);
+  const totalPositionsValue = rateMissing
+    ? null
+    : positions
+      ? positions.reduce((sum, pos) => sum + Number(pos.market_value ?? 0), 0)
+      : (pocket.positions_value ?? null);
+  const totalValue = totalPositionsValue === null ? null : cashBalance + totalPositionsValue;
+  const totalProfitLoss = totalValue === null ? null : totalValue - totalDeposited;
+  const totalReturnPct =
+    totalProfitLoss === null ? null : totalDeposited === 0 ? 0 : (totalProfitLoss / totalDeposited) * 100;
 
   return (
     <Box>
@@ -98,6 +109,13 @@ const PocketDetailsPage: React.FC = () => {
         </ButtonGroup>
       </Box>
 
+      {rateMissing && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Dla części pozycji brakuje kursu waluty wobec waluty portfela — wartość portfela i wynik
+          nie mogą zostać policzone.
+        </Alert>
+      )}
+
       {/* Summary Cards */}
       <Grid container spacing={2} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -115,9 +133,13 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Wartość pozycji
             </Typography>
-            <Typography variant="h5" fontWeight="bold">
-              {formatCurrency(totalPositionsValue)}
-            </Typography>
+            {totalPositionsValue === null ? (
+              <RateMissingChip />
+            ) : (
+              <Typography variant="h5" fontWeight="bold">
+                {formatCurrency(totalPositionsValue)}
+              </Typography>
+            )}
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -125,9 +147,13 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Całkowita wartość
             </Typography>
-            <Typography variant="h5" fontWeight="bold">
-              {formatCurrency(totalValue)}
-            </Typography>
+            {totalValue === null ? (
+              <RateMissingChip />
+            ) : (
+              <Typography variant="h5" fontWeight="bold">
+                {formatCurrency(totalValue)}
+              </Typography>
+            )}
           </Paper>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -135,17 +161,23 @@ const PocketDetailsPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               Zysk/Strata
             </Typography>
-            <Typography
-              variant="h5"
-              fontWeight="bold"
-              color={totalProfitLoss >= 0 ? 'success.main' : 'error.main'}
-            >
-              {formatCurrency(totalProfitLoss)}
-            </Typography>
-            {!Number.isNaN(totalReturnPct) && (
-              <Typography variant="caption" color="text.secondary">
-                ({totalReturnPct.toFixed(2)}%)
-              </Typography>
+            {totalProfitLoss === null ? (
+              <RateMissingChip />
+            ) : (
+              <>
+                <Typography
+                  variant="h5"
+                  fontWeight="bold"
+                  color={totalProfitLoss >= 0 ? 'success.main' : 'error.main'}
+                >
+                  {formatCurrency(totalProfitLoss)}
+                </Typography>
+                {totalReturnPct !== null && (
+                  <Typography variant="caption" color="text.secondary">
+                    ({totalReturnPct.toFixed(2)}%)
+                  </Typography>
+                )}
+              </>
             )}
           </Paper>
         </Grid>
