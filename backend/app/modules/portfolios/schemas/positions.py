@@ -62,11 +62,17 @@ class PositionFields(BaseModel):
 
 
 class PositionResponse(PositionFields):
-    """A position valued at current prices (read model, ADR-0003)."""
+    """A position valued at current prices (read model, ADR-0003).
+
+    The cost needs no rate. Market value, profit, return and weight are `null`
+    with `rate_missing` set when no rate turns the asset's currency into the
+    portfolio's - never a silent rate of 1.
+    """
 
     cost_basis: RoundedValue
     cost_basis_in_portfolio_currency: RoundedValue
-    market_value: RoundedValue
-    unrealized_pnl: RoundedValue
-    return_pct: RoundedPercent
-    portfolio_weight_pct: RoundedPercent
+    market_value: RoundedValue | None
+    unrealized_pnl: RoundedValue | None
+    return_pct: RoundedPercent | None
+    portfolio_weight_pct: RoundedPercent | None
+    rate_missing: bool = False

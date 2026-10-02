@@ -31,6 +31,7 @@ from app.modules.portfolios.exceptions import (
 )
 from app.modules.portfolios.schemas.metrics import PortfolioVectorsResponse
 from app.modules.portfolios.schemas.portfolios import PortfolioSummaryResponse
+from app.modules.portfolios.schemas.positions import PositionResponse
 from app.modules.security.dependencies import get_current_user
 
 USER = SimpleNamespace(id=7, email="user@example.com", is_active=True)
@@ -211,7 +212,92 @@ def test_list_returns_valued_summaries_as_numbers(services: Services) -> None:
         "total_profit_loss": 1033.5,
         "total_return_pct": 103.35,
         "total_fees": 1.5,
+        "rate_missing": False,
     }
+
+
+def test_summary_without_a_rate_has_null_totals_and_the_flag(
+    services: Services,
+) -> None:
+    services.portfolios.list_summaries.return_value = [
+        PortfolioSummaryResponse(
+            **dict(vars(_portfolio())),
+            positions_value=None,
+            total_value=None,
+            total_profit_loss=None,
+            total_return_pct=None,
+            total_fees=D("1.5"),
+            rate_missing=True,
+        )
+    ]
+
+    response = build_client(services).get("/portfolios/")
+
+    [body] = response.json()
+    assert body["rate_missing"] is True
+    assert body["positions_value"] is None
+    assert body["total_value"] is None
+    assert body["total_profit_loss"] is None
+    assert body["total_return_pct"] is None
+    assert body["total_fees"] == 1.5
+    assert body["cash_balance"] == 799.0
+
+
+def test_position_without_a_rate_has_null_values_but_keeps_its_cost(
+    services: Services,
+) -> None:
+    services.positions.list_valued.return_value = [
+        PositionResponse.model_validate(
+            {
+                "id": 5,
+                "portfolio_id": 3,
+                "asset_id": 9,
+                "asset": {
+                    "id": 9,
+                    "ticker": "BARC",
+                    "name": "Barclays",
+                    "asset_class": {"id": 1, "name": "Stock"},
+                    "currency": {
+                        "id": 4,
+                        "code": "GBP",
+                        "exchange_rate": D("1"),
+                        "base_currency_id": None,
+                    },
+                    "current_price": D("2.5"),
+                    "exchange": "LSE",
+                    "sector": "",
+                    "updated_at": NOW,
+                },
+                "quantity": D("10"),
+                "average_buy_price": D("2"),
+                "average_fx_rate": D("5"),
+                "total_fees": D("0"),
+                "total_dividends": D("0"),
+                "opened_at": NOW,
+                "updated_at": NOW,
+                "cost_basis": D("20"),
+                "cost_basis_in_portfolio_currency": D("100"),
+                "market_value": None,
+                "unrealized_pnl": None,
+                "return_pct": None,
+                "portfolio_weight_pct": None,
+                "rate_missing": True,
+            }
+        )
+    ]
+
+    response = build_client(services).get(
+        "/portfolios/positions", params={"portfolio_name": "Main"}
+    )
+
+    [body] = response.json()
+    assert body["rate_missing"] is True
+    assert body["market_value"] is None
+    assert body["unrealized_pnl"] is None
+    assert body["return_pct"] is None
+    assert body["portfolio_weight_pct"] is None
+    assert body["cost_basis"] == 20.0
+    assert body["cost_basis_in_portfolio_currency"] == 100.0
 
 
 def test_create_returns_201_with_the_entity(services: Services) -> None:
