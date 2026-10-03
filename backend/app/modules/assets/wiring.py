@@ -13,10 +13,14 @@ from app.infrastructure.market_data import YahooFinanceProvider
 from app.modules.assets.repositories.asset_classes import AssetClassRepository
 from app.modules.assets.repositories.assets import AssetRepository
 from app.modules.assets.repositories.currencies import CurrencyRepository
+from app.modules.assets.repositories.fx_rates import FxRateRepository
+from app.modules.assets.repositories.prices import PriceRepository
 from app.modules.assets.services.asset_classes import AssetClassService
 from app.modules.assets.services.assets import AssetService
 from app.modules.assets.services.currencies import CurrencyService
+from app.modules.assets.services.fx_rates import FxRateService
 from app.modules.assets.services.market_data import MarketDataService
+from app.modules.assets.services.prices import PriceService
 
 
 def build_market_data_provider() -> MarketDataProvider:
@@ -27,8 +31,16 @@ def build_asset_class_service(session: Session) -> AssetClassService:
     return AssetClassService(AssetClassRepository(session))
 
 
+def build_fx_rate_service(session: Session) -> FxRateService:
+    return FxRateService(FxRateRepository(session), CurrencyRepository(session))
+
+
+def build_price_service(session: Session) -> PriceService:
+    return PriceService(PriceRepository(session), AssetRepository(session))
+
+
 def build_currency_service(session: Session) -> CurrencyService:
-    return CurrencyService(CurrencyRepository(session))
+    return CurrencyService(CurrencyRepository(session), build_fx_rate_service(session))
 
 
 def build_market_data_service(session: Session) -> MarketDataService:
@@ -36,6 +48,8 @@ def build_market_data_service(session: Session) -> MarketDataService:
         AssetRepository(session),
         CurrencyRepository(session),
         build_market_data_provider(),
+        build_price_service(session),
+        build_fx_rate_service(session),
     )
 
 
@@ -45,4 +59,5 @@ def build_asset_service(session: Session) -> AssetService:
         build_asset_class_service(session),
         build_currency_service(session),
         build_market_data_service(session),
+        build_price_service(session),
     )

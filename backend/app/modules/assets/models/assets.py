@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.sql.base import Base
@@ -31,6 +31,22 @@ class Asset(Base):
     )
     exchange: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     sector: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    isin: Mapped[str | None] = mapped_column(
+        String(12), unique=True, nullable=True, index=True
+    )
+    mic: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    asset_type: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="stock",
+        server_default=text("'stock'"),
+    )
+    # Set for an archived asset: hidden from search and new operations, kept in
+    # history and valuation; ticker refreshes stop.
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

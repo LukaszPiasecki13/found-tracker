@@ -16,7 +16,9 @@ class CurrencyCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(pattern=_CURRENCY_CODE_PATTERN)
-    exchange_rate: Decimal = Field(default=Decimal("1"), gt=0, lt=_MAX_RATE)
+    exchange_rate: Decimal = Field(
+        default=Decimal("1"), gt=0, lt=_MAX_RATE, decimal_places=9
+    )
     base_currency_id: int | None = None
 
 
@@ -26,7 +28,9 @@ class CurrencyUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str | None = Field(default=None, pattern=_CURRENCY_CODE_PATTERN)
-    exchange_rate: Decimal | None = Field(default=None, gt=0, lt=_MAX_RATE)
+    exchange_rate: Decimal | None = Field(
+        default=None, gt=0, lt=_MAX_RATE, decimal_places=9
+    )
     base_currency_id: int | None = None
 
     @model_validator(mode="after")
