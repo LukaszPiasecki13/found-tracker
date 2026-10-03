@@ -1,6 +1,6 @@
 ---
 id: adr-0017-background-jobs-cli
-status: Proposed
+status: Accepted
 type: decision
 scope: backend/cli-jobs
 last_reviewed: 2026-10-03

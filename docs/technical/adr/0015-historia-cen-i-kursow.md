@@ -1,6 +1,6 @@
 ---
 id: adr-0015-price-and-fx-history
-status: Proposed
+status: Accepted
 type: decision
 scope: assets/price-fx-history
 last_reviewed: 2026-10-03

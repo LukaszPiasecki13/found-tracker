@@ -1,6 +1,6 @@
 ---
 id: adr-0014-statistics-numerics
-status: Proposed
+status: Accepted
 type: decision
 scope: backend/numerics
 last_reviewed: 2026-10-03

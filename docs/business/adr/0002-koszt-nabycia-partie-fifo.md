@@ -1,6 +1,6 @@
 ---
 id: adr-0002-cost-basis-lots-fifo
-status: Proposed
+status: Accepted
 type: decision
 scope: business/cost-basis
 last_reviewed: 2026-10-03

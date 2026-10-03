@@ -1,6 +1,6 @@
 ---
 id: adr-0004-return-methodology
-status: Proposed
+status: Accepted
 type: decision
 scope: business/metrics-methodology
 last_reviewed: 2026-10-03

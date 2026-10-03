@@ -1,6 +1,6 @@
 ---
 id: adr-0013-module-dependency-directions
-status: Proposed
+status: Accepted
 type: decision
 scope: backend/module-boundaries
 last_reviewed: 2026-10-03

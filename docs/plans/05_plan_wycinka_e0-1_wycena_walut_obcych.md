@@ -191,7 +191,7 @@ Frontend (bez Vitest — E0.7; weryfikacja `npm run lint`, `npm run build`, ręc
 
 ## 7a. Stan realizacji (branch `feat/e0-1-wycena-walut-obcych`)
 
-K1–K7 oraz E0.1b wykonane. Odstępstwa od planu: (1) K2 poszedł po K3/K4 — schematy nullable zmieniono razem z domeną, bo `mypy app` strict wymaga spójnych typów w jednym kroku; (2) zapas „kurs z `exchange_rate` waluty waloru” w domenie nie powstał — domena od razu wymaga `FxMap`, więc nie było commitu z cichym kursem; (3) E0.1b (endpoint `GET /portfolios/fx-rate` + poprawka obu dialogów) wdrożone razem z wycinkiem, zgodnie z ryzykiem z §8; (4) istniejące Operacje z kursem USD nie są naprawiane (E0.8/E2.0), a `total_fees` dalej sumuje różne waluty.
+K1–K7 oraz E0.1b wykonane. Odstępstwa od planu: (1) K2 poszedł po K3/K4 — schematy nullable zmieniono razem z domeną, bo `mypy app` strict wymaga spójnych typów w jednym kroku; (2) zapas „kurs z `exchange_rate` waluty waloru” w domenie nie powstał — domena od razu wymaga `FxMap`, więc nie było commitu z cichym kursem; (3) E0.1b (endpoint `GET /portfolios/fx-rate` + poprawka obu dialogów) wdrożone razem z wycinkiem, zgodnie z ryzykiem z §8; (4) istniejące Operacje z kursem USD nie są naprawiane (nie ma ich w tej bazie: dane startują od zera), a `total_fees` dalej sumuje różne waluty.
 
 ## 8. Ryzyka i wycofanie
 
@@ -203,7 +203,7 @@ K1–K7 oraz E0.1b wykonane. Odstępstwa od planu: (1) K2 poszedł po K3/K4 — 
 | Stale kursy po awarii dostawcy (`market_data.py:121-123` pomija walutę) | kurs z poprzedniego odświeżenia zostaje (jak dziś); „nieaktualny” — E1.7 |
 | `DashboardPage.tsx:16` używa `Number(null) \|\| 0` — przy `null` suma kokpitu po cichu się zaniży (ten sam rodzaj błędu co F1) | do E0.9 kokpit pokazuje sumy tylko z pól bez `null`; w K5 dopisać „—” dla Portfela z `rate_missing` albo wyłączyć dodawanie takich Portfeli do sumy z adnotacją |
 | `FxMapBuilder` pomija `Currency.base_currency_id` (seed ma EUR z bazą USD); heurystyka `exchange_rate != 1` nie odróżni waluty o kursie dokładnie 1 | błąd tylko w stronę „brak kursu”; `base_currency_id` nie jest używane przez wycenę dziś; zastąpione historią kursów w E1.1 |
-| ADR-0015 i ADR-0005 mają status `Proposed` | wycinek używa tylko ustalonej w roadmapie formy (mapa z serwisu); przy odrzuceniu zmienia się źródło mapy w `FxMapBuilder`, nie domena |
+| ADR-0005 (warstwa domeny) ma status `Proposed`; ADR-0015 jest `Accepted` | wycinek używa tylko ustalonej w roadmapie formy (mapa z serwisu); przy odrzuceniu zmienia się źródło mapy w `FxMapBuilder`, nie domena |
 
 Wycofanie: brak migracji ani danych — `git revert` kroków od K5 wstecz do K1; krok K3 jest wstecznie zgodny (zapas), więc dowolny prefiks K1–K3 można wdrożyć osobno.
 
@@ -244,5 +244,5 @@ Komendy z `CLAUDE.md` projektu (backend z aktywnym `.venv`, `cd backend`):
 | 4 | `total_fees` Portfela sumuje opłaty w walutach waloru (`valuation.py:89`; `ledger.py:182,195`) | osobny defekt, poza wycinkiem — kandydat do E2.x |
 | 5 | Operacje już zapisane z `fx_rate` z dialogu (USD-owym) | poprawka ręczna albo ponowny seed (E0.5); wycinek ich nie naprawia |
 | 6 | Seed: blok `PORTFOLIOS` to `seed_data.py:187-212` (roadmapa podaje 187-211 — różnica o jedną linię, bez znaczenia) | seed ma tylko Portfele w walucie waloru — fixture w testach, nie w seedzie |
-| 7 | Akceptacja ADR-0005 i ADR-0015 (`Proposed`) | wycinek nie wymaga; E1.1 wymaga ADR-0015 |
+| 7 | Akceptacja ADR-0005 (`Proposed`) | wycinek nie wymaga |
 | 8 | Brak `.venv` i PostgreSQL w środowisku autora planu | liczby policzone ręcznie, testów nie uruchamiano; pierwszy krok K1 zaczyna od `pytest -m "not integration"` jako bazy odniesienia |

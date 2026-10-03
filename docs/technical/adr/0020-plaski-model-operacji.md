@@ -1,6 +1,6 @@
 ---
 id: adr-0020-flat-operation-model
-status: Proposed
+status: Accepted
 type: decision
 scope: backend/operation-model
 last_reviewed: 2026-10-03

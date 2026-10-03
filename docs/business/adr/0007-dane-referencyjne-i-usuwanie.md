@@ -1,6 +1,6 @@
 ---
 id: adr-0007-reference-data-deletion
-status: Proposed
+status: Accepted
 type: decision
 scope: business/reference-data
 last_reviewed: 2026-10-03

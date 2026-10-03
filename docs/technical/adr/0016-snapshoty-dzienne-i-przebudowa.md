@@ -1,6 +1,6 @@
 ---
 id: adr-0016-daily-snapshots-rebuild
-status: Proposed
+status: Accepted
 type: decision
 scope: portfolios/snapshots-rebuild
 last_reviewed: 2026-10-03
