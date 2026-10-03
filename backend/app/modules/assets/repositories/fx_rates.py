@@ -32,7 +32,6 @@ class FxRateRepository(SQLRepository):
         rate_date: date,
         rate: Decimal,
         source: str,
-        table_no: str | None = None,
         is_synthetic: bool = False,
     ) -> FxRate:
         """Insert the observation, or overwrite the one with the same pair, day
@@ -45,13 +44,11 @@ class FxRateRepository(SQLRepository):
                 rate_date=rate_date,
                 rate=rate,
                 source=source,
-                table_no=table_no,
                 is_synthetic=is_synthetic,
             )
             self.session.add(row)
         else:
             row.rate = rate
-            row.table_no = table_no
             row.is_synthetic = is_synthetic
             row.fetched_at = datetime.now().astimezone()
         self.flush()

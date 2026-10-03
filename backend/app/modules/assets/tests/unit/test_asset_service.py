@@ -120,7 +120,7 @@ def test_create_normalizes_ticker_and_commits(
         isin=None,
         mic=None,
         country=None,
-        asset_type="user_asset",
+        asset_type="stock",
     )
     session.commit.assert_called_once()
 
@@ -315,7 +315,7 @@ def test_get_or_create_by_ticker_creates_without_committing(
         name="CDR",
         asset_class_id=7,
         currency_id=3,
-        asset_type="user_asset",
+        asset_type="stock",
     )
     session.commit.assert_not_called()
     session.rollback.assert_not_called()
@@ -376,7 +376,7 @@ def test_get_or_create_by_ticker_falls_back_when_the_provider_is_down(
         name="AAPL",
         asset_class_id=7,
         currency_id=3,
-        asset_type="user_asset",
+        asset_type="stock",
     )
 
 
@@ -641,11 +641,12 @@ def test_create_request_validates_identifiers_and_type() -> None:
         {"mic": "XNA"},
         {"country": "USA"},
         {"asset_type": "stonk"},
+        {"asset_type": "fund"},
     ):
         with pytest.raises(ValueError):
             _create_request(**bad)
     assert _create_request(isin="  ", mic="", country=None).isin is None
-    assert _create_request().asset_type == "user_asset"
+    assert _create_request().asset_type == "stock"
     assert _create_request(asset_type="etf").asset_type == "etf"
 
 
@@ -817,8 +818,8 @@ def test_create_from_provider_without_a_price_stores_no_history(
     [
         ("EQUITY", "stock"),
         ("ETF", "etf"),
-        ("MUTUALFUND", "fund"),
-        ("CRYPTOCURRENCY", "crypto"),
+        ("MUTUALFUND", "stock"),
+        ("CRYPTOCURRENCY", "stock"),
         ("SOMETHING", "stock"),
     ],
 )

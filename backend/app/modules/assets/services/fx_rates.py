@@ -45,7 +45,6 @@ class FxQuote:
     rate: Decimal
     rate_date: date
     source: str
-    table_no: str | None
     is_synthetic: bool
     stale: bool
     via: Via
@@ -91,7 +90,6 @@ class FxRateService:
                 rate=Decimal(1),
                 rate_date=reference,
                 source="identity",
-                table_no=None,
                 is_synthetic=False,
                 stale=False,
                 via="identity",
@@ -106,7 +104,6 @@ class FxRateService:
             rate=row.rate if via == "direct" else invert_rate(row.rate),
             rate_date=row.rate_date,
             source=row.source,
-            table_no=row.table_no,
             is_synthetic=row.is_synthetic,
             stale=is_stale(
                 row.rate_date, today=reference, max_age_days=STALE_AFTER_DAYS
@@ -173,7 +170,6 @@ class FxRateService:
         *,
         rate_date: date,
         source: str,
-        table_no: str | None = None,
         is_synthetic: bool = False,
     ) -> None:
         """Store one observation (idempotent per pair, day and source) and refresh
@@ -192,7 +188,6 @@ class FxRateService:
             rate_date=rate_date,
             rate=rate,
             source=source,
-            table_no=table_no,
             is_synthetic=is_synthetic,
         )
         self.sync_cached_rate(source_currency)

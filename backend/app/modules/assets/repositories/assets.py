@@ -89,7 +89,7 @@ class AssetRepository(SQLRepository):
         isin: str | None = None,
         mic: str | None = None,
         country: str | None = None,
-        asset_type: str = "user_asset",
+        asset_type: str = "stock",
     ) -> Asset:
         """Create new asset; refreshed so the server-side `updated_at` is loaded."""
         asset = Asset(

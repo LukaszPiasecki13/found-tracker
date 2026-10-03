@@ -261,7 +261,6 @@ def test_rate_lookup_returns_the_quote_and_maps_date(
         rate=Decimal("0.26"),
         rate_date=date(2026, 10, 1),
         source="nbp",
-        table_no="190/A/NBP/2026",
         is_synthetic=False,
         stale=False,
         via="direct",
@@ -279,7 +278,6 @@ def test_rate_lookup_returns_the_quote_and_maps_date(
         "rate": 0.26,
         "rate_date": "2026-10-01",
         "source": "nbp",
-        "table_no": "190/A/NBP/2026",
         "is_synthetic": False,
         "stale": False,
         "via": "direct",
@@ -333,7 +331,6 @@ def test_fx_history_lists_items(client: TestClient, services: Services) -> None:
             rate_date=date(2026, 10, 1),
             rate=Decimal("0.26"),
             source="nbp",
-            table_no=None,
             is_synthetic=False,
         )
     ]
@@ -356,7 +353,6 @@ def test_fx_history_lists_items(client: TestClient, services: Services) -> None:
                 "rate_date": "2026-10-01",
                 "rate": 0.26,
                 "source": "nbp",
-                "table_no": None,
                 "is_synthetic": False,
             }
         ]
@@ -379,7 +375,6 @@ def test_put_manual_fx_rate_returns_the_row(
         rate_date=date(2026, 10, 1),
         rate=Decimal("0.26"),
         source="manual",
-        table_no=None,
         is_synthetic=False,
     )
 

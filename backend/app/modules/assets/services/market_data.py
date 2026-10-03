@@ -160,6 +160,10 @@ class MarketDataService:
             self._asset_repo.flush()
         return stored
 
+    def list_currency_codes(self) -> list[str]:
+        """Codes of every stored currency, by code."""
+        return [currency.code for currency in self._currency_repo.list_all()]
+
     def refresh_currency_rates(self, base_code: str = DEFAULT_CURRENCY_CODE) -> int:
         """Store today's rate of every currency to `base_code` in the history and
         set its cached `exchange_rate` (units of `base_code` per one unit; the base

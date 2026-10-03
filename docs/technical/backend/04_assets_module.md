@@ -20,9 +20,9 @@ Walory, klasy waloru, waluty oraz dane rynkowe: historia cen i kursów (źródł
 |---|---|---|
 | `assets_assetclass` | `AssetClass` | `id`, `name` (unikalna, max 20) |
 | `assets_currency` | `Currency` | `id`, `code` (unikalny, 3), `exchange_rate` (`Numeric(18,9)`, **cache**), `base_currency_id` |
-| `assets_asset` | `Asset` | `id`, `ticker` (unikalny), `name`, `asset_class_id`, `currency_id`, `current_price` (`Numeric(18,9)`, **cache**), `exchange`, `sector`, `isin` (unikalny, nullable), `mic`, `country`, `asset_type`, `archived_at`, `updated_at` |
+| `assets_asset` | `Asset` | `id`, `ticker` (unikalny), `name`, `asset_class_id`, `currency_id`, `current_price` (`Numeric(18,9)`, **cache**), `exchange`, `sector`, `isin` (unikalny, nullable), `mic`, `country`, `asset_type` (`String(10)`, domyślnie `stock`), `archived_at`, `updated_at` |
 | `assets_price` | `AssetPrice` | `id`, `asset_id`, `price_date`, `close` (`Numeric(18,9)`, `CHECK > 0`), `currency_id`, `source`, `is_synthetic`, `fetched_at`; UNIQUE `(asset_id, price_date, source)` |
-| `assets_fx_rate` | `FxRate` | `id`, `from_currency_id`, `to_currency_id` (FK `ON DELETE CASCADE`), `rate_date`, `rate` (`Numeric(18,9)`, `CHECK > 0`), `source`, `table_no`, `is_synthetic`, `fetched_at`; `CHECK from <> to`; UNIQUE `(from, to, rate_date, source)` |
+| `assets_fx_rate` | `FxRate` | `id`, `from_currency_id`, `to_currency_id` (FK `ON DELETE CASCADE`), `rate_date`, `rate` (`Numeric(18,9)`, `CHECK > 0`), `source`, `is_synthetic`, `fetched_at`; `CHECK from <> to`; UNIQUE `(from, to, rate_date, source)` |
 
 Modele w stylu `Mapped[...]`/`mapped_column`; kwoty i kursy to `Decimal` ([ADR-0010](../adr/0010-decimal-i-precyzja-pieniedzy.md)). `CHECK` tylko w nowych tabelach; walidację pól istniejących tabel robi serwis i schemat.
 
@@ -30,7 +30,7 @@ Modele w stylu `Mapped[...]`/`mapped_column`; kwoty i kursy to `Decimal` ([ADR-0
 
 **Źródła i pierwszeństwo.** `source` ∈ {`manual`, `yahoo`, …}. Różne źródła tego samego dnia współistnieją; dla dnia wygrywa `manual` (ranga 0), potem znany dostawca (`yahoo`, ranga 1), potem reszta (nieznane, ranga 1000; remis rozstrzyga nazwa źródła). Efektywna cena na dzień D = zwycięzca **najpóźniejszego dnia ≤ D** (nie „najlepsze źródło ze wszystkich dni": starsza cena ręczna nie przykrywa nowszego zamknięcia z dostawcy). Forward-fill liczy się przy odczycie, nigdy nie jest zapisywany. `is_synthetic`: notowanie z `fetch_quote` (może być śródsesyjne) zapisuje się jako syntetyczne i jest nadpisywane zamknięciem z historii dostawcy; wpisy ręczne nie są.
 
-**Typ waloru** (`asset_type`, zbiór zamknięty w `constants.ASSET_TYPES`): `stock`, `etf`, `fund`, `treasury_bond`, `bond`, `crypto`, `currency`, `commodity`, `deposit`, `user_asset` (domyślny). Walor z dostawcy dostaje typ z `quoteType` (`EQUITY`→`stock`, `ETF`→`etf`, `MUTUALFUND`→`fund`, `CRYPTO*`→`crypto`, `CURRENCY`→`currency`, `FUTURE`→`commodity`, inne→`stock`). Oś ta jest niezależna od edytowalnej **klasy waloru**. `isin` (ISO 6166, suma kontrolna), `mic` (4 znaki) i `country` (2 litery) są walidowane i zapisywane wielkimi literami; `null` czyści.
+**Typ waloru** (`asset_type`, zbiór zamknięty w `constants.ASSET_TYPES`): `stock` (domyślny) albo `etf` — moduł obsługuje akcje i ETF-y. Walor z dostawcy dostaje `etf` dla `quoteType` `ETF`, w pozostałych przypadkach `stock`. Oś ta jest niezależna od edytowalnej **klasy waloru**. `isin` (ISO 6166, suma kontrolna), `mic` (4 znaki) i `country` (2 litery) są walidowane i zapisywane wielkimi literami; `null` czyści.
 
 **Archiwizacja.** `archived_at` ukrywa walor w wyszukiwarce i listach (`include_archived=true` go pokazuje), blokuje nowe Operacje (`409 ASSET_ARCHIVED` z `portfolios`), ręczne ceny i edycję ceny oraz zatrzymuje odświeżanie. Historia, pozycje i wycena zostają. Odwracalna. Walor z historią (Operacje, Pozycje albo ceny) nie jest usuwany: `409 ASSET_HAS_HISTORY` (zastępuje `ASSET_IN_USE`).
 
@@ -43,7 +43,7 @@ Wszystkie wymagają zalogowanego użytkownika (`get_current_user`). Zapis danych
 | `GET/POST /assets/asset-classes`, `PUT/PATCH/DELETE /assets/asset-classes/{id}` | CRUD klas waloru |
 | `GET/POST /assets/currencies`, `GET/PUT/PATCH/DELETE /assets/currencies/{id}` | CRUD walut; jawny `exchange_rate` przy `POST`/`PUT`/`PATCH` zapisuje ręczny kurs do USD z dzisiejszą datą (domyślne `1` nie jest kursem i nie trafia do historii) |
 | `GET /assets/currencies/rate?from_currency=&to_currency=&date=` | Kurs na dzień (domyślnie dziś): bezpośredni albo odwrotny (`via`), nowsza obserwacja wygrywa, remis → bezpośredni; ta sama waluta → `identity`; brak → `404 RATE_MISSING`. Kursów krzyżowych nie składa — to robi `portfolios` |
-| `GET /assets/fx-rates?from_currency=&to_currency=&from=&to=&source=` | Historia skierowanej pary, od najstarszej: `{items: [{rate_date, rate, source, table_no, is_synthetic}]}` |
+| `GET /assets/fx-rates?from_currency=&to_currency=&from=&to=&source=` | Historia skierowanej pary, od najstarszej: `{items: [{rate_date, rate, source, is_synthetic}]}` |
 | `PUT /assets/fx-rates` | Ręczny kurs dnia (`source=manual`, upsert), nie z przyszłości |
 | `GET /assets/?search=&asset_type=&asset_class_id=&country=&include_archived=` | Lista; `search` po tickerze, nazwie i ISIN |
 | `POST /assets/` | Utworzenie; początkowa cena > 0 zapisuje się jako dzisiejszy wpis `manual` (cena 0 = brak ceny) |
@@ -120,12 +120,12 @@ assets/
 
 `domain/` ma wyłącznie bibliotekę standardową i nie czyta zegara (`tests/unit/test_domain_purity.py`).
 
-`entrypoints.py` ([ADR-0002](../adr/0002-sesja-poza-zadaniem-entrypointy-i-wiring.md)) — jedyne miejsce modułu otwierające sesję poza żądaniem; nie commituje:
+`entrypoints.py` ([ADR-0002](../adr/0002-sesja-poza-zadaniem-entrypointy-i-wiring.md)) — jedyne miejsce modułu otwierające sesję poza żądaniem; nie commituje. Funkcje przyjmują `SessionScope` (jak w ADR-0017), a błąd jednego waloru lub waluty nie przerywa reszty — liczy się w `failed`:
 
 | Funkcja | Działanie |
 |---|---|
-| `refresh_prices(asset_ids=None)` | dzisiejsza cena z dostawcy dla podanych walorów albo wszystkich aktywnych; zwraca liczbę zapisanych |
-| `refresh_fx_rates()` | dzisiejszy kurs każdej waluty do USD |
+| `refresh_prices(asset_ids=None, scope=session_scope)` | dzisiejsza cena z dostawcy dla podanych walorów albo wszystkich aktywnych (zarchiwizowane są pomijane); zwraca `RefreshResult(ok, failed)` |
+| `refresh_fx_rates(scope=session_scope)` | dzisiejszy kurs każdej waluty do USD; zwraca `RefreshResult(ok, failed)` |
 
 Harmonogramu ani CLI jeszcze nie ma — `refresh_prices` i `refresh_fx_rates` wołają dziś ręcznie `POST /assets/refresh-prices` i `POST /portfolios/positions/refresh`.
 

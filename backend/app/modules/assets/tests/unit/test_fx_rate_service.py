@@ -32,7 +32,6 @@ def _rate(
         "rate_date": day,
         "rate": Decimal(rate),
         "source": source,
-        "table_no": None,
         "is_synthetic": False,
     }
     values.update(extra)
@@ -72,25 +71,14 @@ def test_get_rate_returns_a_direct_rate_with_its_evidence(
 ) -> None:
     _rows(
         fx_repo,
-        {
-            (PLN.id, USD.id): [
-                _rate(
-                    PLN.id,
-                    USD.id,
-                    date(2026, 10, 1),
-                    "0.26",
-                    "nbp",
-                    table_no="190/A/NBP/2026",
-                )
-            ]
-        },
+        {(PLN.id, USD.id): [_rate(PLN.id, USD.id, date(2026, 10, 1), "0.26", "nbp")]},
     )
 
     quote = service.get_rate("pln", "usd", date(2026, 10, 2))
 
     assert (quote.from_currency, quote.to_currency) == ("PLN", "USD")
     assert (quote.rate, quote.via, quote.source) == (Decimal("0.26"), "direct", "nbp")
-    assert (quote.rate_date, quote.table_no) == (date(2026, 10, 1), "190/A/NBP/2026")
+    assert quote.rate_date == date(2026, 10, 1)
     assert quote.stale is False
 
 
@@ -284,7 +272,6 @@ def test_record_rate_upserts_and_refreshes_the_cache_of_the_non_base_currency(
         rate_date=TODAY,
         rate=Decimal("1.08"),
         source="yahoo",
-        table_no=None,
         is_synthetic=True,
     )
     assert EUR.exchange_rate == Decimal("1.08")

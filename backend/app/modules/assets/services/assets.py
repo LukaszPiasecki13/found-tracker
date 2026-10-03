@@ -16,7 +16,6 @@ from app.core.market_data import MarketDataUnavailableError, Quote
 from app.modules.assets.constants import (
     DEFAULT_ASSET_CLASS_NAME,
     DEFAULT_ASSET_TYPE,
-    DEFAULT_PROVIDER_ASSET_TYPE,
     LOCAL_SEARCH_LIMIT,
     QUOTE_TYPE_ASSET_CLASSES,
     QUOTE_TYPE_ASSET_TYPES,
@@ -372,7 +371,7 @@ class AssetService:
 
     @staticmethod
     def _asset_type_of(quote: Quote) -> str:
-        return QUOTE_TYPE_ASSET_TYPES.get(quote.quote_type, DEFAULT_PROVIDER_ASSET_TYPE)
+        return QUOTE_TYPE_ASSET_TYPES.get(quote.quote_type, DEFAULT_ASSET_TYPE)
 
     def _with_price[R: AssetBase](
         self, schema: type[R], asset: Asset, quotes: dict[int, PriceQuote]
