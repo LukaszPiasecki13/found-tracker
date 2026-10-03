@@ -8,7 +8,7 @@ last_reviewed: 2026-10-02
 
 # Jak naprawić wycenę walut obcych jako pierwszy wycinek implementacji?
 
-> **Plan wykonawczy (L3, draft).** Nie opisuje stanu systemu. Wycinek adaptuje istniejące moduły `assets` i `portfolios` — krok E0.1 [roadmapy](./02_roadmapa_funkcjonalna.md) ([etapy E0–E5](./03_roadmapa_etapy_E0-E5.md)).
+> **Plan wykonawczy (L3, draft).** Nie opisuje stanu systemu. Wycinek adaptuje istniejące moduły `assets` i `portfolios` — krok E0.1 [roadmapy](./02_roadmapa_funkcjonalna.md) ([etapy E0–E4](./03_roadmapa_etapy_E0-E5.md)).
 
 Wycinek: wycena pozycji w walucie obcej kursem krzyżowym (waluta waloru → waluta bazowa Portfela), z jawnym `rate_missing` zamiast cichego kursu 1. Rozmiar **M** (4–5 dni), 7 kroków TDD, zero migracji. Dowód defektu: F1 w [stanie vs cel](../research/06_stan_found-tracker_vs_cel.md).
 
@@ -27,7 +27,7 @@ Wycinek: wycena pozycji w walucie obcej kursem krzyżowym (waluta waloru → wal
 
 | Wycinek | Zakres | Dlaczego odłożony |
 |---|---|---|
-| **B. Ustawienia użytkownika** (E0.9) | nowy zasób w `core_data`: tabela `core_data_user_settings`, `GET/PUT`, test API | wymaga migracji autogenerate i rozstrzygnięć (usunięcie `timezone`, `condition_thresholds`, domyślna waluta); nic nie naprawia; sumy „w walucie wyświetlania” (F3) i tak potrzebują kursu krzyżowego z E0.1 — B zależy od A |
+| **B. Ustawienia użytkownika** (E0.9) | nowy zasób w `core_data`: tabela `core_data_user_settings`, `GET/PUT`, test API | wymaga migracji autogenerate i rozstrzygnięć (usunięcie `timezone`, domyślna waluta); nic nie naprawia; sumy „w walucie wyświetlania” (F3) i tak potrzebują kursu krzyżowego z E0.1 — B zależy od A |
 | **C. Zamknięcie rejestracji** (E0.6) | `ALLOW_REGISTRATION`, kolumna `is_owner` (migracja addytywna), pierwszy `cli.py` z `set-owner`, 403 na zapisach `assets` | zmienia zachowanie auth (testy używają `/auth/register`, `conftest.py:46`), dotyka D14 i biznesowego ADR 0007 (decyzja właściciela), wprowadza pierwszy driver CLI pod `test_architecture.py:295`; to utwardzanie, nie poprawność danych |
 
 ## 1. Cel i zakres
@@ -197,7 +197,7 @@ K1–K7 oraz E0.1b wykonane. Odstępstwa od planu: (1) K2 poszedł po K3/K4 — 
 
 | Ryzyko | Mitygacja |
 |---|---|
-| **Dialogi nadal podpowiadają kurs USD** (`BuyAssetDialog.tsx:62-64`, `SellAssetDialog.tsx:49` — ten drugi nie jest w F4): nowa Operacja w Portfelu PLN na walorze EUR dostanie `fx_rate` 1,08 zamiast 4,32, a wartość będzie już poprawna — wynik (`unrealized_pnl`) zrobi się zawyżony | E0.1b (S, ~1 dzień) **blokuje wydanie na `main` razem z tym wycinkiem** (nie wdrażać K1–K7 bez E0.1b); do tego czasu wpisywać kurs ręcznie; istniejące operacje z kursem z dialogu — raport E0.8 / przebudowa E2.0 |
+| **Dialogi nadal podpowiadają kurs USD** (`BuyAssetDialog.tsx:62-64`, `SellAssetDialog.tsx:49` — ten drugi nie jest w F4): nowa Operacja w Portfelu PLN na walorze EUR dostanie `fx_rate` 1,08 zamiast 4,32, a wartość będzie już poprawna — wynik (`unrealized_pnl`) zrobi się zawyżony | E0.1b (S, ~1 dzień) **blokuje wydanie na `main` razem z tym wycinkiem** (nie wdrażać K1–K7 bez E0.1b); do tego czasu wpisywać kurs ręcznie; operacje wprowadzone z kursem z dialogu przed wdrożeniem E0.1b trzeba poprawić ręcznie (dane od zera, bez migracji) |
 | Heurystyka `exchange_rate == 1` ∧ kod ≠ USD (przed E1.1) | błąd tylko w stronę „brak kursu”, nigdy cichego kursu 1; zastępowana w E1.1 |
 | Zmiana kształtu odpowiedzi (`null`) | frontend w K5; pola addytywne; typy `\| null` przechwycą użycia przy `npm run build` |
 | Stale kursy po awarii dostawcy (`market_data.py:121-123` pomija walutę) | kurs z poprzedniego odświeżenia zostaje (jak dziś); „nieaktualny” — E1.7 |
@@ -242,7 +242,7 @@ Komendy z `CLAUDE.md` projektu (backend z aktywnym `.venv`, `cd backend`):
 | 2 | Czy E0.1b (endpoint `fx-rate` + oba dialogi) w tym samym wycinku? | osobny review i commity, ale **wydanie na `main` blokujące razem z wycinkiem** — ryzyko w pkt 8 |
 | 3 | `FxMapBuilder` importuje stałą `DEFAULT_CURRENCY_CODE` z `assets.constants` czy dostaje kod USD z `CurrencyService`? | stała (test architektury jej nie flaguje, `test_architecture.py:475-500`); metoda w serwisie, jeśli właściciel woli ścisłą lekturę ADR-0006 |
 | 4 | `total_fees` Portfela sumuje opłaty w walutach waloru (`valuation.py:89`; `ledger.py:182,195`) | osobny defekt, poza wycinkiem — kandydat do E2.x |
-| 5 | Operacje już zapisane z `fx_rate` z dialogu (USD-owym) | raport E0.8, przebudowa E2.0; wycinek ich nie naprawia |
+| 5 | Operacje już zapisane z `fx_rate` z dialogu (USD-owym) | poprawka ręczna albo ponowny seed (E0.5); wycinek ich nie naprawia |
 | 6 | Seed: blok `PORTFOLIOS` to `seed_data.py:187-212` (roadmapa podaje 187-211 — różnica o jedną linię, bez znaczenia) | seed ma tylko Portfele w walucie waloru — fixture w testach, nie w seedzie |
 | 7 | Akceptacja ADR-0005 i ADR-0015 (`Proposed`) | wycinek nie wymaga; E1.1 wymaga ADR-0015 |
 | 8 | Brak `.venv` i PostgreSQL w środowisku autora planu | liczby policzone ręcznie, testów nie uruchamiano; pierwszy krok K1 zaczyna od `pytest -m "not integration"` jako bazy odniesienia |

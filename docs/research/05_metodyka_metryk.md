@@ -158,7 +158,7 @@ R_base         = R_local + R_fx + R_local × R_fx          (cross term)
 
 **Jakie kursy FX:**
 - PP używa kursów referencyjnych EBC i ostrzega, że „will probably differ slightly from the real transaction rates” (PP-Prices).
-- Podatek w PL: kwoty walutowe po średnim kursie NBP (tabela A) z ostatniego dnia roboczego przed dniem przychodu/kosztu (art. 11a ustawy o PIT; cytat z tekstu jednolitego Dz.U. 2026 poz. 592 w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)).
+- Podatek w PL: kwoty walutowe po średnim kursie NBP (tabela A) z ostatniego dnia roboczego przed dniem przychodu/kosztu (art. 11a ustawy o PIT; cytat z tekstu jednolitego Dz.U. 2026 poz. 592 w [04_rynek_pl_brokerzy.md](./04_rynek_pl_brokerzy.md)).
 - **rekomendacja:** przechowuj `fx_rate` i `fx_source` (`broker`, `nbp_a`, `ecb`) per Operacja; kurs brokera dla kosztu nabycia w UI, NBP A z D−1 dla rejestru podatkowego, dzienny kurs rynkowy/NBP dla wyceny. Istniejące `average_fx_rate` w `domain/protocols.py` to pojęcie kosztu nabycia — trzymaj osobno od FX wyceny.
 ## 4. Metryki ryzyka
 GIPS 2.A.18: okresowość i metodologia ryzyka dla kompozytu i benchmarku muszą być takie same. Każdą metrykę licz z szeregu TWR r_t (§1.2), nigdy ze zmian surowej MV. Przykładowy szereg (indeks 100, 102, 99, 101, 97, 103): r = [+2.0000 %, −2.9412 %, +2.0202 %, −3.9604 %, +6.1856 %]; wyniki niżej to dane zabawkowe.
@@ -187,7 +187,7 @@ GIPS 2.A.18: okresowość i metodologia ryzyka dla kompozytu i benchmarku muszą
 | Rentowność 52-tyg. bonów / krótkich obligacji | inwestowalna | nieregularne emisje | |
 | 0 % | proste | zawyża Sharpe'a przy wysokich stopach | |
 
-**rekomendacja:** stopa jako szereg czasowy `rate_series(code, date, annual_rate)`, kapitalizowana dziennie `rf_d = (1 + rf_annual)^(1/365 or 1/252) − 1` (ta sama baza dni co zwroty); domyślnie stopa referencyjna NBP (darmowa); POLSTR, jeśli licencja pozwala (dane WIBOR/WIRON GPW Benchmark są płatne — `./03_rynek_pl_dane_i_obligacje.md`), wybór widoczny w UI; dla innych walut bazowych €STR (EUR) lub SOFR (USD) (**[niezweryfikowane]** przydatność).
+**rekomendacja:** stopa jako szereg czasowy `rate_series(code, date, annual_rate)`, kapitalizowana dziennie `rf_d = (1 + rf_annual)^(1/365 or 1/252) − 1` (ta sama baza dni co zwroty); domyślnie stopa referencyjna NBP (darmowa); POLSTR, jeśli licencja pozwala (dane WIBOR/WIRON GPW Benchmark są płatne — `./03_rynek_pl_dane_rynkowe.md`), wybór widoczny w UI; dla innych walut bazowych €STR (EUR) lub SOFR (USD) (**[niezweryfikowane]** przydatność).
 ## 5. Benchmarking
 - TWR Portfela vs zwrot całkowity indeksu w tym samym [s, e] i tej samej okresowości (GIPS 2.A.18). Indeks **total return** (dywidendy reinwestowane), gdy istnieje — indeks cenowy zaniża benchmark. Osobne wytyczne GIPS o benchmarkach (nieczytane szczegółowo): https://www.gipsstandards.org/wp-content/uploads/2023/08/gs_benchmarks_firms.pdf
 - **PP** (`SecurityIndex.java`): benchmark to **szereg cen** waloru, przeliczany na walutę Portfela kursem z wybranej daty (nie daty notowania — ważne w weekendy), wyrównany do pierwszego punktu Portfela, łączony dziennie `accumulated = (acc_{t−1} + 1) × (1 + delta_t) − 1` — czyli cenowy TWR; dywidendy tylko w indeksie TR.
@@ -228,9 +228,9 @@ Bench_MV_t = units × P_bench,t × FX_t
 | Niezrealizowany przy 130 (MV 650) | 47.50 | 97.50 |
 | **Razem** | **384.00** | **384.00** |
 ### 6.2 Dlaczego FIFO ma znaczenie w Polsce (PIT-38)
-- **Art. 24 ust. 10 ustawy o PIT** (tekst jednolity Dz.U. 2026 poz. 592; pełny cytat w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)): FIFO stosuje się, „jeżeli … nie jest możliwe określenie ceny nabycia zbywanych papierów wartościowych”, „odrębnie dla każdego rachunku papierów wartościowych”. FIFO jest więc regułą domyślną, nie zakazem identyfikacji: gdy broker identyfikuje sprzedawaną partię, można przyjąć jej cenę. Przykład: myfund w maju 2026 dodał wybór konkretnej transakcji kupna dla XTB (https://myfund.pl/index.php?raport=pomoc&helpID=20). **[wniosek]:** model partii musi dopuszczać wskazanie partii obok FIFO; czy FundTracker to obsłuży — decyduje biznesowy ADR. `Portfolio` w FundTracker może nie odpowiadać 1:1 rachunkowi.
-- Koszty i przychody walutowe → PLN po średnim kursie NBP z ostatniego dnia roboczego przed (art. 11a; cytat w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)).
-- Zaokrąglenie podstawy i podatku: art. 63 §1 Ordynacji podatkowej (do pełnych złotych, od 50 gr w górę) (**[niezweryfikowane]**) — dotyczy deklarowanej podstawy i podatku, nie rejestru partii. Wyjątek (broszura MF, art. 63 § 1a Ordynacji): podatek z art. 30a ust. 1 pkt 1–3 zaokrągla się do pełnych groszy w górę — szczegóły i sprzeczność z przykładami PKO BP w `./04_rynek_pl_podatki_i_brokerzy.md`.
+- **Art. 24 ust. 10 ustawy o PIT** (tekst jednolity Dz.U. 2026 poz. 592; pełny cytat w [04_rynek_pl_brokerzy.md](./04_rynek_pl_brokerzy.md)): FIFO stosuje się, „jeżeli … nie jest możliwe określenie ceny nabycia zbywanych papierów wartościowych”, „odrębnie dla każdego rachunku papierów wartościowych”. FIFO jest więc regułą domyślną, nie zakazem identyfikacji: gdy broker identyfikuje sprzedawaną partię, można przyjąć jej cenę. Przykład: myfund w maju 2026 dodał wybór konkretnej transakcji kupna dla XTB (https://myfund.pl/index.php?raport=pomoc&helpID=20). **[wniosek]:** model partii musi dopuszczać wskazanie partii obok FIFO; czy FundTracker to obsłuży — decyduje biznesowy ADR. `Portfolio` w FundTracker może nie odpowiadać 1:1 rachunkowi.
+- Koszty i przychody walutowe → PLN po średnim kursie NBP z ostatniego dnia roboczego przed (art. 11a; cytat w [04_rynek_pl_brokerzy.md](./04_rynek_pl_brokerzy.md)).
+- Zaokrąglenie podstawy i podatku: art. 63 §1 Ordynacji podatkowej (do pełnych złotych, od 50 gr w górę) (**[niezweryfikowane]**) — dotyczy deklarowanej podstawy i podatku, nie rejestru partii. Wyjątek (broszura MF, art. 63 § 1a Ordynacji): podatek z art. 30a ust. 1 pkt 1–3 zaokrągla się do pełnych groszy w górę — szczegóły i sprzeczność z przykładami PKO BP w `./04_rynek_pl_brokerzy.md`.
 - To nie jest porada podatkowa. **rekomendacja:** eksport PIT-38 oznaczać jako „szkic do sprawdzenia”.
 
 **Konsekwencja:** obecna domena (`PositionState.average_buy_price`, `average_fx_rate`) to średni koszt — dobry dla „średniej ceny” w UI, ale zrealizowany P/L podatkowy musi pochodzić z rejestru partii (FIFO domyślnie) z przeliczeniem na PLN kursem NBP z D−1 **każdej partii**. Średni FX × średnia cena ≠ suma kosztów PLN per partia.
@@ -364,7 +364,7 @@ position_daily(portfolio_id, asset_id, date, qty, price_local, fx, mv_base, flow
 
 **Testy właściwości** (Hypothesis, jeśli dodany — decyzja o zależności): wpłata w dowolnej dacie nie zmienia TWR, gdy MV skaluje się razem z nią; bez przepływów zewnętrznych TWR = IRR (okresu, de-annualizowany); Total P/L identyczny dla FIFO i średniego kosztu; `R(a, c) = (1 + R(a, b))(1 + R(b, c)) − 1` (łączenie); drawdown nigdy ujemny; suma MV Pozycji = MV Portfela minus gotówka. **Walidacja krzyżowa:** eksport przykładowego Portfela do Portfolio Performance (import CSV) i porównanie TTWROR, IRR, MDD i zysków zrealizowanych FIFO. Oczekiwane drobne różnice ze źródeł FX (EBC vs NBP) i skalowania zmienności PP (§4).
 ## 11. Pytania otwarte (do weryfikacji przed implementacją)
-1. Art. 63 Ordynacji podatkowej — czytane tylko źródła wtórne (art. 24 ust. 10, 11a, 30b ustawy o PIT zacytowano z tekstu jednolitego Dz.U. 2026 poz. 592 w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)).
+1. Art. 63 Ordynacji podatkowej — czytane tylko źródła wtórne (art. 24 ust. 10, 11a, 30b ustawy o PIT zacytowano z tekstu jednolitego Dz.U. 2026 poz. 592 w [04_rynek_pl_brokerzy.md](./04_rynek_pl_brokerzy.md)).
 2. Bieżąca stopa referencyjna NBP i dostępność danych POLSTR/WIRON, w tym licencja GPW Benchmark na redystrybucję w aplikacji.
 3. Czy `Portfolio` w FundTracker = jeden rachunek maklerski (FIFO per rachunek).
 4. Czy dodać typy Operacji `transfer_in`/`transfer_out`, `fee`, `tax`, `interest`, `split` — wszystkie potrzebne do poprawnego TWR i partii.
@@ -378,10 +378,10 @@ Dostęp: 2026-10-01.
 - Sharpe 1994 (DOI 10.3905/jpm.1994.409501): https://web.stanford.edu/~wfsharpe/art/sr/sr.htm ; Sharpe 1966: https://doi.org/10.1086/294846 ; Sortino & Price 1994: https://doi.org/10.3905/joi.3.3.59 ; Jensen 1968: https://doi.org/10.1111/j.1540-6261.1968.tb00815.x ; Lo 2002: https://doi.org/10.2469/faj.v58.n4.2453
 - Karnosky & Singer 1994: https://rpc.cfainstitute.org/research/foundation/1994/global-asset-management-and-performance-attribution ; Vanguard, rebalansowanie (lustro PDF strony trzeciej): https://www.aaii.com/files/journal/pdf/best-practices-for-portfolio-rebalancing.pdf
 - TradingView, benchmark: https://www.tradingview.com/support/solutions/43000756149-what-is-a-benchmark-and-how-does-benchmarking-work/ ; Python `decimal`: https://docs.python.org/3/library/decimal.html
-- Wikipedia (wtórne): https://en.wikipedia.org/wiki/Modified_Dietz_method , https://en.wikipedia.org/wiki/Time-weighted_return ; ustawa o PIT, tekst jednolity Dz.U. 2026 poz. 592 — patrz [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md)
+- Wikipedia (wtórne): https://en.wikipedia.org/wiki/Modified_Dietz_method , https://en.wikipedia.org/wiki/Time-weighted_return ; ustawa o PIT, tekst jednolity Dz.U. 2026 poz. 592 — patrz [04_rynek_pl_brokerzy.md](./04_rynek_pl_brokerzy.md)
 
 ## Luki i niepewności
-- Art. 63 Ordynacji — tylko źródła wtórne; szczegóły stosowania stawki 19 % niezweryfikowane. Art. 24 ust. 10, 11a, 30b ustawy o PIT: tekst jednolity Dz.U. 2026 poz. 592, cytaty w [04_rynek_pl_podatki_i_brokerzy.md](./04_rynek_pl_podatki_i_brokerzy.md).
+- Art. 63 Ordynacji — tylko źródła wtórne; szczegóły stosowania stawki 19 % niezweryfikowane. Art. 24 ust. 10, 11a, 30b ustawy o PIT: tekst jednolity Dz.U. 2026 poz. 592, cytaty w [04_rynek_pl_brokerzy.md](./04_rynek_pl_brokerzy.md).
 - Stopa referencyjna NBP 3.75 % (lipiec 2026), harmonogram wygaszania WIBOR, wybór POLSTR — źródła wtórne; nbp.pl blokował dostęp. Przydatność €STR/SOFR jako rf — niezweryfikowana.
 - Brak źródła pierwotnego dla VaR (Jorion — wydanie/strony niezweryfikowane) i praktyki Monte Carlo; atrybucja rozszerzenia reguły Kartezjusza (Laguerre) niezweryfikowana.
 - Skalowanie zmienności w PP (× n) to odczyt kodu, niepotwierdzony w UI. Investopedia niedostępna; dokumentacja atrybucji Eagle i wątek forum PP cytowane wtórnie, bez URL w materiale.

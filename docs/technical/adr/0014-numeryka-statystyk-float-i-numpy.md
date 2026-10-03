@@ -3,19 +3,19 @@ id: adr-0014-statistics-numerics
 status: Proposed
 type: decision
 scope: backend/numerics
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 ---
 
-# Księga, partie i wycena obligacji liczą się na `Decimal` w `domain/`; statystyki na `float` z `numpy` w `services/`
+# Księga, partie, TWR i kursy liczą się na `Decimal` w `domain/`; `float` z `numpy` tylko dla XIRR i statystyk benchmarku w `services/`
 
-Pieniądze, ilości i koszt — `Decimal`, `domain/` tylko ze stdlib. Statystyki — `float` i `numpy` w `services/`. Zamyka wariant (a) [ADR-0005](0005-warstwa-domeny.md), dodaje `assets/domain/bonds.py`, uzupełnia [ADR-0010](0010-decimal-i-precyzja-pieniedzy.md).
+Pieniądze, ilości, koszt i `twr_index` — `Decimal`, `domain/` tylko ze stdlib. `float` i `numpy` wyłącznie w `services/`. Zamyka wariant (a) [ADR-0005](0005-warstwa-domeny.md), uzupełnia [ADR-0010](0010-decimal-i-precyzja-pieniedzy.md).
 
-**Rozstrzyga:** D11 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E3.1, E5.1, E6.1, E7.1, E9.2, E9.5.
+**Rozstrzyga:** D11 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E3.1.
 
 ## Kontekst
 
 - Metryki są w `services/metrics.py` (`numpy`, `backend/app/modules/portfolios/services/metrics.py:31`); ADR-0010 dopuszcza `float` tylko w wektorach wykresów, nie rozstrzyga skalarów ani przechowywanego `twr_index`.
-- Test czystości (`portfolios/tests/unit/test_domain_purity.py:17`) jest per moduł; `assets/domain/` i `taxes/domain/` byłyby bez kontroli.
+- Test czystości (`portfolios/tests/unit/test_domain_purity.py:17`) jest per moduł.
 - Dowód: [metodyka §10.1](../../research/05_metodyka_metryk.md).
 
 ## Decyzja
@@ -25,13 +25,9 @@ Pieniądze, ilości i koszt — `Decimal`, `domain/` tylko ze stdlib. Statystyki
 | Obliczenie | Typ | Miejsce |
 |---|---|---|
 | Księga, partie FIFO, zysk zrealizowany | `Decimal` | `portfolios/domain/` |
-| `r_day`, `twr_index` | `Decimal` | `portfolios/domain/` |
-| Wycena obligacji | `Decimal` | `assets/domain/bonds.py` |
-| Pule podatkowe, straty, WHT, kurs podatkowy | `Decimal` | `taxes/domain/` |
-| Rebalansing | `Decimal` | `planning/domain/rebalancing.py` **[propozycja]** |
-| XIRR, TWR okresu | `float` → `Decimal` | `portfolios/services/performance.py` |
-| Zmienność, Sharpe, Sortino, MDD, beta, korelacja, VaR, ES | `float` | `portfolios/services/risk.py` |
-| Monte Carlo (stałe ziarno, ≥ 10 000 ścieżek) | `float` | `planning/services/monte_carlo.py` |
+| `r_day`, `twr_index`, kursy | `Decimal` | `portfolios/domain/` |
+| XIRR | `float` → `Decimal` | `portfolios/services/performance.py` |
+| Statystyki benchmarku | `float` | `portfolios/services/performance.py` |
 | Wektory wykresów | `float` | `portfolios/services/metrics.py` |
 
 Kalkulatory to klasy bez I/O, budowane w `wiring.py`.
@@ -45,20 +41,20 @@ Kalkulatory to klasy bez I/O, budowane w `wiring.py`.
 
 **3. Egzekwowanie** ([ADR-0013](0013-kierunki-zaleznosci-nowych-modulow.md) pkt 6)
 - `numpy` tylko w `*/services/` (wzór: test `yfinance`, `test_architecture.py:446`).
-- Test czystości → `core/tests/test_domain_purity.py`, parametryzowany po `modules/*/domain`; dozwolone jak dziś plus `calendar`, `itertools` **[propozycja]**; `DOMAIN_LAYERS` obejmuje `assets` i `taxes` (`planning` przy E9.2).
+- Test czystości → `core/tests/test_domain_purity.py`, parametryzowany po `modules/*/domain`; dozwolone jak dziś plus `calendar`, `itertools` **[propozycja]**.
 - Brak `float` w `models/` i polach `Decimal*` schematów (`DecimalNumber`).
 
 ## Alternatywy
 
 - `numpy` w `domain/` — łamie DOM-1; odrzucone.
-- Statystyki na `Decimal` — niedokładne `**`, wolne; odrzucone.
+- XIRR na `Decimal` — iteracja z `**`, niedokładna i wolna; odrzucone.
 - Wszystko `float`, w tym `twr_index` — dryf, brak dokładnej równości w testach; odrzucone.
 - `pandas` — zbędna zależność; odrzucone.
 
 ## Konsekwencje
 
-- (+) Księga i podatek testowalne bez `numpy`; jedna granica konwersji; `domain/` pod jednym testem.
-- (−) Dwie arytmetyki w `portfolios`; rebalansing w `domain/` roboczy; `performance.py` odstępuje od DOM-6 (zapis w dokumencie modułu).
+- (+) Księga testowalna bez `numpy`; jedna granica konwersji; `domain/` pod jednym testem.
+- (−) Dwie arytmetyki w `portfolios`; `performance.py` odstępuje od DOM-6 (zapis w dokumencie modułu).
 
 ## Otwarte
 

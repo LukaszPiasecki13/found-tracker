@@ -58,7 +58,7 @@ Odbiorca: implementujący wycenę Walorów w `backend/app/modules/assets/` i `po
 | Historia | od 2002-01-02 (test: `2001-12-28` → 404, `2002-01-02` → `1/A/NBP/2002`, `mid 3.9480`) | api.nbp.pl + test |
 | HTTPS | „Od 1 sierpnia 2025 r. cała komunikacja z API.nbp.pl musi odbywać się za pośrednictwem protokołu HTTPS.” | api.nbp.pl |
 
-**rekomendacja (algorytm „kurs D-1” do PIT, art. 11a — patrz dokument podatkowy `04_rynek_pl_podatki_i_brokerzy.md`):** dla daty przychodu/kosztu `t` weź pierwszą tabelę A z `effectiveDate < t`, cofając się po 404 (weekendy, święta). Zapisz w Operacji: kurs, numer tabeli (`no`), `effectiveDate`. Numer tabeli jest dowodem dla urzędu. Obecnie `yahoo.py:52-53` bierze kurs `f"{from_code}{to_code}=X"` z Yahoo — do wyceny bieżącej wystarczy, do podatku nie.
+**rekomendacja (algorytm „kurs D-1” do PIT, art. 11a — patrz dokument podatkowy `04_rynek_pl_brokerzy.md`):** dla daty przychodu/kosztu `t` weź pierwszą tabelę A z `effectiveDate < t`, cofając się po 404 (weekendy, święta). Zapisz w Operacji: kurs, numer tabeli (`no`), `effectiveDate`. Numer tabeli jest dowodem dla urzędu. Obecnie `yahoo.py:52-53` bierze kurs `f"{from_code}{to_code}=X"` z Yahoo — do wyceny bieżącej wystarczy, do podatku nie.
 
 ### 1.3 Płatne API z pokryciem GPW (XWAR)
 
@@ -133,7 +133,7 @@ dla dnia d (start_k <= d < end_k):
 
 - **„Wartość rynkowa” w UI [wniosek]:** dwie liczby: `brutto` (wartość nominalna + narosłe odsetki; tak pokazuje to Tabela odsetkowa) oraz „wartość likwidacyjna netto” (po opłacie i podatku). Z drugiej liczby liczy się realny wynik.
 - **Który odczyt CPI:** list mówi tylko „ogłaszana … w miesiącu poprzedzającym pierwszy miesiąc danego okresu”. Rynek przyjmuje, że chodzi o odczyt za miesiąc X−2, publikowany w X−1 **[niezweryfikowane]** (nie znaleziono pierwotnego potwierdzenia, czy chodzi o szybki szacunek, czy odczyt finalny). **rekomendacja:** nie wyliczać `i` z danych GUS. Pobierać **ogłoszoną stopę okresu** dla serii (strona oferty: „Okres oprocentowania” + Tabela odsetkowa) i zapisywać ją jako fakt. CPI z GUS służy wyłącznie do szacunku przyszłych okresów („prognoza”, wyraźnie oznaczona).
-- **Podatek (19%):** od odsetek z obligacji — art. 30a ust. 1 pkt 2 ustawy o PIT (szczegóły w `04_rynek_pl_podatki_i_brokerzy.md`). Zaokrąglenie podatku — patrz sprzeczność w §2.4. COI: podatek przy każdej rocznej wypłacie odsetek. EDO/TOS/ROS/ROD: przy wykupie lub przedterminowym wykupie, od (narosłe − opłata).
+- **Podatek (19%):** od odsetek z obligacji — art. 30a ust. 1 pkt 2 ustawy o PIT (szczegóły w `04_rynek_pl_brokerzy.md`). Zaokrąglenie podatku — patrz sprzeczność w §2.4. COI: podatek przy każdej rocznej wypłacie odsetek. EDO/TOS/ROS/ROD: przy wykupie lub przedterminowym wykupie, od (narosłe − opłata).
 
 ### 2.4 Złote dane testowe (golden tests) z przykładów MF/PKO BP — sprawdzone
 
