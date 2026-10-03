@@ -10,13 +10,13 @@ last_reviewed: 2026-10-03
 
 Zmiana ustawia `dirty_from` Portfela; przebudowa kasuje wiersze od tej daty i liczy od nowa.
 
-**Rozstrzyga:** D7 (reszta po [ADR-0015](0015-historia-cen-i-kursow.md)), część D15. **Blokuje:** E2.3, E2.5, E3.1.
+**Blokuje:** E2.3, E2.5, E3.1.
 
 ## Kontekst
 
 - Księga składa jeden Portfel (`domain/ledger.py:311`); kolejność (`operation_date`, `created_at`, `id`) (`repositories/operations.py:53-57`).
 - Portfel to jeden rachunek bez przelewów, więc historie Portfeli są niezależne.
-- Zmiana ceny/kursu z przeszłości wymaga daty, nie znacznika czasu. Schemat: [metodyka §10.4](../../research/05_metodyka_metryk.md).
+- Zmiana ceny/kursu z przeszłości wymaga daty, nie znacznika czasu. Schemat: [metodyka §10.4](../../research/00_analiza_koncowa.md).
 
 ## Decyzja
 

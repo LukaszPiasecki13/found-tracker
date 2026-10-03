@@ -10,7 +10,7 @@ last_reviewed: 2026-10-03
 
 Portfel = jeden rachunek maklerski. Sumowanie rachunków w jeden widok robi byt **Grupa portfeli**, bez własnych Operacji.
 
-**Rozstrzyga:** D1 ([plan](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E2.1, E2.4, pośrednio E2.2, E2.3, E3.1.
+**Blokuje:** E2.1, E2.4, pośrednio E2.2, E2.3, E3.1.
 
 ## Kontekst
 

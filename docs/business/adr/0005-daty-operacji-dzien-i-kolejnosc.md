@@ -10,7 +10,7 @@ last_reviewed: 2026-10-03
 
 `operation_day` to data zawarcia w strefie Europe/Warsaw; `sequence` jawnie ustala kolejność Operacji w dniu. Snapshoty i okresy używają `operation_day`.
 
-**Rozstrzyga:** D12. **Blokuje:** E2.0, E2.3, E2.4.
+**Blokuje:** E2.0, E2.3, E2.4.
 
 ## Kontekst
 

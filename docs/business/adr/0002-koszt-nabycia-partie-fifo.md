@@ -10,7 +10,7 @@ last_reviewed: 2026-10-03
 
 **Partia** powstaje przy zakupie; jest daną pochodną Operacji, odtwarzalną przez `rebuild`. Sprzedaż zawsze zużywa partie FIFO w obrębie Portfela ([ADR 0001](0001-portfel-jest-rachunkiem.md)). `average_buy_price` zostaje wyłącznie informacją.
 
-**Rozstrzyga:** D2. **Blokuje:** E2.4, E3.2, E8.1–E8.3.
+**Blokuje:** E2.4, E3.2, E8.1–E8.3.
 
 ## Kontekst
 
@@ -25,7 +25,7 @@ last_reviewed: 2026-10-03
 4. **Split** nie tworzy Operacji otwierającej: zmienia `split_ratio`, ilość i cenę jednostkową przy stałym koszcie łącznym i dacie.
 5. **Wycena**: koszt = Σ koszt pozostały partii; niezrealizowany P/L = wartość rynkowa − koszt. `average_buy_price` — średnia ruchoma, w UI „informacyjnie”, nie zasila P/L.
 6. **Zysk zrealizowany** per wycinek zużycia, w walucie Waloru i walucie Portfela (po kursie brokera z zakupu i sprzedaży).
-7. **Test złoty** ([dowód 05](../../research/05_metodyka_metryk.md), §6): FIFO 336,50 + 47,50 = 384,00; średnia 286,50 + 97,50 = 384,00 — zysk całkowity niezależny od metody.
+7. **Test złoty** ([dowód 05](../../research/00_analiza_koncowa.md), §6): FIFO 336,50 + 47,50 = 384,00; średnia 286,50 + 97,50 = 384,00 — zysk całkowity niezależny od metody.
 
 ## Alternatywy
 

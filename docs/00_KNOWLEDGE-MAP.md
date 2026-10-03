@@ -19,10 +19,9 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 | Warstwa | Rola | Gdzie w tym repo |
 |---|---|---|
 | **L0 — Konstytucja** | reguły zachowania agenta | [`CLAUDE.md`](../CLAUDE.md), [`.claude/rules/ai-tools/`](../.claude/rules/ai-tools/) |
-| **L1 — Kanon** | słownik, decyzje produktowe | [`business/CONTEXT.md`](./business/CONTEXT.md), [`business/adr/`](./business/adr/README.md) |
+| **L1 — Kanon** | słownik, decyzje produktowe | [`business/CONTEXT.md`](./business/CONTEXT.md), [`business/adr/`](./business/adr/) |
 | **L2 — Kontrakty** | architektura, moduły, ADR-y techniczne | [`technical/`](./technical/) |
-| **L3 — Pamięć robocza** | plany zadań | [`plans/`](./plans/) |
-| **L4 — Dowody** | analizy, materiały źródłowe | [`research/`](./research/) |
+| **L4 — Dowody** | analiza zbiorcza, materiały źródłowe | [`research/`](./research/00_analiza_koncowa.md) |
 
 > **Plan nie opisuje stanu systemu.** Stan opisuje wyłącznie warstwa L2 i kod. Dokumenty modułów zawierają tabelę „Stan vs cel” z przypisaniem do kroku planu.
 
@@ -30,19 +29,19 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 
 | Zadanie | Kolejność czytania |
 |---|---|
-| Pierwszy kontakt z projektem | [`CONTEXT.md`](./business/CONTEXT.md) → [architektura backendu](./technical/backend/01_backend-architecture.md) → [plan refaktoryzacji](./plans/01_refaktoryzacja_do_wzorca_waterworks.md) |
+| Pierwszy kontakt z projektem | [`CONTEXT.md`](./business/CONTEXT.md) → [architektura backendu](./technical/backend/01_backend-architecture.md) → [analiza końcowa](./research/00_analiza_koncowa.md) |
 | Zmiana w backendzie | [`CONTEXT.md`](./business/CONTEXT.md) → [architektura](./technical/backend/01_backend-architecture.md) → dokument modułu (niżej) → [wiring](./technical/backend/06_wiring_i_entrypointy.md) |
 | Nowa operacja lub reguła portfela | [`05_portfolios_module.md`](./technical/backend/05_portfolios_module.md) → [ADR-0005 (domain)](./technical/adr/0005-warstwa-domeny.md) |
 | Zmiana we frontendzie | [architektura frontendu](./technical/frontend/frontend-architecture.md) |
 | Decyzja techniczna | [ADR-y techniczne](#adr-y-techniczne) |
-| Nowa funkcja produktu (zakres „jak myfund, tylko lepiej”) | [roadmapa funkcjonalna](./plans/02_roadmapa_funkcjonalna.md) → etap w [E0–E4](./plans/03_roadmapa_etapy_E0-E5.md) / [E8 i E11](./plans/04_roadmapa_etapy_E6-E11.md) → dowód L4 wskazany w kroku |
+| Nowa funkcja produktu (zakres „jak myfund, tylko lepiej”) | [analiza końcowa](./research/00_analiza_koncowa.md) (sekcje 7–8: decyzje i plan wdrożenia) → ADR-y |
 
 ## L1 — Kanon
 
 | Dokument | Co zawiera |
 |---|---|
 | [`business/CONTEXT.md`](./business/CONTEXT.md) | Słownik domeny: Portfel, Pozycja, Operacja, Walor, Klasa waloru, Waluta, Metryki. **Obowiązujące nazewnictwo** w kodzie, dokumentach i rozmowie |
-| [`business/adr/`](./business/adr/README.md) | ADR-y biznesowe (wszystkie `Accepted`, decyzje właściciela D1–D16 z [roadmapy](./plans/02_roadmapa_funkcjonalna.md)): [0001 Portfel = rachunek](./business/adr/0001-portfel-jest-rachunkiem.md), [0002 koszt nabycia, partie FIFO](./business/adr/0002-koszt-nabycia-partie-fifo.md), [0003 gotówka wielowalutowa](./business/adr/0003-gotowka-wielowalutowa.md), [0004 metodologia stóp zwrotu](./business/adr/0004-metodologia-stop-zwrotu.md), [0005 daty operacji: dzień i kolejność](./business/adr/0005-daty-operacji-dzien-i-kolejnosc.md), [0007 dane referencyjne i usuwanie](./business/adr/0007-dane-referencyjne-i-usuwanie.md) |
+| [`business/adr/`](./business/adr/) | ADR-y biznesowe (wszystkie `Accepted`, decyzje właściciela, zbiorczo w [analizie końcowej](./research/00_analiza_koncowa.md)): [0001 Portfel = rachunek](./business/adr/0001-portfel-jest-rachunkiem.md), [0002 koszt nabycia, partie FIFO](./business/adr/0002-koszt-nabycia-partie-fifo.md), [0003 gotówka wielowalutowa](./business/adr/0003-gotowka-wielowalutowa.md), [0004 metodologia stóp zwrotu](./business/adr/0004-metodologia-stop-zwrotu.md), [0005 daty operacji: dzień i kolejność](./business/adr/0005-daty-operacji-dzien-i-kolejnosc.md), [0007 dane referencyjne i usuwanie](./business/adr/0007-dane-referencyjne-i-usuwanie.md) |
 
 ## ADR-y techniczne
 
@@ -98,29 +97,13 @@ Osobny zbiór od tej mapy: zdiagnozowane, potwierdzone zaskoczenia, jeden plik n
 |---|---|
 | `backend/` | [`except A, B:` w Pythonie 3.14](./knowledge_base/backend/python-314-except-bez-nawiasow.md) |
 
-## L3 — Pamięć robocza
-
-| Dokument | Status |
-|---|---|
-| [plan refaktoryzacji do wzorca waterworks](./plans/01_refaktoryzacja_do_wzorca_waterworks.md) | `draft` — kroki R-01…R-13 wykonane (2026-10-01) |
-| [roadmapa funkcjonalna](./plans/02_roadmapa_funkcjonalna.md) | `draft` — etapy E0–E4, E8, E11, decyzje D1–D16 do ADR-ów; czeka na akceptację właściciela |
-| [roadmapa — etapy E0–E5](./plans/03_roadmapa_etapy_E0-E5.md) | `draft` — naprawy, dane rynkowe, księga v2, analityka, import XTB (później) |
-| [roadmapa — etapy E8 i E11](./plans/04_roadmapa_etapy_E6-E11.md) | `draft` — zdarzenia korporacyjne i dywidendy, jakość i eksploatacja |
-| [plan wycinka E0.1 — wycena walut obcych](./plans/05_plan_wycinka_e0-1_wycena_walut_obcych.md) | `draft` — pierwszy mały wycinek implementacji (adaptacja `assets` + `portfolios`) |
-| [archiwum: dawny plan architektury](./plans/archive/backend-architecture-plan.md) | Zastąpiony przez L2; do usunięcia za zgodą |
-
 ## L4 — Dowody
 
-Badania z datą i źródłami; **nienormatywne** — rekomendacje stąd obowiązują dopiero przez ADR lub plan. Append-only: nowe badanie zastępuje stare dopiskiem, nie edycją.
+Analiza zbiorcza z datą i źródłami; **nienormatywna** — rekomendacje stąd obowiązują dopiero przez ADR.
 
-| Dokument | Co zawiera (stan na 2026-10-01/02) |
+| Dokument | Co zawiera (stan na 2026-10-03) |
 |---|---|
-| [`research/competitors/01_myfund.md`](./research/competitors/01_myfund.md) | myfund.pl: model danych, operacje, analityka, import, cennik, słabości |
-| [`research/competitors/02_trackery_porownanie.md`](./research/competitors/02_trackery_porownanie.md) | Portfolio Performance, Ghostfolio, Wealthfolio, Sharesight, Snowball, Parqet, getquin i in.: macierz funkcji, pomysły do przejęcia, lekcje techniczne |
-| [`research/03_rynek_pl_dane_rynkowe.md`](./research/03_rynek_pl_dane_rynkowe.md) | źródła danych rynkowych PL (NBP, GPW, dostawcy notowań) |
-| [`research/04_rynek_pl_brokerzy.md`](./research/04_rynek_pl_brokerzy.md) | formaty eksportu brokerów (XTB, IBKR, DEGIRO, Trading 212 i in.); nazwa pliku historyczna |
-| [`research/05_metodyka_metryk.md`](./research/05_metodyka_metryk.md) | TWR, XIRR, benchmark, FIFO, dywidendy, testy złote |
-| [`research/06_stan_found-tracker_vs_cel.md`](./research/06_stan_found-tracker_vs_cel.md) | migawka kodu z 2026-10-01: defekty poprawności i luki G1…G25 względem myfund |
+| [`research/00_analiza_koncowa.md`](./research/00_analiza_koncowa.md) | zakres v1, myfund i konkurencja, dane rynkowe i brokerzy, metodyka metryk, stan aplikacji, architektura docelowa, decyzje (ADR), plan wdrożenia, otwarte kwestie |
 
 ## Czego tu nie ma
 

@@ -10,7 +10,7 @@ last_reviewed: 2026-10-03
 
 `portfolios_operation` pozostaje płaską tabelą; nowe zdarzenia (przewalutowanie, split) dostają kolumny nullable. Przewalutowanie to **jeden wiersz**: `amount`/`currency_id` = noga wychodząca, `counter_amount`/`counter_currency_id` = przychodząca.
 
-**Rozstrzyga:** D9 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). Kolumny: [`07_schemat_danych_docelowy.md`](../backend/07_schemat_danych_docelowy.md) §5.4.
+**Rozstrzyga:** D9 ([roadmapa](../../research/00_analiza_koncowa.md)). Kolumny: [`07_schemat_danych_docelowy.md`](../../research/00_analiza_koncowa.md) §5.4.
 
 ## Kontekst
 

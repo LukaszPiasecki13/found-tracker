@@ -10,7 +10,7 @@ last_reviewed: 2026-10-03
 
 Rozszerza kierunki z [ADR-0006](0006-cross-module-wylacznie-przez-serwisy.md) o pełny graf modułów `core_data`, `security`, `assets`, `portfolios` i egzekwuje go testem.
 
-**Rozstrzyga:** D10 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E1.4, E2.5, E4.1.
+**Blokuje:** E1.4, E2.5, E4.1.
 
 ## Kontekst
 
@@ -47,7 +47,7 @@ Zakazane: `assets → portfolios`, `assets → core_data|security`.
 ## Alternatywy
 
 - Port `CurrencyCatalog` w `core_data` — daje `core_data → assets` i pętlę; odrzucone.
-- Osobny moduł `imports` — cykl FK; odrzucone (D10).
+- Osobny moduł `imports` — cykl FK; odrzucone.
 - Zdarzenia zamiast kierunków — jeden proces, wystarczą wywołania serwisów; odrzucone.
 
 ## Konsekwencje
