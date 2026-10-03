@@ -1,6 +1,6 @@
 ---
 id: adr-0001-portfolio-is-account
-status: Proposed
+status: Accepted
 type: decision
 scope: business/portfolio-model
 last_reviewed: 2026-10-03

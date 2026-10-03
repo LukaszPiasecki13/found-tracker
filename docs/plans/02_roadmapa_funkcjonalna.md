@@ -110,7 +110,7 @@ Decyzje nieodwracalne lub zmieniające model danych. Rekomendacje pochodzą z do
 | D15 | Semantyka usuwania | walor z historią cen lub operacjami — tylko archiwizacja; paczka importu — cofnięcie usuwa jej operacje, chyba że były edytowane (wtedy blokada z listą) | twarde usuwanie z kaskadą | biznesowy | E2.3, E4.1 |
 | D16 | Dane i migracje | migracje schematu tylko `autogenerate`; nowe kolumny nullable albo z `server_default`; dane od zera przez seed i import | ręczna edycja migracji (zakazana) | techniczny | E2.0 |
 
-### Dokumenty projektowe i ADR-y (wszystkie `Proposed`/`draft` do akceptacji właściciela)
+### Dokumenty projektowe i ADR-y (biznesowe i techniczne 0013–0017, 0019–0020 `Accepted`; 0018 `Proposed`)
 
 Plan mówi **co** i **w jakiej kolejności**; **jak** (kolumny, endpointy, ekrany, algorytmy) opisują dokumenty projektowe.
 
@@ -122,7 +122,7 @@ Plan mówi **co** i **w jakiej kolejności**; **jak** (kolumny, endpointy, ekran
 
 Mapa decyzji D na ADR-y (biznesowe 0001–0005 i 0007, techniczne 0013–0020):
 
-| Decyzja | ADR (Proposed) |
+| Decyzja | ADR |
 |---|---|
 | D1 | [biznesowy 0001 — Portfel jest rachunkiem](../business/adr/0001-portfel-jest-rachunkiem.md) |
 | D2, D3 | [biznesowy 0002 — koszt nabycia, partie FIFO](../business/adr/0002-koszt-nabycia-partie-fifo.md) |
@@ -175,6 +175,6 @@ Mapa decyzji D na ADR-y (biznesowe 0001–0005 i 0007, techniczne 0013–0020):
 
 ## 8. Kolejne kroki po akceptacji planu
 
-1. Właściciel akceptuje lub zmienia decyzje D1–D16; agent przygotowuje ADR-y `Proposed` (biznesowe w `docs/business/adr/`, techniczne w `docs/technical/adr/`).
+1. Właściciel akceptuje lub zmienia decyzje D1–D16; agent przygotowuje ADR-y jako `Proposed` (biznesowe w `docs/business/adr/`, techniczne w `docs/technical/adr/`).
 2. Start od **E0** — naprawy nie wymagają nowych ADR-ów, a usuwają defekty F1–F6, które zafałszowałyby każdą metrykę.
 3. Po każdym kamieniu milowym przegląd planu (ten plik); stan systemu opisuje L2.

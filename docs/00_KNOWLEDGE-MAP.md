@@ -42,11 +42,11 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 | Dokument | Co zawiera |
 |---|---|
 | [`business/CONTEXT.md`](./business/CONTEXT.md) | Słownik domeny: Portfel, Pozycja, Operacja, Walor, Klasa waloru, Waluta, Metryki. **Obowiązujące nazewnictwo** w kodzie, dokumentach i rozmowie |
-| [`business/adr/`](./business/adr/README.md) | ADR-y biznesowe (wszystkie `Proposed`, decyzje właściciela D1–D16 z [roadmapy](./plans/02_roadmapa_funkcjonalna.md)): [0001 Portfel = rachunek](./business/adr/0001-portfel-jest-rachunkiem.md), [0002 koszt nabycia, partie FIFO](./business/adr/0002-koszt-nabycia-partie-fifo.md), [0003 gotówka wielowalutowa](./business/adr/0003-gotowka-wielowalutowa.md), [0004 metodologia stóp zwrotu](./business/adr/0004-metodologia-stop-zwrotu.md), [0005 daty operacji: dzień i kolejność](./business/adr/0005-daty-operacji-dzien-i-kolejnosc.md), [0007 dane referencyjne i usuwanie](./business/adr/0007-dane-referencyjne-i-usuwanie.md) |
+| [`business/adr/`](./business/adr/README.md) | ADR-y biznesowe (wszystkie `Accepted`, decyzje właściciela D1–D16 z [roadmapy](./plans/02_roadmapa_funkcjonalna.md)): [0001 Portfel = rachunek](./business/adr/0001-portfel-jest-rachunkiem.md), [0002 koszt nabycia, partie FIFO](./business/adr/0002-koszt-nabycia-partie-fifo.md), [0003 gotówka wielowalutowa](./business/adr/0003-gotowka-wielowalutowa.md), [0004 metodologia stóp zwrotu](./business/adr/0004-metodologia-stop-zwrotu.md), [0005 daty operacji: dzień i kolejność](./business/adr/0005-daty-operacji-dzien-i-kolejnosc.md), [0007 dane referencyjne i usuwanie](./business/adr/0007-dane-referencyjne-i-usuwanie.md) |
 
 ## ADR-y techniczne
 
-Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyje w front-matterze (`status:`). Wszystkie poniższe mają status **Proposed** — akceptuje człowiek.
+Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyje w front-matterze (`status:`). ADR-y 0013–0017 i 0019–0020 mają status **Accepted**; 0018 (import) oraz 0001–0012 są `Proposed` — status zmienia człowiek.
 
 | Dokument | Decyzja |
 |---|---|

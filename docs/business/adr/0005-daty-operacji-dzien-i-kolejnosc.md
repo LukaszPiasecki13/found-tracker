@@ -1,6 +1,6 @@
 ---
 id: adr-0005-operation-dates
-status: Proposed
+status: Accepted
 type: decision
 scope: business/operation-dates
 last_reviewed: 2026-10-03

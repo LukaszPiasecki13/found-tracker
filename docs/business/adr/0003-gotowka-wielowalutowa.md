@@ -1,6 +1,6 @@
 ---
 id: adr-0003-multicurrency-cash
-status: Proposed
+status: Accepted
 type: decision
 scope: business/cash
 last_reviewed: 2026-10-03

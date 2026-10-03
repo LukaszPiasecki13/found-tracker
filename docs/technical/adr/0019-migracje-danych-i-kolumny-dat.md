@@ -1,6 +1,6 @@
 ---
 id: adr-0019-data-migrations-date-columns
-status: Proposed
+status: Accepted
 type: decision
 scope: backend/migrations-seed-dates
 last_reviewed: 2026-10-03

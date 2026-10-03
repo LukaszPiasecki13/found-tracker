@@ -8,7 +8,7 @@ scope: business/adr
 
 # ADR-y biznesowe
 
-Decyzje produktowe i domenowe (zakres, reguły rozliczania, model danych z perspektywy użytkownika). Rejestr zawiera ADR 0001–0005 i 0007 (status `Proposed`); numeracja od 0001.
+Decyzje produktowe i domenowe (zakres, reguły rozliczania, model danych z perspektywy użytkownika). Rejestr zawiera ADR 0001–0005 i 0007 (status `Accepted`); numeracja od 0001.
 
 ## Konwencja
 
