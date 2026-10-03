@@ -1,7 +1,7 @@
 ---
 id: be-architecture
 status: current
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-03
 type: mixed
 scope: backend/architecture
 applies_to:
@@ -385,7 +385,7 @@ Tylko `alembic revision --autogenerate -m "..."`; pliku migracji nie edytuje si�
 
 ## 10. Stan kodu vs cel
 
-Opis powyżej to **cel**. Stan faktyczny kodu na 2026-10-01 i krok planu, który domyka lukę ([plan refaktoryzacji](../../plans/01_refaktoryzacja_do_wzorca_waterworks.md)):
+Opis powyżej to **cel**. Stan faktyczny kodu na 2026-10-01 i krok planu, który domyka lukę ([plan refaktoryzacji](../../research/00_analiza_koncowa.md)):
 
 | Element wzorca | Stan w kodzie | Krok planu |
 |---|---|---|

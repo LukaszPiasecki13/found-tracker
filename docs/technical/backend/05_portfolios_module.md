@@ -1,7 +1,7 @@
 ---
 id: be-portfolios-module
 status: current
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-02
 type: mixed
 scope: backend/portfolios
 applies_to:
@@ -33,6 +33,7 @@ Wszystkie wymagają zalogowanego użytkownika (`get_current_user`) i działają 
 | `GET /portfolios/{id}` | `PortfolioDetailResponse` — podsumowanie + `positions` (wycenione, z `portfolio_weight_pct`) + `updated_at` |
 | `PUT`/`PATCH /portfolios/{id}` | `PortfolioResponse`; jawny `null` = „bez zmian” |
 | `DELETE /portfolios/{id}` | 204; usuwa też pozycje i operacje |
+| `GET /portfolios/fx-rate?from_currency=&to_currency=` | `FxRateResponse` — kurs krzyżowy (`rate`, `via`: `identity/direct/inverse/cross`) składany z kursów `assets`; `CURRENCY_NOT_FOUND`, `RATE_MISSING` (oba 404); podpowiedź kursu w dialogach kupna/sprzedaży |
 | `GET /portfolios/positions?portfolio_name=` | `PositionResponse[]` — wycena po zapisanych cenach, bez efektów ubocznych |
 | `POST /portfolios/positions/refresh?portfolio_name=` | `PositionResponse[]` — najpierw odświeża kursy walut i ceny walorów pozycji (best-effort, [`04_assets_module.md` §3](./04_assets_module.md#3-reguły-biznesowe)), potem wycenia |
 | `GET /portfolios/operations?portfolio_name=` | `OperationResponse[]`, od najnowszej (`operation_date`, `created_at`) |
@@ -85,7 +86,7 @@ Reguły z §3 i wycena to czysta arytmetyka na `Decimal` — `portfolios/domain/
 | 0 — słownik | `errors.py` | `PortfolioDomainError(ValueError)` z klasowym `code`; podklasy `InvalidOperationError` (z `field`), `AssetRequiredError`, `AssetNotAllowedError`, `InsufficientCashError`, `InsufficientQuantityError`, `PositionNotFoundError` |
 | 1 — granica ORM | `protocols.py` | `Protocol`y (DOM-8): `OperationLike`, `PositionLike`, `PortfolioBalanceLike`, `HoldingLike`, `QuotedAssetLike`, `ValuedPortfolioLike` — wiersze ORM spełniają je strukturalnie |
 | 2 — komponent | `ledger.py` | `PortfolioLedger`: `validate(op)`, `apply(state, op) -> LedgerState`, `rebuild(ops) -> LedgerState`; wartości `OperationInput`, `PositionState`, `LedgerState` (`LedgerState.of(portfolio, positions)`, `OperationInput.from_operation(row)`) |
-| 2 — komponent | `valuation.py` | `PortfolioValuator.value(portfolio, holdings) -> PortfolioValuation` (z `PositionValuation` per pozycja) |
+| 2 — komponent | `valuation.py` | `PortfolioValuator.value(portfolio, holdings, fx_rates: FxMap) -> PortfolioValuation` (z `PositionValuation` per pozycja) |
 
 Publiczne API wyłącznie przez `domain/__init__.py` (`__all__`, DOM-11). Komponenty buduje `wiring.py` (`build_portfolio_ledger`, `build_portfolio_valuator`) i wstrzykuje przez konstruktor (DOM-10). Serwis tłumaczy każdy `PortfolioDomainError` w jednym miejscu (`_ledger_errors_rejected` w `services/operations.py`) na `OperationRejectedError` (400) z `code` domeny. Czystość, warstwy i import tylko przez `__init__` sprawdza `tests/unit/test_domain_purity.py`.
 
@@ -93,7 +94,7 @@ Publiczne API wyłącznie przez `domain/__init__.py` (`__all__`, DOM-11). Kompon
 
 ## 5. Wycena (modele odczytowe)
 
-`PortfolioValuator` liczy dokładnie (na `Decimal`): koszt nabycia `ilość × średnia cena` (waluta waloru) i `× średni kurs` (waluta portfela); wartość rynkowa `ilość × cena bieżąca`, a gdy waluta waloru ≠ waluta bazowa portfela — `× exchange_rate` waluty waloru; niezrealizowany wynik, zwrot %; dla portfela: wartość pozycji, wartość całkowita (z gotówką), wynik względem `total_deposited`, zwrot %, suma `total_fees` pozycji; udział pozycji względem wartości całkowitej. Dzielenie przez zero daje 0. Zaokrąglenie dopiero w schemacie odpowiedzi (typy `RoundedValue`/`RoundedPercent`/`RoundedFees` w `schemas/positions.py`): wartości 3 miejsca, procenty 4, opłaty 2, `ROUND_HALF_EVEN` (jak `round` Pythona).
+`PortfolioValuator` liczy dokładnie (na `Decimal`): koszt nabycia `ilość × średnia cena` (waluta waloru) i `× średni kurs` (waluta portfela); wartość rynkowa `ilość × cena bieżąca`, a gdy waluta waloru ≠ waluta bazowa portfela — `× kurs krzyżowy` z mapy `FxMap` (`(id waluty waloru, id waluty bazowej) -> rate[waloru]/rate[bazowej]`, kursy `assets` są „USD za jednostkę”; buduje ją `services/fx.py::FxMapBuilder`, domena dostaje gotową mapę); niezrealizowany wynik, zwrot %; dla portfela: wartość pozycji, wartość całkowita (z gotówką), wynik względem `total_deposited`, zwrot %, suma `total_fees` pozycji; udział pozycji względem wartości całkowitej. Dzielenie przez zero daje 0. **Brak kursu** (waluta bez notowania; `exchange_rate` równy 1 na walucie innej niż USD to wartość domyślna kolumny, nie kurs) → pola wyceny pozycji `null` + `rate_missing=true`; sumy portfela (`positions_value`, `total_value`, `total_profit_loss`, `total_return_pct`) są `null`, gdy brakuje kursu którejkolwiek pozycji (bez sum częściowych); koszty i `total_fees` nie wymagają kursu. Zaokrąglenie dopiero w schemacie odpowiedzi (typy `RoundedValue`/`RoundedPercent`/`RoundedFees` w `schemas/positions.py`): wartości 3 miejsca, procenty 4, opłaty 2, `ROUND_HALF_EVEN` (jak `round` Pythona).
 
 Serwisy odczytowe zwracają DTO (`PortfolioSummaryResponse`, `PortfolioDetailResponse`, `PositionResponse` — [ADR-0003](../adr/0003-serwisy-zwracaja-encje-orm.md)); repozytoria ładują pozycje → walor → waluta/klasa zapytaniami `selectinload`/`joinedload` (bez N+1) z `populate_existing`, więc odczyt w tej samej sesji po zapisie widzi świeży stan.
 
@@ -113,8 +114,8 @@ Odpowiedź `PortfolioVectorsResponse` to `RootModel[dict[str, list[datetime] | l
 
 | Serwis | Metody |
 |---|---|
-| `PortfolioService(portfolio_repo, currency_service, valuator)` | `list_summaries(owner_id, name=None)`, `get_detail(portfolio_id, owner_id)`, `get_owned(portfolio_id, owner_id)`, `get_owned_by_name(owner_id, name)`, `create(data, owner_id)`, `update(portfolio_id, data, owner_id)`, `delete(portfolio_id, owner_id)` |
-| `PositionService(portfolio_service, position_repo, market_data, valuator)` | `list_valued(owner_id, portfolio_name)` |
+| `PortfolioService(portfolio_repo, currency_service, valuator, fx_map_builder)` | `list_summaries(owner_id, name=None)`, `get_detail(portfolio_id, owner_id)`, `get_owned(portfolio_id, owner_id)`, `get_owned_by_name(owner_id, name)`, `create(data, owner_id)`, `update(portfolio_id, data, owner_id)`, `delete(portfolio_id, owner_id)` |
+| `PositionService(portfolio_service, position_repo, market_data, valuator, fx_map_builder)` | `list_valued(owner_id, portfolio_name)` |
 | `OperationService(portfolio_repo, position_repo, operation_repo, asset_service, ledger)` | `list_operations(owner_id, portfolio_name=None)`, `record(data, owner_id)`, `update(operation_id, data, owner_id)`, `delete(operation_id, owner_id)` — orkiestrator operacji wielomodułowej |
 | `MetricsService(operation_repo, prices)` | `portfolio_vectors(owner_id, query)` |
 
@@ -124,11 +125,11 @@ Zależności zewnętrzne: `assets` (`CurrencyService`, `AssetService`, `MarketDa
 
 ```text
 portfolios/
-├─ api/{portfolios,positions,operations,metrics}.py   # __init__.py: wspólny `router` dla main.py
-├─ services/{portfolios,positions,operations,metrics}.py
+├─ api/{portfolios,positions,operations,metrics,fx_rates}.py   # __init__.py: wspólny `router` dla main.py
+├─ services/{portfolios,positions,operations,metrics,fx}.py
 ├─ domain/{enums,errors,protocols,ledger,valuation}.py # + __init__.py z __all__
 ├─ repositories/{portfolios,positions,operations}.py
-├─ schemas/{portfolios,positions,operations,metrics}.py
+├─ schemas/{portfolios,positions,operations,metrics,fx_rates}.py
 ├─ models/{portfolio,position,operation}.py
 ├─ exceptions.py  dependencies.py  wiring.py
 └─ tests/unit/        # domena (w tym parytet z Django), serwisy, API, wiring, czystość domain/
@@ -162,5 +163,6 @@ Testy parytetu (`tests/unit/test_ledger_parity.py`) odtwarzają scenariusze test
 | Struktura, wiring, błędy z `code`, `transaction()`, `find_`/`get_`, testy `unit/` + `integration/` | zgodne z celem | — | R-07 (domknięty) |
 | `domain/` (księga, wycena), typowane argumenty, `Decimal` do granicy schematu, port cen, testy parytetu | zgodne z celem; wariant (a) ADR-0005 czeka na akceptację | — | R-08 (domknięty) |
 | Rejestracja operacji z datą wcześniejszą niż istniejące | stosowana do bieżącego stanu; późniejsza przebudowa (edycja/usunięcie) układa historię wg dat i może ją odrzucić | decyzja właściciela: walidować `POST` przebudową całej historii albo zostawić | — (otwarte) |
+| Kurs waluty = heurystyka (`exchange_rate` ≠ 1 lub USD), kursy bez historii; kurs jest zawsze „USD za jednostkę” — `FxMapBuilder` ignoruje `Currency.base_currency_id`, więc ręczny kurs względem innej bazy zepsuje wycenę do następnego odświeżenia; `CURRENCY_NOT_FOUND` ma tu dwa statusy (400 w ciele operacji, 404 w `GET /portfolios/fx-rate`) | tabela kursów z historią i źródłem ([ADR-0015](../adr/0015-historia-cen-i-kursow.md)) | E1.1 |
 | Odświeżanie kursów/cen | synchronicznie w `POST /portfolios/positions/refresh` | entrypoint + harmonogram ([`04_assets_module.md`](./04_assets_module.md)) | — (poza planem) |
 | `mypy` | nieuruchamiany | `mypy app` zielone | R-10 |
