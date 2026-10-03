@@ -20,12 +20,12 @@ Docelowa architektura: Layered Modular Monolith wzorowany na projekcie
 
 | Task | Command |
 |------|---------|
-| Install | `pip install -r requirements.txt` |
+| Install | `pip install -r requirements-dev.txt` (dev/CI: with ruff, mypy, pytest); `pip install -r requirements.txt` (production only) |
 | Run (dev) | `uvicorn app.main:app --reload` |
 | Test | `pytest` — wymaga jednorazowej bazy Postgres w `TEST_DATABASE_URL` (albo lokalnego `DATABASE_URL`); `conftest.py` odmawia startu na nielokalnej bazie. Bez bazy: `pytest -m "not integration"` |
 | Lint | `ruff check .` (verified) |
 | Format check | `ruff format --check .` (verified) |
-| Typecheck | `mypy app` — konfiguracja (`strict`, py3.14) w `pyproject.toml`; `mypy==2.3.0` w `requirements.txt` |
+| Typecheck | `mypy app` — konfiguracja (`strict`, py3.14) w `pyproject.toml`; `mypy==2.3.0` w `requirements-dev.txt` |
 | Migration status | `alembic current` |
 | Migration apply | `alembic upgrade head` |
 | Migration create | `alembic revision --autogenerate -m "..."` |
