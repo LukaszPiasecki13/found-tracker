@@ -23,8 +23,13 @@ def _integrity_error() -> IntegrityError:
 
 
 @pytest.fixture
-def service(currency_repo: MagicMock) -> CurrencyService:
-    return CurrencyService(currency_repo)
+def fx_rates() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def service(currency_repo: MagicMock, fx_rates: MagicMock) -> CurrencyService:
+    return CurrencyService(currency_repo, fx_rates)
 
 
 def test_create_uppercases_the_code(
@@ -206,3 +211,59 @@ def test_get_or_create_by_code_normalizes_and_does_not_commit(
 def test_create_request_validates_shape(payload: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         CurrencyCreateRequest.model_validate(payload)
+
+
+# --- manual exchange rates enter the history (ADR-0015) ---
+
+
+def test_create_with_an_explicit_rate_records_it_as_a_manual_rate(
+    service: CurrencyService, currency_repo: MagicMock, fx_rates: MagicMock
+) -> None:
+    currency_repo.find_by_code.return_value = None
+    created = SimpleNamespace(id=1, code="EUR")
+    currency_repo.create.return_value = created
+
+    service.create(CurrencyCreateRequest(code="eur", exchange_rate=Decimal("1.08")))
+
+    fx_rates.record_manual_rate_to_base.assert_called_once_with(
+        created, Decimal("1.08")
+    )
+
+
+def test_create_without_a_rate_records_nothing(
+    service: CurrencyService, currency_repo: MagicMock, fx_rates: MagicMock
+) -> None:
+    """The default 1 is a placeholder, not a quote: it must not become history."""
+    currency_repo.find_by_code.return_value = None
+    currency_repo.create.return_value = SimpleNamespace(id=1, code="EUR")
+
+    service.create(CurrencyCreateRequest(code="eur"))
+
+    fx_rates.record_manual_rate_to_base.assert_not_called()
+
+
+def test_update_of_the_rate_records_it_as_a_manual_rate(
+    service: CurrencyService, currency_repo: MagicMock, fx_rates: MagicMock
+) -> None:
+    currency = SimpleNamespace(id=1, code="EUR", exchange_rate=Decimal("1"))
+    currency_repo.get_by_id.return_value = currency
+
+    service.update(1, CurrencyUpdateRequest(exchange_rate=Decimal("1.1")))
+
+    fx_rates.record_manual_rate_to_base.assert_called_once_with(
+        currency, Decimal("1.1")
+    )
+
+
+def test_update_of_another_field_records_no_rate(
+    service: CurrencyService, currency_repo: MagicMock, fx_rates: MagicMock
+) -> None:
+    currency = SimpleNamespace(
+        id=1, code="EUR", exchange_rate=Decimal("1"), base_currency_id=None
+    )
+    currency_repo.get_by_id.return_value = currency
+    currency_repo.find_by_code.return_value = None
+
+    service.update(1, CurrencyUpdateRequest(code="eur"))
+
+    fx_rates.record_manual_rate_to_base.assert_not_called()
