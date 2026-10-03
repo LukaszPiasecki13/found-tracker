@@ -91,15 +91,33 @@ def assets() -> MagicMock:
 
 
 @pytest.fixture
+def history() -> list[SimpleNamespace]:
+    """The stored operations of portfolio 1; a recorded operation joins it."""
+    return [_stored("deposit", id=1, amount=D("1000"))]
+
+
+@pytest.fixture
 def service(
     portfolio_repo: MagicMock,
     position_repo: MagicMock,
     operation_repo: MagicMock,
     assets: MagicMock,
+    history: list[SimpleNamespace],
 ) -> OperationService:
+    def create(**values: Any) -> SimpleNamespace:
+        operation = _stored(values.pop("operation_type"), id=len(history) + 1, **values)
+        history.append(operation)
+        # From now on the replay reads the history, in the repository's order.
+        operation_repo.list_by_portfolio.side_effect = lambda _: sorted(
+            history, key=lambda op: (op.operation_date.replace(tzinfo=None), op.id)
+        )
+        return operation
+
     portfolio_repo.update.side_effect = lambda entity: entity
     position_repo.update.side_effect = lambda entity: entity
     operation_repo.update.side_effect = lambda entity: entity
+    operation_repo.create.side_effect = create
+
     return OperationService(
         portfolio_repo, position_repo, operation_repo, assets, PortfolioLedger()
     )
@@ -108,24 +126,25 @@ def service(
 # --- record ---
 
 
-def test_record_deposit_updates_cash_and_stores_the_operation(
+def test_record_deposit_rebuilds_cash_and_stores_the_operation(
     service: OperationService,
     portfolio_repo: MagicMock,
     position_repo: MagicMock,
     operation_repo: MagicMock,
+    history: list[SimpleNamespace],
     session: MagicMock,
 ) -> None:
+    history.clear()
     portfolio = _portfolio(cash="10", deposited="10")
     portfolio_repo.get_owned.return_value = portfolio
     position_repo.list_by_portfolio.return_value = []
-    created = SimpleNamespace(id=9)
-    operation_repo.create.return_value = created
 
     result = service.record(_request(amount="100.5", fee="0.5", notes="n"), 7)
 
-    assert result is created
-    portfolio_repo.get_owned.assert_called_once_with(1, 7)
-    assert (portfolio.cash_balance, portfolio.total_deposited) == (D("110"), D("110.5"))
+    assert result is history[-1]
+    portfolio_repo.lock_owned.assert_called_once_with(1, 7)
+    portfolio_repo.get_owned.assert_called_with(1, 7)
+    assert (portfolio.cash_balance, portfolio.total_deposited) == (D("100"), D("100.5"))
     operation_repo.create.assert_called_once_with(
         portfolio_id=1,
         asset_id=None,
@@ -140,6 +159,40 @@ def test_record_deposit_updates_cash_and_stores_the_operation(
     )
     session.commit.assert_called_once()
     session.rollback.assert_not_called()
+
+
+def test_back_dated_sell_without_a_position_then_is_rejected(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    assets: MagicMock,
+    history: list[SimpleNamespace],
+    session: MagicMock,
+) -> None:
+    # The buy is later than the new sell: replayed in date order the sell has
+    # nothing to sell, though the current state holds the position.
+    history.append(
+        _stored(
+            "buy",
+            id=2,
+            asset_id=ASSET_ID,
+            quantity=D("10"),
+            price=D("20"),
+            operation_date=datetime(2026, 3, 1, tzinfo=UTC),
+        )
+    )
+    portfolio_repo.get_owned.return_value = _portfolio()
+    position_repo.list_by_portfolio.return_value = [_row(quantity="10")]
+    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID)
+
+    with pytest.raises(OperationRejectedError) as exc_info:
+        service.record(
+            _request(operation_type="sell", asset_id=ASSET_ID, quantity=1, price=1),
+            7,
+        )
+
+    assert exc_info.value.code == "POSITION_NOT_FOUND"
+    session.commit.assert_not_called()
 
 
 def test_record_translates_a_unique_race_into_a_409_and_rolls_back(
@@ -180,11 +233,15 @@ def test_record_buy_of_held_asset_updates_the_row_in_place(
     portfolio_repo: MagicMock,
     position_repo: MagicMock,
     assets: MagicMock,
+    history: list[SimpleNamespace],
 ) -> None:
     portfolio_repo.get_owned.return_value = _portfolio()
     row = _row(quantity="10")
     position_repo.list_by_portfolio.return_value = [row]
     assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID)
+    history.append(
+        _stored("buy", id=2, asset_id=ASSET_ID, quantity=D("10"), price=D("20"))
+    )
 
     service.record(
         _request(operation_type="buy", asset_id=ASSET_ID, quantity=10, price=30, fee=2),
@@ -205,12 +262,16 @@ def test_record_sell_of_everything_deletes_the_row(
     portfolio_repo: MagicMock,
     position_repo: MagicMock,
     assets: MagicMock,
+    history: list[SimpleNamespace],
 ) -> None:
     portfolio = _portfolio(cash="0")
     portfolio_repo.get_owned.return_value = portfolio
     row = _row(quantity="10")
     position_repo.list_by_portfolio.return_value = [row]
     assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID)
+    history.append(
+        _stored("buy", id=2, asset_id=ASSET_ID, quantity=D("10"), price=D("100"))
+    )
 
     service.record(
         _request(operation_type="sell", asset_id=ASSET_ID, quantity=10, price=25),
@@ -218,7 +279,7 @@ def test_record_sell_of_everything_deletes_the_row(
     )
 
     position_repo.delete.assert_called_once_with(row)
-    assert portfolio.cash_balance == D("250")
+    assert portfolio.cash_balance == D("250")  # 1000 - 1000 + 250
 
 
 def test_record_buy_of_new_ticker_creates_asset_inside_the_same_transaction(
@@ -252,7 +313,7 @@ def test_record_buy_of_new_ticker_creates_asset_inside_the_same_transaction(
     )
 
     assets.get_or_create_by_ticker.assert_called_once_with(
-        "cdr", asset_class_name="Stock", currency_id=3
+        "cdr", asset_class_name="Stock", fallback_currency_id=3
     )
     position_repo.create.assert_called_once_with(
         portfolio_id=1,
@@ -270,10 +331,11 @@ def test_rejected_operation_rolls_back_the_new_asset_and_commits_nothing(
     service: OperationService,
     portfolio_repo: MagicMock,
     position_repo: MagicMock,
-    operation_repo: MagicMock,
     assets: MagicMock,
+    history: list[SimpleNamespace],
     session: MagicMock,
 ) -> None:
+    history[:] = [_stored("deposit", id=1, amount=D("10"))]
     portfolio = _portfolio(cash="10")
     portfolio_repo.get_owned.return_value = portfolio
     position_repo.list_by_portfolio.return_value = []
@@ -298,7 +360,6 @@ def test_rejected_operation_rolls_back_the_new_asset_and_commits_nothing(
     assets.get_or_create_by_ticker.assert_called_once()
     session.rollback.assert_called_once()
     session.commit.assert_not_called()
-    operation_repo.create.assert_not_called()
     portfolio_repo.update.assert_not_called()
     assert portfolio.cash_balance == D("10")
 

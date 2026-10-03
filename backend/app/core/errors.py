@@ -1,8 +1,11 @@
 """Global error handling and custom exceptions."""
 
 import logging
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
@@ -77,16 +80,37 @@ class GoneError(APIError):
         super().__init__(message, status.HTTP_410_GONE, code)
 
 
+# Fallback `code` by status for errors raised without one (error-handling
+# patterns: every error carries a stable code).
+_GENERIC_CODES = {
+    status.HTTP_400_BAD_REQUEST: "BAD_REQUEST",
+    status.HTTP_401_UNAUTHORIZED: "UNAUTHORIZED",
+    status.HTTP_403_FORBIDDEN: "FORBIDDEN",
+    status.HTTP_404_NOT_FOUND: "NOT_FOUND",
+    status.HTTP_409_CONFLICT: "CONFLICT",
+    status.HTTP_410_GONE: "GONE",
+    status.HTTP_422_UNPROCESSABLE_CONTENT: "VALIDATION_ERROR",
+}
+
+
 def _error_response(
     status_code: int,
     detail: object,
     code: str | None = None,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
-    content = {"detail": detail}
+    content: dict[str, object] = {"detail": detail}
+    code = code or _GENERIC_CODES.get(status_code)
     if code is not None:
         content["code"] = code
     return JSONResponse(status_code=status_code, content=content, headers=headers)
+
+
+def _public_error(error: Mapping[str, Any]) -> dict[str, Any]:
+    """One validation error as the client sees it: where, what and the type.
+    `input` is dropped (it would echo what the user typed, passwords included)
+    and so is `ctx` (it may hold exception objects, not JSON)."""
+    return {key: error[key] for key in ("type", "loc", "msg") if key in error}
 
 
 def register_error_handlers(app: FastAPI) -> None:
@@ -111,14 +135,15 @@ def register_error_handlers(app: FastAPI) -> None:
             )
         return _error_response(exc.status_code, exc.message, exc.code, exc.headers)
 
+    @app.exception_handler(RequestValidationError)
     @app.exception_handler(ValidationError)
     async def validation_exception_handler(
-        request: Request, exc: ValidationError
+        request: Request, exc: RequestValidationError | ValidationError
     ) -> JSONResponse:
         logger.info("Validation error on %s %s", request.method, request.url.path)
         return _error_response(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
-            exc.errors(),
+            [_public_error(error) for error in exc.errors()],
         )
 
     @app.exception_handler(Exception)

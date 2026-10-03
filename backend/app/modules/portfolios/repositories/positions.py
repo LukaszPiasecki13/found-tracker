@@ -3,7 +3,7 @@
 from decimal import Decimal
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.infrastructure.sql.repository import SQLRepository
 from app.modules.assets.models import Asset
@@ -12,9 +12,6 @@ from app.modules.portfolios.models import Position
 
 class PositionRepository(SQLRepository):
     """Repository for Position model database operations."""
-
-    def __init__(self, session: Session):
-        super().__init__(session)
 
     def list_by_portfolio(self, portfolio_id: int) -> list[Position]:
         """The portfolio's positions, most recently updated first, with their
@@ -55,17 +52,12 @@ class PositionRepository(SQLRepository):
             total_fees=total_fees,
             total_dividends=total_dividends,
         )
-        self.session.add(position)
-        self.flush()
-        self.refresh(position)
-        return position
+        return self.save_new(position)
 
     def update(self, position: Position) -> Position:
         """Write pending changes; refreshed so stored (rounded) values are
         loaded."""
-        self.flush()
-        self.refresh(position)
-        return position
+        return self.persist(position)
 
     def delete(self, position: Position) -> None:
         self.session.delete(position)

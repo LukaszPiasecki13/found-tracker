@@ -9,7 +9,7 @@ from app.modules.assets.schemas.asset_classes import (
     AssetClassUpdateRequest,
 )
 from app.modules.assets.services.asset_classes import AssetClassService
-from app.modules.security.dependencies import get_current_user
+from app.modules.security.dependencies import get_current_admin, get_current_user
 
 router = APIRouter(
     prefix="/assets/asset-classes",
@@ -25,7 +25,12 @@ def list_asset_classes(
     return service.list_asset_classes()
 
 
-@router.post("", response_model=AssetClassResponse, status_code=201)
+@router.post(
+    "",
+    dependencies=[Depends(get_current_admin)],
+    response_model=AssetClassResponse,
+    status_code=201,
+)
 def create_asset_class(
     data: AssetClassCreateRequest,
     service: AssetClassService = Depends(get_asset_class_service),
@@ -33,8 +38,16 @@ def create_asset_class(
     return service.create(data)
 
 
-@router.put("/{ac_id:int}", response_model=AssetClassResponse)
-@router.patch("/{ac_id:int}", response_model=AssetClassResponse)
+@router.put(
+    "/{ac_id:int}",
+    dependencies=[Depends(get_current_admin)],
+    response_model=AssetClassResponse,
+)
+@router.patch(
+    "/{ac_id:int}",
+    dependencies=[Depends(get_current_admin)],
+    response_model=AssetClassResponse,
+)
 def update_asset_class(
     ac_id: int,
     data: AssetClassUpdateRequest,
@@ -43,7 +56,9 @@ def update_asset_class(
     return service.update(ac_id, data)
 
 
-@router.delete("/{ac_id:int}", status_code=204)
+@router.delete(
+    "/{ac_id:int}", dependencies=[Depends(get_current_admin)], status_code=204
+)
 def delete_asset_class(
     ac_id: int,
     service: AssetClassService = Depends(get_asset_class_service),

@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.modules.portfolios.domain import PortfolioValuator
 from app.modules.portfolios.exceptions import (
     PortfolioAlreadyExistsError,
+    PortfolioCurrencyLockedError,
     PortfolioNotFoundError,
     UnknownCurrencyError,
 )
@@ -90,8 +91,17 @@ def currencies() -> MagicMock:
 
 
 @pytest.fixture
-def service(portfolio_repo: MagicMock, currencies: MagicMock) -> PortfolioService:
-    return PortfolioService(portfolio_repo, currencies, PortfolioValuator())
+def fx_builder() -> MagicMock:
+    builder = MagicMock()
+    builder.build.return_value = {}
+    return builder
+
+
+@pytest.fixture
+def service(
+    portfolio_repo: MagicMock, currencies: MagicMock, fx_builder: MagicMock
+) -> PortfolioService:
+    return PortfolioService(portfolio_repo, currencies, PortfolioValuator(), fx_builder)
 
 
 def _integrity_error() -> IntegrityError:
@@ -215,6 +225,32 @@ def test_update_to_an_unknown_currency_is_400(
     portfolio_repo.update.assert_not_called()
 
 
+def test_base_currency_cannot_change_once_there_are_operations(
+    service: PortfolioService, portfolio_repo: MagicMock, session: MagicMock
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    portfolio_repo.has_operations.return_value = True
+
+    with pytest.raises(PortfolioCurrencyLockedError) as exc_info:
+        service.update(1, PortfolioUpdateRequest(base_currency_id=2), owner_id=7)
+
+    assert exc_info.value.code == "PORTFOLIO_CURRENCY_LOCKED"
+    portfolio_repo.update.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_base_currency_changes_while_the_portfolio_has_no_operations(
+    service: PortfolioService, portfolio_repo: MagicMock
+) -> None:
+    portfolio = _portfolio()
+    portfolio_repo.get_owned.return_value = portfolio
+    portfolio_repo.has_operations.return_value = False
+
+    service.update(1, PortfolioUpdateRequest(base_currency_id=2), owner_id=7)
+
+    assert portfolio.base_currency_id == 2
+
+
 def test_another_owners_portfolio_is_not_found(
     service: PortfolioService, portfolio_repo: MagicMock, session: MagicMock
 ) -> None:
@@ -245,9 +281,10 @@ def test_delete_removes_and_commits(
 
 
 def test_list_summaries_values_each_portfolio_and_rounds_at_the_boundary(
-    service: PortfolioService, portfolio_repo: MagicMock
+    service: PortfolioService, portfolio_repo: MagicMock, fx_builder: MagicMock
 ) -> None:
-    usd = _currency(2, rate="3.9")
+    fx_builder.build.return_value = {(2, 1): D("3.9")}
+    usd = _currency(2, rate="999")
     positions = [
         _position(1, "3", "10", "33.3333", _currency(), fees="1.25"),
         _position(2, "1", "100", "101", usd, fees="0.5"),
@@ -263,6 +300,7 @@ def test_list_summaries_values_each_portfolio_and_rounds_at_the_boundary(
     assert summary.total_profit_loss == D("193.900")
     assert summary.total_return_pct == D("48.4750")
     assert summary.total_fees == D("1.75")
+    assert summary.rate_missing is False
     assert summary.base_currency.id == 1
     body = summary.model_dump(mode="json")
     assert body["positions_value"] == 493.9
@@ -306,3 +344,58 @@ def test_rounding_is_half_even_like_pythons_round(
 
     assert position.market_value == D("0.012")
     assert position.cost_basis == D("0.014")
+
+
+def test_list_summaries_builds_the_rate_map_once_for_every_base_currency(
+    service: PortfolioService, portfolio_repo: MagicMock, fx_builder: MagicMock
+) -> None:
+    pln = _portfolio(id=1, base_currency_id=1)
+    usd = _portfolio(id=2, base_currency_id=2, base_currency=_currency(2))
+    portfolio_repo.list_by_owner.return_value = [pln, usd]
+
+    service.list_summaries(7)
+
+    fx_builder.build.assert_called_once()
+    assert set(fx_builder.build.call_args.args[0]) == {1, 2}
+
+
+def test_get_detail_builds_the_rate_map_for_the_portfolio_currency(
+    service: PortfolioService, portfolio_repo: MagicMock, fx_builder: MagicMock
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio(base_currency_id=1)
+
+    service.get_detail(1, owner_id=7)
+
+    fx_builder.build.assert_called_once()
+    assert set(fx_builder.build.call_args.args[0]) == {1}
+
+
+def test_get_detail_flags_a_position_whose_currency_has_no_rate(
+    service: PortfolioService, portfolio_repo: MagicMock, fx_builder: MagicMock
+) -> None:
+    fx_builder.build.return_value = {}
+    gbp = _currency(4)
+    positions = [
+        _position(1, "2", "40", "50", _currency()),
+        _position(2, "10", "2", "2.5", gbp),
+    ]
+    portfolio_repo.get_owned.return_value = _portfolio(positions)
+
+    detail = service.get_detail(1, owner_id=7)
+
+    assert detail.rate_missing is True
+    assert detail.positions_value is None
+    assert detail.total_value is None
+    assert detail.total_profit_loss is None
+    assert detail.total_return_pct is None
+    priced, unpriced = detail.positions
+    assert priced.rate_missing is False
+    assert priced.market_value == D("100.000")
+    assert priced.portfolio_weight_pct is None
+    assert unpriced.rate_missing is True
+    assert unpriced.market_value is None
+    assert unpriced.cost_basis == D("20.000")
+    body = detail.model_dump(mode="json")
+    assert body["total_value"] is None
+    assert body["rate_missing"] is True
+    assert body["positions"][1]["market_value"] is None

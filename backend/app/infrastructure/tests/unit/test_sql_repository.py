@@ -66,3 +66,17 @@ def test_flush_and_refresh_delegate_to_the_session() -> None:
 
     session.flush.assert_called_once()
     session.refresh.assert_called_once_with(entity)
+
+
+def test_save_new_adds_flushes_and_reloads_the_entity() -> None:
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    repo = SQLRepository(session)
+    entity = object()
+
+    assert repo.save_new(entity) is entity
+
+    session.add.assert_called_once_with(entity)
+    session.flush.assert_called_once_with()
+    session.refresh.assert_called_once_with(entity)

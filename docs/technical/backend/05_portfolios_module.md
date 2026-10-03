@@ -34,7 +34,8 @@ Wszystkie wymagają zalogowanego użytkownika (`get_current_user`) i działają 
 | `PUT`/`PATCH /portfolios/{id}` | `PortfolioResponse`; jawny `null` = „bez zmian” |
 | `DELETE /portfolios/{id}` | 204; usuwa też pozycje i operacje |
 | `GET /portfolios/fx-rate?from_currency=&to_currency=` | `FxRateResponse` — kurs krzyżowy (`rate`, `via`: `identity/direct/inverse/cross`) składany z kursów `assets`; `CURRENCY_NOT_FOUND`, `RATE_MISSING` (oba 404); podpowiedź kursu w dialogach kupna/sprzedaży |
-| `GET /portfolios/positions?portfolio_name=` | `PositionResponse[]` — najpierw odświeża kursy walut i ceny walorów pozycji (best-effort, [`04_assets_module.md` §3](./04_assets_module.md#3-reguły-biznesowe)), potem wycenia |
+| `GET /portfolios/positions?portfolio_name=` | `PositionResponse[]` — wycena po zapisanych cenach, bez efektów ubocznych |
+| `POST /portfolios/positions/refresh?portfolio_name=` | `PositionResponse[]` — najpierw odświeża kursy walut i ceny walorów pozycji (best-effort, [`04_assets_module.md` §3](./04_assets_module.md#3-reguły-biznesowe)), potem wycenia |
 | `GET /portfolios/operations?portfolio_name=` | `OperationResponse[]`, od najnowszej (`operation_date`, `created_at`) |
 | `POST /portfolios/operations` | 201, `OperationResponse` |
 | `PUT`/`PATCH /portfolios/operations/{id}` | `OperationResponse`; zmienia `quantity`, `price`, `amount`, `fee`, `fx_rate`, `notes`, `operation_date` (typ i walor są stałe; jawny `null` = „bez zmian”, poza `notes`) |
@@ -162,5 +163,5 @@ Testy parytetu (`tests/unit/test_ledger_parity.py`) odtwarzają scenariusze test
 | `domain/` (księga, wycena), typowane argumenty, `Decimal` do granicy schematu, port cen, testy parytetu | zgodne z celem; wariant (a) ADR-0005 czeka na akceptację | — | R-08 (domknięty) |
 | Rejestracja operacji z datą wcześniejszą niż istniejące | stosowana do bieżącego stanu; późniejsza przebudowa (edycja/usunięcie) układa historię wg dat i może ją odrzucić | decyzja właściciela: walidować `POST` przebudową całej historii albo zostawić | — (otwarte) |
 | Kurs waluty = heurystyka (`exchange_rate` ≠ 1 lub USD), kursy bez historii; kurs jest zawsze „USD za jednostkę” — `FxMapBuilder` ignoruje `Currency.base_currency_id`, więc ręczny kurs względem innej bazy zepsuje wycenę do następnego odświeżenia; `CURRENCY_NOT_FOUND` ma tu dwa statusy (400 w ciele operacji, 404 w `GET /portfolios/fx-rate`) | tabela kursów z historią i źródłem ([ADR-0015](../adr/0015-historia-cen-i-kursow.md)) | E1.1 |
-| Odświeżanie kursów/cen | synchronicznie w `GET /portfolios/positions` | entrypoint + harmonogram ([`04_assets_module.md`](./04_assets_module.md)) | — (poza planem) |
+| Odświeżanie kursów/cen | synchronicznie w `POST /portfolios/positions/refresh` | entrypoint + harmonogram ([`04_assets_module.md`](./04_assets_module.md)) | — (poza planem) |
 | `mypy` | nieuruchamiany | `mypy app` zielone | R-10 |

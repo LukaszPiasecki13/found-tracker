@@ -1,8 +1,9 @@
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Environment = Literal["development", "test", "staging", "production"]
 
@@ -28,7 +29,15 @@ class Settings(BaseSettings):
     jwt_audience: str = "found-tracker-client"
 
     # HTTP
-    cors_origins: list[str] = Field(default_factory=list)
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    # Accounts (e-mails, comma-separated or a JSON list) allowed to change the
+    # data every user shares: assets, asset classes and currencies.
+    admin_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    # Rate limiter: trust `X-Forwarded-For` from a reverse proxy. `None` means
+    # "not set explicitly": on in production, off elsewhere; an explicit value wins.
+    trust_proxy_headers: bool | None = None
 
     # A deployment may retain variables used by an older/newer application
     # version. They must not prevent the backend from starting after a rollback.
@@ -46,13 +55,22 @@ class Settings(BaseSettings):
     def docs_enabled(self) -> bool:
         return not self.is_production
 
-    @field_validator("cors_origins", mode="before")
+    @property
+    def effective_trust_proxy_headers(self) -> bool:
+        if self.trust_proxy_headers is not None:
+            return self.trust_proxy_headers
+        return self.is_production
+
+    @field_validator("cors_origins", "admin_emails", mode="before")
     @classmethod
-    def split_cors_origins(cls, value: object) -> object:
-        """Accept CORS_ORIGINS as a comma-separated string or a JSON list."""
-        if isinstance(value, str) and not value.strip().startswith("["):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    def split_list_setting(cls, value: object) -> object:
+        """Accept a comma-separated string or a JSON list (CORS_ORIGINS, ...)."""
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            return json.loads(text)
+        return [item.strip() for item in text.split(",") if item.strip()]
 
     @field_validator("log_level")
     @classmethod

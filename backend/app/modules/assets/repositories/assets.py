@@ -3,7 +3,6 @@
 from decimal import Decimal
 
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
 
 from app.infrastructure.sql.repository import SQLRepository
 from app.modules.assets.exceptions import AssetNotFoundError
@@ -12,9 +11,6 @@ from app.modules.assets.models.assets import Asset
 
 class AssetRepository(SQLRepository):
     """Repository for Asset model database operations."""
-
-    def __init__(self, session: Session):
-        super().__init__(session)
 
     def list_all(
         self, search: str | None = None, limit: int | None = None
@@ -69,16 +65,11 @@ class AssetRepository(SQLRepository):
             exchange=exchange,
             sector=sector,
         )
-        self.session.add(asset)
-        self.flush()
-        self.refresh(asset)
-        return asset
+        return self.save_new(asset)
 
     def update(self, asset: Asset) -> Asset:
         """Write pending changes; refreshed so the new `updated_at` is loaded."""
-        self.flush()
-        self.refresh(asset)
-        return asset
+        return self.persist(asset)
 
     def delete(self, asset: Asset) -> None:
         """Delete asset; a still-referenced asset fails here (IntegrityError)."""

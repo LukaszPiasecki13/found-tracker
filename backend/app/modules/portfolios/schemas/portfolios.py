@@ -58,13 +58,19 @@ class PortfolioResponse(BaseModel):
 
 
 class PortfolioSummaryResponse(PortfolioResponse):
-    """A portfolio valued at current prices (read model, ADR-0003)."""
+    """A portfolio valued at current prices (read model, ADR-0003).
 
-    positions_value: RoundedValue
-    total_value: RoundedValue
-    total_profit_loss: RoundedValue
-    total_return_pct: RoundedPercent
+    Positions value, total value, profit and return are `null` with
+    `rate_missing` set when any position lacks a currency rate: a partial sum
+    would silently understate the portfolio. `total_fees` never needs a rate.
+    """
+
+    positions_value: RoundedValue | None
+    total_value: RoundedValue | None
+    total_profit_loss: RoundedValue | None
+    total_return_pct: RoundedPercent | None
     total_fees: RoundedFees
+    rate_missing: bool = False
 
 
 class PortfolioDetailResponse(PortfolioSummaryResponse):

@@ -5,7 +5,7 @@ any `except` on the base class keep working; the subclass names the reason
 and owns its message (ADR-0007).
 """
 
-from app.core.errors import AuthenticationError
+from app.core.errors import AuthenticationError, ForbiddenError
 
 # RFC 6750 §3: a 401 from a bearer-protected resource must carry a challenge.
 _BEARER_CHALLENGE = {"WWW-Authenticate": "Bearer"}
@@ -70,3 +70,10 @@ class InactiveUserError(BearerAuthenticationError):
 
     def __init__(self) -> None:
         super().__init__("User not found or inactive", "INACTIVE_USER")
+
+
+class AdminRequiredError(ForbiddenError):
+    """The endpoint changes data shared by all users (assets, currencies)."""
+
+    def __init__(self) -> None:
+        super().__init__("Administrator access required", code="ADMIN_REQUIRED")

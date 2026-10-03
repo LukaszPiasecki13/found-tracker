@@ -17,11 +17,15 @@ previous implementation:
   (`end` exclusive) laid over the full calendar range, the last day takes the
   current price when `end` is a weekday, then gaps are filled forward and
   backward; a ticker with no price at all fails its vector;
-- a vector that fails is logged and returned as zeros, the others still are.
+- a vector that cannot be computed (provider down, no price at all for a
+  ticker) fails the request - zeros would draw a worthless portfolio;
+- the cost and cash vectors follow the ledger: buy/sell/dividend amounts carry
+  the operation's `fx_rate`, a dividend adds its income to free cash and profit.
+  Asset values are quantity x close in the asset's own currency: there is no
+  historical FX series, so they are not converted.
 """
 
 import json
-import logging
 from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -36,6 +40,7 @@ from app.modules.portfolios.exceptions import (
     InvalidDateError,
     InvalidDateRangeError,
     InvalidVectorsError,
+    PriceDataMissingError,
     UnsupportedIntervalError,
 )
 from app.modules.portfolios.models import Operation
@@ -45,13 +50,13 @@ from app.modules.portfolios.schemas.metrics import (
     PortfolioVectorsResponse,
 )
 
-logger = logging.getLogger(__name__)
-
 _DAY_SECONDS = 24 * 60 * 60
 _SUPPORTED_INTERVAL = "1d"
 _DATE_FORMAT = "%Y-%m-%d"
 _SATURDAY = 5
 _ZERO = Decimal("0")
+# Longest range of daily points one request may ask for (about ten years).
+_MAX_RANGE_DAYS = 3660
 
 type Vector = NDArray[np.float64]
 
@@ -106,14 +111,25 @@ def _net_deposit_change(operation: Operation) -> Decimal:
 
 
 def _transaction_cost_change(operation: Operation) -> Decimal:
-    """What the operation cost: a buy its price and fee, a sell gives back its
-    proceeds net of the fee, anything else costs its fee."""
+    """What the operation cost, in the portfolio's currency like the ledger's
+    cash: a buy its price and fee, a sell gives back its proceeds net of the fee,
+    a dividend costs its fee, a cash operation its fee."""
+    fx_rate = operation.fx_rate
     match operation.operation_type:
         case OperationType.BUY:
-            return operation.quantity * operation.price + operation.fee
+            return (operation.quantity * operation.price + operation.fee) * fx_rate
         case OperationType.SELL:
-            return -(operation.quantity * operation.price - operation.fee)
+            return -(operation.quantity * operation.price - operation.fee) * fx_rate
+        case OperationType.DIVIDEND:
+            return operation.fee * fx_rate
     return operation.fee
+
+
+def _dividend_income_change(operation: Operation) -> Decimal:
+    """The gross dividend paid, in the portfolio's currency."""
+    if operation.operation_type != OperationType.DIVIDEND:
+        return _ZERO
+    return (operation.amount or _ZERO) * operation.fx_rate
 
 
 class _VectorCalculator:
@@ -134,6 +150,7 @@ class _VectorCalculator:
         self._closes: dict[str, Vector] = {}
         self._assets: dict[str, Vector] | None = None
         self._transaction_cost: Vector | None = None
+        self._dividend_income: Vector | None = None
         self._net_deposits: Vector | None = None
 
     # --- Building blocks ---
@@ -243,11 +260,18 @@ class _VectorCalculator:
             )
         return self._transaction_cost
 
+    def dividend_income(self) -> Vector:
+        if self._dividend_income is None:
+            self._dividend_income = self._running_total(
+                self._operations, _dividend_income_change
+            )
+        return self._dividend_income
+
     def profit(self) -> Vector:
-        return self._sum_value() - self.transaction_cost()
+        return self._sum_value() - self.transaction_cost() + self.dividend_income()
 
     def free_cash(self) -> Vector:
-        return self.net_deposits() - self.transaction_cost()
+        return self.net_deposits() - self.transaction_cost() + self.dividend_income()
 
     def portfolio_value(self) -> Vector:
         return self.free_cash() + self._sum_value()
@@ -263,7 +287,7 @@ def _filled(closes: list[float | None], ticker: str) -> list[float]:
         filled.append(last)
     first = next((close for close in filled if close is not None), None)
     if first is None:
-        raise ValueError(f"No price data for {ticker}")
+        raise PriceDataMissingError(ticker)
     return [close if close is not None else first for close in filled]
 
 
@@ -322,8 +346,9 @@ class MetricsService:
         owner's portfolio `query.portfolio_name` (all portfolios when absent);
         `{}` when there are no operations.
 
-        Raises InvalidVectorsError, InvalidDateError, InvalidDateRangeError,
-        UnsupportedIntervalError.
+        Raises InvalidVectorsError, InvalidDateError, InvalidDateRangeError
+        (also for a range over `_MAX_RANGE_DAYS`), UnsupportedIntervalError,
+        PriceDataMissingError, MarketDataUnavailableError.
         """
         operations = self._operation_repo.list_by_owner(
             owner_id, portfolio_name=query.portfolio_name
@@ -334,7 +359,7 @@ class MetricsService:
         requested = _requested_vectors(query.vectors)
         start = _parse_date(query.start_date)
         end = _parse_date(query.end_date)
-        if start > end:
+        if start > end or (end - start).days >= _MAX_RANGE_DAYS:
             raise InvalidDateRangeError
         if query.interval != _SUPPORTED_INTERVAL:
             raise UnsupportedIntervalError
@@ -344,14 +369,5 @@ class MetricsService:
         for key in requested or list(_VECTORS):
             if not isinstance(key, str) or key not in _VECTORS:
                 continue
-            try:
-                value = _VECTORS[key](calculator)
-            except Exception:
-                logger.exception(
-                    "Failed to compute portfolio vector %s for portfolio %s",
-                    key,
-                    query.portfolio_name,
-                )
-                value = calculator.zeros()
-            result[key] = _as_json_value(value)
+            result[key] = _as_json_value(_VECTORS[key](calculator))
         return PortfolioVectorsResponse(result)

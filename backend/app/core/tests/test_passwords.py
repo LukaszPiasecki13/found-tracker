@@ -4,7 +4,7 @@ import hashlib
 import pytest
 
 from app.core.errors import ValidationException
-from app.modules.security.services.password import (
+from app.core.passwords import (
     burn_password_verification,
     hash_password,
     validate_password_length,
@@ -63,7 +63,7 @@ def test_burn_password_verification_checks_against_a_bcrypt_hash(
         calls.append((plain, hashed))
         return False
 
-    monkeypatch.setattr("app.modules.security.services.password.verify_password", spy)
+    monkeypatch.setattr("app.core.passwords.verify_password", spy)
 
     burn_password_verification("anything")
 

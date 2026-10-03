@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.core.errors import AuthenticationError
+from app.core.passwords import hash_password
 from app.modules.security.errors import (
     InvalidCredentialsError,
     InvalidRefreshTokenError,
@@ -11,7 +12,6 @@ from app.modules.security.errors import (
 )
 from app.modules.security.schemas import LoginRequest
 from app.modules.security.services.auth import AuthService
-from app.modules.security.services.password import hash_password
 from app.modules.security.services.token import TokenService
 
 
