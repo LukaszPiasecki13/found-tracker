@@ -1,7 +1,7 @@
 ---
 id: be-wiring-entrypoints
 status: current
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-03
 type: mixed
 scope: backend/wiring-entrypoints
 applies_to:
