@@ -45,7 +45,7 @@ Ukrycie waloru w wyszukiwarce i przed nowymi Operacjami bez usuwania: historia, 
 _Unikać_: dezaktywacja, usunięcie (miękkie)
 
 **Historia cen i kursów** (`assets_price`, `assets_fx_rate`)
-Zamknięcia dzienne waloru i kursy walut, każde z jawnym źródłem (`manual`, `yahoo`, `legacy`). Tego samego dnia wygrywa wpis ręczny, potem dostawca. `current_price` i `exchange_rate` to tylko cache najnowszej wartości.
+Zamknięcia dzienne waloru i kursy walut, każde z jawnym źródłem (`manual`, `yahoo`). Tego samego dnia wygrywa wpis ręczny, potem dostawca. `current_price` i `exchange_rate` to tylko cache najnowszej wartości.
 _Unikać_: notowanie (ogólnie), cena bieżąca jako źródło prawdy
 
 **Klasa waloru** (`assets_assetclass`)

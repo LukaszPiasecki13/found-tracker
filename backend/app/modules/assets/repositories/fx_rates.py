@@ -100,11 +100,3 @@ class FxRateRepository(SQLRepository):
         """When any provider last wrote a rate."""
         stmt = select(func.max(FxRate.fetched_at)).where(FxRate.source != SOURCE_MANUAL)
         return self.session.execute(stmt).scalar_one_or_none()
-
-    def currency_ids_with_rates(self) -> set[int]:
-        """Currencies that appear on either side of a stored rate."""
-        from_ids = select(FxRate.from_currency_id).distinct()
-        to_ids = select(FxRate.to_currency_id).distinct()
-        return set(self.session.execute(from_ids).scalars()) | set(
-            self.session.execute(to_ids).scalars()
-        )

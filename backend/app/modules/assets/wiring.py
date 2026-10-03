@@ -19,7 +19,6 @@ from app.modules.assets.services.asset_classes import AssetClassService
 from app.modules.assets.services.assets import AssetService
 from app.modules.assets.services.currencies import CurrencyService
 from app.modules.assets.services.fx_rates import FxRateService
-from app.modules.assets.services.history import HistoryBackfillService
 from app.modules.assets.services.market_data import MarketDataService
 from app.modules.assets.services.prices import PriceService
 
@@ -61,13 +60,4 @@ def build_asset_service(session: Session) -> AssetService:
         build_currency_service(session),
         build_market_data_service(session),
         build_price_service(session),
-    )
-
-
-def build_history_backfill_service(session: Session) -> HistoryBackfillService:
-    return HistoryBackfillService(
-        AssetRepository(session),
-        CurrencyRepository(session),
-        PriceRepository(session),
-        FxRateRepository(session),
     )

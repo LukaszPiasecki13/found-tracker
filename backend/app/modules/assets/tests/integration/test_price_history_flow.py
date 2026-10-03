@@ -1,4 +1,4 @@
-"""Price history, exchange-rate history, archiving and backfill against the real
+"""Price history, exchange-rate history, archiving against the real
 database (each test runs in a rolled-back transaction).
 
 The market-data provider is replaced in `wiring.py`, so no test reaches the
@@ -614,46 +614,3 @@ def test_a_provider_refresh_writes_history_and_keeps_the_cache_in_step(
         f"/assets/currencies/{created['id']}", headers=auth_headers
     ).json()
     assert cached["exchange_rate"] == 0.5
-
-
-# --- backfill ---
-
-
-def test_backfill_seeds_history_from_the_caches_once(
-    integration_session: Session,
-    integration_client: TestClient,
-    integration_data: IntegrationData,
-    auth_headers: dict[str, str],
-    currency_codes: CurrencyCodes,
-) -> None:
-    code = currency_codes.new()
-    integration_session.add(Currency(code=code, exchange_rate=Decimal("2.5")))
-    integration_session.flush()
-    backfill = assets_wiring.build_history_backfill_service(integration_session)
-    # Leave only the data this test controls: clear history written by other rows.
-    integration_session.query(AssetPrice).delete()
-    integration_session.query(FxRate).delete()
-
-    first = backfill.backfill()
-    second = backfill.backfill()
-
-    assert first.prices >= 1 and first.rates >= 1
-    assert (second.prices, second.rates) == (0, 0)
-    legacy = integration_session.execute(
-        select(FxRate)
-        .join(Currency, FxRate.from_currency_id == Currency.id)
-        .where(Currency.code == code)
-    ).scalar_one()
-    assert (legacy.source, legacy.rate, legacy.is_synthetic) == (
-        "legacy",
-        Decimal("2.5"),
-        True,
-    )
-    priced = integration_session.execute(select(AssetPrice)).scalars().all()
-    assert priced
-    assert {p.source for p in priced} == {"legacy"}
-    # Legacy rows rank last: any real observation of the same day outranks them.
-    detail = integration_client.get(
-        f"/assets/{priced[0].asset_id}", headers=auth_headers
-    ).json()
-    assert detail["price_source"] == "legacy"

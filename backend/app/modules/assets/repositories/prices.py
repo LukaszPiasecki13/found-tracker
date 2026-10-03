@@ -129,7 +129,3 @@ class PriceRepository(SQLRepository):
     def exists_for_asset(self, asset_id: int) -> bool:
         stmt = select(AssetPrice.id).where(AssetPrice.asset_id == asset_id).limit(1)
         return self.session.execute(stmt).first() is not None
-
-    def asset_ids_with_prices(self) -> set[int]:
-        stmt = select(AssetPrice.asset_id).distinct()
-        return set(self.session.execute(stmt).scalars())

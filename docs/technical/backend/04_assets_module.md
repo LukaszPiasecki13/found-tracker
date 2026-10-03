@@ -28,7 +28,7 @@ Modele w stylu `Mapped[...]`/`mapped_column`; kwoty i kursy to `Decimal` ([ADR-0
 
 **Historia jest źródłem prawdy, kolumny `current_price` i `exchange_rate` są cache'em.** Serwis `assets` ustawia je w tej samej transakcji, w której zapisuje wiersz historii (jedyny wyjątek: waluta systemowa ma stałe `exchange_rate = 1`): `current_price` = zamknięcie najnowszego dnia, `exchange_rate` = kurs do USD (waluty systemowej, `DEFAULT_CURRENCY_CODE`) najnowszego dnia — bezpośredni albo odwrotny. `portfolios` czyta cache (`FxMapBuilder`), więc jego wycena się nie zmienia.
 
-**Źródła i pierwszeństwo.** `source` ∈ {`manual`, `yahoo`, `legacy`, …}. Różne źródła tego samego dnia współistnieją; dla dnia wygrywa `manual` (ranga 0), potem znany dostawca (`yahoo`, ranga 1), potem reszta (`legacy` i nieznane, ranga 1000; remis rozstrzyga nazwa źródła). Efektywna cena na dzień D = zwycięzca **najpóźniejszego dnia ≤ D** (nie „najlepsze źródło ze wszystkich dni": starsza cena ręczna nie przykrywa nowszego zamknięcia z dostawcy). Forward-fill liczy się przy odczycie, nigdy nie jest zapisywany. `is_synthetic`: notowanie z `fetch_quote` (może być śródsesyjne) zapisuje się jako syntetyczne i jest nadpisywane zamknięciem z historii dostawcy; wpisy ręczne i `legacy` nie są (`legacy` jest zawsze syntetyczne).
+**Źródła i pierwszeństwo.** `source` ∈ {`manual`, `yahoo`, …}. Różne źródła tego samego dnia współistnieją; dla dnia wygrywa `manual` (ranga 0), potem znany dostawca (`yahoo`, ranga 1), potem reszta (nieznane, ranga 1000; remis rozstrzyga nazwa źródła). Efektywna cena na dzień D = zwycięzca **najpóźniejszego dnia ≤ D** (nie „najlepsze źródło ze wszystkich dni": starsza cena ręczna nie przykrywa nowszego zamknięcia z dostawcy). Forward-fill liczy się przy odczycie, nigdy nie jest zapisywany. `is_synthetic`: notowanie z `fetch_quote` (może być śródsesyjne) zapisuje się jako syntetyczne i jest nadpisywane zamknięciem z historii dostawcy; wpisy ręczne nie są.
 
 **Typ waloru** (`asset_type`, zbiór zamknięty w `constants.ASSET_TYPES`): `stock`, `etf`, `fund`, `treasury_bond`, `bond`, `crypto`, `currency`, `commodity`, `deposit`, `user_asset` (domyślny). Walor z dostawcy dostaje typ z `quoteType` (`EQUITY`→`stock`, `ETF`→`etf`, `MUTUALFUND`→`fund`, `CRYPTO*`→`crypto`, `CURRENCY`→`currency`, `FUTURE`→`commodity`, inne→`stock`). Oś ta jest niezależna od edytowalnej **klasy waloru**. `isin` (ISO 6166, suma kontrolna), `mic` (4 znaki) i `country` (2 litery) są walidowane i zapisywane wielkimi literami; `null` czyści.
 
@@ -101,7 +101,6 @@ Wzorem waterworks (`core/audit.py` jako port, `infrastructure/storage/` jako ada
 | `PriceService` | `find_close(asset_id, as_of)`, `latest_quotes`, `series`, `set_manual_price`, `delete_manual_price`; rdzenie bez commitu: `record_closes`, `record_manual_price_today`, `sync_current_price` |
 | `FxRateService` | `get_rate`, `history`, `set_manual_rate`; rdzenie bez commitu: `record_rate`, `record_manual_rate_to_base`, `sync_cached_rate` |
 | `MarketDataService` | `search`, `get_quote`, `current_price`, `close_history`, `refresh_asset_prices`, `refresh_currency_rates`, `data_status` |
-| `HistoryBackfillService` | `backfill` — jednorazowe zasianie historii z cache (patrz §6) |
 
 Rdzenie bez commitu ([ADR-0008](../adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md)) służą `portfolios` przy rejestrowaniu operacji na nowym tickerze oraz serwisom `assets` między sobą — transakcję trzyma orkiestrator.
 
@@ -111,7 +110,7 @@ Rdzenie bez commitu ([ADR-0008](../adr/0008-rdzenie-bez-commitu-w-operacjach-wie
 assets/
 ├─ api/{asset_classes,assets,currencies,fx_rates,prices}.py   # __init__.py: wspólny `router` dla main.py
 ├─ domain/{identifiers,pricing}.py                            # czyste reguły: ISIN/MIC, pierwszeństwo źródeł, świeżość
-├─ services/{asset_classes,assets,currencies,fx_rates,prices,market_data,history}.py
+├─ services/{asset_classes,assets,currencies,fx_rates,prices,market_data}.py
 ├─ repositories/{asset_classes,assets,currencies,fx_rates,prices}.py
 ├─ schemas/{asset_classes,assets,currencies,fx_rates,prices}.py
 ├─ models/{asset_classes,assets,currencies,fx_rates,prices}.py
@@ -127,9 +126,8 @@ assets/
 |---|---|
 | `refresh_prices(asset_ids=None)` | dzisiejsza cena z dostawcy dla podanych walorów albo wszystkich aktywnych; zwraca liczbę zapisanych |
 | `refresh_fx_rates()` | dzisiejszy kurs każdej waluty do USD |
-| `backfill_history()` | **raz po migracji historii**: dla walorów z `current_price > 0` bez żadnych cen zapisuje wiersz `legacy` (data = `updated_at`), dla walut innych niż USD z `exchange_rate` ≠ 1 bez żadnych kursów — wiersz `legacy` do USD z dzisiejszą datą; ponowne uruchomienie nic nie zmienia. Bez tego walory są `stale`, a `/assets/currencies/rate` zwraca `RATE_MISSING` aż do pierwszego odświeżenia |
 
-Uruchomienie z korzenia `backend/`: `python -c "from app.modules.assets.entrypoints import backfill_history; print(backfill_history())"`. Harmonogramu ani CLI jeszcze nie ma — `refresh_prices` i `refresh_fx_rates` wołają dziś ręcznie `POST /assets/refresh-prices` i `POST /portfolios/positions/refresh`.
+Harmonogramu ani CLI jeszcze nie ma — `refresh_prices` i `refresh_fx_rates` wołają dziś ręcznie `POST /assets/refresh-prices` i `POST /portfolios/positions/refresh`.
 
 ## 7. Stan vs cel
 

@@ -46,9 +46,6 @@ DEFAULT_PROVIDER_ASSET_TYPE = "stock"
 # Sources of price and FX-rate observations.
 SOURCE_MANUAL = MANUAL_SOURCE
 SOURCE_YAHOO = "yahoo"
-# Rows seeded from the cached `current_price` / `exchange_rate` of data that
-# predates the history; lowest precedence, always synthetic.
-SOURCE_LEGACY = "legacy"
 # Providers the module can write today; `manual` outranks them all.
 KNOWN_PROVIDER_SOURCES: frozenset[str] = frozenset({SOURCE_YAHOO})
 
