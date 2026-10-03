@@ -61,7 +61,61 @@ def test_assets_and_reference_data_round_trip(
     assert detail.json()["asset_class"]["id"] == asset_class_id
     assert detail.json()["currency"]["id"] == seeded_currency.id
 
+    # The initial price is history now: the asset cannot be deleted, only archived.
+    refused = integration_client.delete(f"/assets/{asset_id}", headers=auth_headers)
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "ASSET_HAS_HISTORY"
+
+    archived = integration_client.post(
+        f"/assets/{asset_id}/archive", headers=auth_headers
+    )
+    assert archived.status_code == 200
+    assert archived.json()["archived_at"] is not None
+    hidden = integration_client.get(
+        "/assets/", params={"search": ticker}, headers=auth_headers
+    )
+    assert all(item["id"] != asset_id for item in hidden.json())
+    shown = integration_client.get(
+        "/assets/",
+        params={"search": ticker, "include_archived": True},
+        headers=auth_headers,
+    )
+    assert any(item["id"] == asset_id for item in shown.json())
+
+    unarchived = integration_client.post(
+        f"/assets/{asset_id}/unarchive", headers=auth_headers
+    )
+    assert unarchived.json()["archived_at"] is None
+
+
+def test_an_asset_without_history_is_deleted_for_good(
+    integration_client: TestClient,
+    integration_data: IntegrationData,
+    auth_headers: dict[str, str],
+    seeded_currency,
+) -> None:
+    asset_class = integration_client.post(
+        "/assets/asset-classes",
+        headers=auth_headers,
+        json={"name": integration_data.value("class")[:20]},
+    )
+    asset = integration_client.post(
+        "/assets/",
+        headers=auth_headers,
+        json={
+            "ticker": integration_data.value("ticker")[:20].upper(),
+            "name": "No history",
+            "asset_class_id": asset_class.json()["id"],
+            "currency_id": seeded_currency.id,
+        },
+    )
+    assert asset.status_code == 201
+    asset_id = asset.json()["id"]
+    assert asset.json()["stale"] is True
+    assert asset.json()["price_date"] is None
+
     deleted = integration_client.delete(f"/assets/{asset_id}", headers=auth_headers)
+
     assert deleted.status_code == 204
     assert (
         integration_client.get(f"/assets/{asset_id}", headers=auth_headers).status_code

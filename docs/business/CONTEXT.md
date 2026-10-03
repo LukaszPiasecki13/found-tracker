@@ -2,6 +2,7 @@
 id: business-context
 status: current
 last_reviewed: 2026-10-03
+
 type: reference
 scope: business/vocabulary
 ---
@@ -50,6 +51,14 @@ _Unikać_: data transakcji
 **Walor** (`assets_asset`)
 Instrument finansowy (akcja, ETF) identyfikowany unikalnym tickerem, z aktualną ceną, giełdą i sektorem. Należy do jednej Klasy waloru i ma jedną Walutę notowania.
 _Unikać_: aktywo (w polskim UI „aktywo” bywa używane, ale w kodzie i dokumentach trzymamy „walor”), instrument, papier
+
+**Archiwizacja waloru** (`assets_asset.archived_at`)
+Ukrycie waloru w wyszukiwarce i przed nowymi Operacjami bez usuwania: historia, Pozycje i wycena zostają, odświeżanie cen się zatrzymuje, operację można cofnąć. Walor z historią (Operacje, Pozycje, ceny) nie może być usunięty, tylko zarchiwizowany.
+_Unikać_: dezaktywacja, usunięcie (miękkie)
+
+**Historia cen i kursów** (`assets_price`, `assets_fx_rate`)
+Zamknięcia dzienne waloru i kursy walut, każde z jawnym źródłem (`manual`, `yahoo`). Tego samego dnia wygrywa wpis ręczny, potem dostawca. `current_price` i `exchange_rate` to tylko cache najnowszej wartości.
+_Unikać_: notowanie (ogólnie), cena bieżąca jako źródło prawdy
 
 **Klasa waloru** (`assets_assetclass`)
 Kategoria Waloru: akcja, ETF. Słownik zarządzany przez użytkownika.

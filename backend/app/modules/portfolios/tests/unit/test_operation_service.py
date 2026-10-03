@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from app.modules.assets.exceptions import AssetArchivedError
 from app.modules.portfolios.domain import OperationType, PortfolioLedger
 from app.modules.portfolios.exceptions import (
     AssetClassRequiredError,
@@ -183,7 +184,7 @@ def test_back_dated_sell_without_a_position_then_is_rejected(
     )
     portfolio_repo.get_owned.return_value = _portfolio()
     position_repo.list_by_portfolio.return_value = [_row(quantity="10")]
-    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID)
+    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID, archived_at=None)
 
     with pytest.raises(OperationRejectedError) as exc_info:
         service.record(
@@ -238,7 +239,7 @@ def test_record_buy_of_held_asset_updates_the_row_in_place(
     portfolio_repo.get_owned.return_value = _portfolio()
     row = _row(quantity="10")
     position_repo.list_by_portfolio.return_value = [row]
-    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID)
+    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID, archived_at=None)
     history.append(
         _stored("buy", id=2, asset_id=ASSET_ID, quantity=D("10"), price=D("20"))
     )
@@ -268,7 +269,7 @@ def test_record_sell_of_everything_deletes_the_row(
     portfolio_repo.get_owned.return_value = portfolio
     row = _row(quantity="10")
     position_repo.list_by_portfolio.return_value = [row]
-    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID)
+    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID, archived_at=None)
     history.append(
         _stored("buy", id=2, asset_id=ASSET_ID, quantity=D("10"), price=D("100"))
     )
@@ -296,7 +297,7 @@ def test_record_buy_of_new_ticker_creates_asset_inside_the_same_transaction(
     def get_or_create(ticker: str, **_: Any) -> SimpleNamespace:
         # No-commit core (ADR-0008): called while the transaction is open.
         assert session.commit.call_count == 0
-        return SimpleNamespace(id=42)
+        return SimpleNamespace(id=42, archived_at=None)
 
     assets.get_or_create_by_ticker.side_effect = get_or_create
 
@@ -340,7 +341,9 @@ def test_rejected_operation_rolls_back_the_new_asset_and_commits_nothing(
     portfolio_repo.get_owned.return_value = portfolio
     position_repo.list_by_portfolio.return_value = []
     assets.find_by_ticker.return_value = None
-    assets.get_or_create_by_ticker.return_value = SimpleNamespace(id=42)
+    assets.get_or_create_by_ticker.return_value = SimpleNamespace(
+        id=42, archived_at=None
+    )
 
     with pytest.raises(OperationRejectedError) as exc_info:
         service.record(
@@ -392,7 +395,7 @@ def test_ledger_rules_reach_the_client_as_400_with_the_domain_code(
 ) -> None:
     portfolio_repo.get_owned.return_value = _portfolio()
     position_repo.list_by_portfolio.return_value = []
-    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID)
+    assets.find_by_id.return_value = SimpleNamespace(id=ASSET_ID, archived_at=None)
 
     with pytest.raises(OperationRejectedError) as exc_info:
         service.record(_request(**values), 7)
@@ -438,7 +441,7 @@ def test_known_ticker_is_reused_without_creating(
 ) -> None:
     portfolio_repo.get_owned.return_value = _portfolio()
     position_repo.list_by_portfolio.return_value = []
-    assets.find_by_ticker.return_value = SimpleNamespace(id=ASSET_ID)
+    assets.find_by_ticker.return_value = SimpleNamespace(id=ASSET_ID, archived_at=None)
 
     service.record(
         _request(
@@ -641,3 +644,34 @@ def test_operation_types_are_the_frontend_ones() -> None:
         "withdrawal",
         "dividend",
     }
+
+
+@pytest.mark.parametrize("by", ["asset_id", "ticker"])
+def test_an_archived_asset_takes_no_new_operation(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    operation_repo: MagicMock,
+    assets: MagicMock,
+    session: MagicMock,
+    by: str,
+) -> None:
+    archived = SimpleNamespace(
+        id=ASSET_ID, archived_at=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    portfolio_repo.get_owned.return_value = _portfolio()
+    assets.find_by_id.return_value = archived
+    assets.find_by_ticker.return_value = archived
+    asset_arg: dict[str, Any] = (
+        {"asset_id": ASSET_ID}
+        if by == "asset_id"
+        else {"ticker": "AAPL", "asset_class": "X"}
+    )
+
+    with pytest.raises(AssetArchivedError) as exc_info:
+        service.record(
+            _request(operation_type="buy", quantity=1, price=1, **asset_arg), 7
+        )
+
+    assert (exc_info.value.status_code, exc_info.value.code) == (409, "ASSET_ARCHIVED")
+    operation_repo.create.assert_not_called()
+    session.commit.assert_not_called()
