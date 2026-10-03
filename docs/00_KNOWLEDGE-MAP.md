@@ -83,15 +83,12 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`assets`](./technical/backend/04_assets_module.md) | `backend/app/modules/assets/**` — waluty, klasy, walory, dane rynkowe |
 | [`portfolios`](./technical/backend/05_portfolios_module.md) | `backend/app/modules/portfolios/**` — portfele, pozycje, operacje, metryki |
 | [wiring i entrypointy](./technical/backend/06_wiring_i_entrypointy.md) | `backend/app/modules/*/{wiring,entrypoints,dependencies}.py`, `main.py` |
-| [schemat danych docelowy](./technical/backend/07_schemat_danych_docelowy.md) | `draft` — projekt docelowy: core_data, assets, portfolios, import i `job_run` (tabele i kolumny dziś → docelowo) |
-| [kontrakt API docelowy](./technical/backend/09_kontrakt_api_docelowy.md) | `draft` — projekt docelowy: ścieżki, koperty, paginacja, kody błędów |
 
 ### Frontend
 
 | Dokument | Zakres kodu |
 |---|---|
 | [architektura frontendu](./technical/frontend/frontend-architecture.md) | `frontend/src/**` — opis stanu faktycznego (`draft`) |
-| [IA i konwencje UI](./technical/frontend/ia-i-konwencje-ui.md) | `draft` — projekt docelowy: trasy, nawigacja, formatowanie, flagi jakości danych, kreator importu |
 
 ## Baza potwierdzonych ustaleń technicznych (`docs/knowledge_base/`)
 
