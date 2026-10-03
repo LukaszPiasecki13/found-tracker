@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -9,7 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from app.core.market_data import MarketDataUnavailableError
 from app.modules.assets.exceptions import (
     AssetAlreadyExistsError,
-    AssetInUseError,
+    AssetArchivedError,
+    AssetHasHistoryError,
     AssetNotFoundError,
     AssetNotFoundOnProviderError,
     UnknownAssetClassError,
@@ -22,6 +23,7 @@ from app.modules.assets.schemas.assets import (
 )
 from app.modules.assets.services.assets import AssetService
 from app.modules.assets.services.market_data import MarketDataService
+from app.modules.assets.services.prices import PriceQuote
 from app.modules.assets.tests.fakes import FakeMarketDataProvider, make_quote
 
 
@@ -63,15 +65,23 @@ def currencies() -> MagicMock:
 
 
 @pytest.fixture
+def prices() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
 def service(
     asset_repo: MagicMock,
     currency_repo: MagicMock,
     asset_classes: MagicMock,
     currencies: MagicMock,
     provider: FakeMarketDataProvider,
+    prices: MagicMock,
 ) -> AssetService:
-    market_data = MarketDataService(asset_repo, currency_repo, provider)
-    return AssetService(asset_repo, asset_classes, currencies, market_data)
+    market_data = MarketDataService(
+        asset_repo, currency_repo, provider, MagicMock(), MagicMock()
+    )
+    return AssetService(asset_repo, asset_classes, currencies, market_data, prices)
 
 
 def _create_request(**overrides: object) -> AssetCreateRequest:
@@ -107,6 +117,10 @@ def test_create_normalizes_ticker_and_commits(
         current_price=Decimal("190.5"),
         exchange="",
         sector="",
+        isin=None,
+        mic=None,
+        country=None,
+        asset_type="stock",
     )
     session.commit.assert_called_once()
 
@@ -214,17 +228,17 @@ def test_update_request_rejects_null_for_not_null_columns() -> None:
         AssetUpdateRequest.model_validate({"name": None})
 
 
-def test_delete_of_referenced_asset_is_in_use(
+def test_delete_of_an_asset_with_history_is_refused(
     service: AssetService, asset_repo: MagicMock, session: MagicMock
 ) -> None:
     asset_repo.get_by_id.return_value = SimpleNamespace(id=1)
     asset_repo.delete.side_effect = _integrity_error()
 
-    with pytest.raises(AssetInUseError) as exc_info:
+    with pytest.raises(AssetHasHistoryError) as exc_info:
         service.delete(1)
 
     assert exc_info.value.status_code == 409
-    assert exc_info.value.code == "ASSET_IN_USE"
+    assert exc_info.value.code == "ASSET_HAS_HISTORY"
     session.rollback.assert_called_once()
 
 
@@ -297,7 +311,11 @@ def test_get_or_create_by_ticker_creates_without_committing(
     assert result is created
     asset_classes.get_or_create_by_name.assert_called_once_with("Stock")
     asset_repo.create.assert_called_once_with(
-        ticker="CDR", name="CDR", asset_class_id=7, currency_id=3
+        ticker="CDR",
+        name="CDR",
+        asset_class_id=7,
+        currency_id=3,
+        asset_type="stock",
     )
     session.commit.assert_not_called()
     session.rollback.assert_not_called()
@@ -335,7 +353,7 @@ def test_get_or_create_by_ticker_uses_the_provider_quote_currency(
 
     currencies.get_or_create_by_code.assert_called_once_with("USD")
     asset_repo.create.assert_called_once_with(
-        ticker="AAPL", name="AAPL", asset_class_id=7, currency_id=5
+        ticker="AAPL", name="AAPL", asset_class_id=7, currency_id=5, asset_type="stock"
     )
 
 
@@ -354,7 +372,11 @@ def test_get_or_create_by_ticker_falls_back_when_the_provider_is_down(
     )
 
     asset_repo.create.assert_called_once_with(
-        ticker="AAPL", name="AAPL", asset_class_id=7, currency_id=3
+        ticker="AAPL",
+        name="AAPL",
+        asset_class_id=7,
+        currency_id=3,
+        asset_type="stock",
     )
 
 
@@ -419,6 +441,7 @@ def test_create_from_provider_builds_asset_from_quote_and_commits(
         current_price=Decimal("201"),
         exchange="NMS",
         sector="Technology",
+        asset_type="stock",
     )
     session.commit.assert_called_once()
 
@@ -560,3 +583,338 @@ def test_search_with_picker_format_looks_up_the_ticker_part_locally(
     assert [a.ticker for a in found.local] == ["MSFT"]
     # Already stored locally, even if the capped local list had missed it.
     assert found.yahoo == []
+
+
+# --- price history, identifiers, archive (ADR-0015, biz. 0007) ---
+
+
+def test_create_records_the_initial_price_as_todays_manual_close(
+    service: AssetService, asset_repo: MagicMock, prices: MagicMock
+) -> None:
+    asset_repo.find_by_ticker.return_value = None
+    asset_repo.find_by_isin.return_value = None
+    created = SimpleNamespace(id=1)
+    asset_repo.create.return_value = created
+
+    service.create(_create_request(isin="us0378331005", mic="xnas", country="us"))
+
+    kwargs = asset_repo.create.call_args.kwargs
+    assert (kwargs["isin"], kwargs["mic"], kwargs["country"]) == (
+        "US0378331005",
+        "XNAS",
+        "US",
+    )
+    prices.record_manual_price_today.assert_called_once_with(created, Decimal("190.5"))
+
+
+def test_create_refuses_a_taken_isin(
+    service: AssetService, asset_repo: MagicMock, session: MagicMock
+) -> None:
+    asset_repo.find_by_ticker.return_value = None
+    asset_repo.find_by_isin.return_value = SimpleNamespace(id=7)
+
+    with pytest.raises(AssetAlreadyExistsError) as exc_info:
+        service.create(_create_request(isin="US0378331005"))
+
+    assert exc_info.value.code == "ASSET_ALREADY_EXISTS"
+    assert "ISIN" in exc_info.value.message
+    asset_repo.create.assert_not_called()
+    session.rollback.assert_called_once()
+
+
+def test_a_race_on_the_isin_is_a_conflict_too(
+    service: AssetService, asset_repo: MagicMock
+) -> None:
+    asset_repo.find_by_ticker.side_effect = [None, None]
+    asset_repo.find_by_isin.side_effect = [None, SimpleNamespace(id=7)]
+    asset_repo.create.side_effect = _integrity_error()
+
+    with pytest.raises(AssetAlreadyExistsError) as exc_info:
+        service.create(_create_request(isin="US0378331005"))
+
+    assert "ISIN" in exc_info.value.message
+
+
+def test_create_request_validates_identifiers_and_type() -> None:
+    for bad in (
+        {"isin": "US0378331006"},
+        {"mic": "XNA"},
+        {"country": "USA"},
+        {"asset_type": "stonk"},
+        {"asset_type": "fund"},
+    ):
+        with pytest.raises(ValueError):
+            _create_request(**bad)
+    assert _create_request(isin="  ", mic="", country=None).isin is None
+    assert _create_request().asset_type == "stock"
+    assert _create_request(asset_type="etf").asset_type == "etf"
+
+
+def test_update_request_lets_identifiers_be_cleared_but_not_required_columns() -> None:
+    cleared = AssetUpdateRequest.model_validate({"isin": None, "country": None})
+    assert cleared.model_dump(exclude_unset=True) == {"isin": None, "country": None}
+    with pytest.raises(ValueError, match="asset_type cannot be null"):
+        AssetUpdateRequest.model_validate({"asset_type": None})
+
+
+def test_update_routes_a_price_through_the_history(
+    service: AssetService, asset_repo: MagicMock, prices: MagicMock
+) -> None:
+    asset = SimpleNamespace(id=1, archived_at=None, current_price=Decimal("1"))
+    asset_repo.get_by_id.return_value = asset
+
+    service.update(1, AssetUpdateRequest(current_price=Decimal("5")))
+
+    prices.record_manual_price_today.assert_called_once_with(asset, Decimal("5"))
+
+
+def test_update_request_rejects_a_zero_price() -> None:
+    with pytest.raises(ValueError):
+        AssetUpdateRequest(current_price=Decimal("0"))
+
+
+def test_requests_reject_more_than_nine_decimals() -> None:
+    with pytest.raises(ValueError):
+        AssetUpdateRequest(current_price=Decimal("0.0000000001"))
+    with pytest.raises(ValueError):
+        _create_request(current_price="1.0000000001")
+
+
+def test_update_without_a_price_leaves_the_history_alone(
+    service: AssetService, asset_repo: MagicMock, prices: MagicMock
+) -> None:
+    asset_repo.get_by_id.return_value = SimpleNamespace(
+        id=1, archived_at=None, name="Old"
+    )
+
+    service.update(1, AssetUpdateRequest(name="New"))
+
+    prices.record_manual_price_today.assert_not_called()
+
+
+def test_a_price_cannot_be_edited_on_an_archived_asset(
+    service: AssetService, asset_repo: MagicMock, session: MagicMock
+) -> None:
+    asset_repo.get_by_id.return_value = SimpleNamespace(
+        id=1, archived_at=datetime(2026, 1, 1, tzinfo=UTC), current_price=Decimal("1")
+    )
+
+    with pytest.raises(AssetArchivedError):
+        service.update(1, AssetUpdateRequest(current_price=Decimal("5")))
+
+    session.rollback.assert_called_once()
+
+
+def test_update_refuses_an_isin_that_belongs_to_another_asset(
+    service: AssetService, asset_repo: MagicMock
+) -> None:
+    asset_repo.get_by_id.return_value = SimpleNamespace(id=1, archived_at=None)
+    asset_repo.find_by_isin.return_value = SimpleNamespace(id=2)
+
+    with pytest.raises(AssetAlreadyExistsError):
+        service.update(1, AssetUpdateRequest(isin="US0378331005"))
+
+
+def test_update_allows_keeping_its_own_isin(
+    service: AssetService, asset_repo: MagicMock
+) -> None:
+    asset = SimpleNamespace(id=1, archived_at=None, isin=None)
+    asset_repo.get_by_id.return_value = asset
+    asset_repo.find_by_isin.return_value = SimpleNamespace(id=1)
+
+    service.update(1, AssetUpdateRequest(isin="US0378331005"))
+
+    assert asset.isin == "US0378331005"
+    asset_repo.update.assert_called_once()
+
+
+def test_archive_stamps_the_time_once_and_is_idempotent(
+    service: AssetService, asset_repo: MagicMock, session: MagicMock
+) -> None:
+    asset = SimpleNamespace(id=1, archived_at=None)
+    asset_repo.get_by_id.return_value = asset
+
+    service.archive(1)
+    first = asset.archived_at
+    service.archive(1)
+
+    assert first is not None
+    assert asset.archived_at is first
+    assert session.commit.call_count == 2
+
+
+def test_unarchive_clears_the_stamp(
+    service: AssetService, asset_repo: MagicMock
+) -> None:
+    asset = SimpleNamespace(id=1, archived_at=datetime(2026, 1, 1, tzinfo=UTC))
+    asset_repo.get_by_id.return_value = asset
+
+    service.unarchive(1)
+
+    assert asset.archived_at is None
+
+
+def test_archive_of_an_unknown_asset_is_404(
+    service: AssetService, asset_repo: MagicMock, session: MagicMock
+) -> None:
+    asset_repo.get_by_id.side_effect = AssetNotFoundError
+
+    with pytest.raises(AssetNotFoundError):
+        service.archive(1)
+
+    session.rollback.assert_called_once()
+
+
+def test_create_from_provider_sets_the_type_and_stores_the_quote_as_a_price(
+    service: AssetService,
+    asset_repo: MagicMock,
+    asset_classes: MagicMock,
+    currencies: MagicMock,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+) -> None:
+    asset_repo.find_by_ticker.return_value = None
+    asset_classes.get_or_create_by_name.return_value = SimpleNamespace(id=4)
+    currencies.get_or_create_by_code.return_value = SimpleNamespace(id=5)
+    provider.quotes["VWCE"] = make_quote(
+        "VWCE", quote_type="ETF", current_price=Decimal("120")
+    )
+    created = SimpleNamespace(id=9)
+    asset_repo.create.return_value = created
+
+    service.create_from_provider(AssetFromProviderRequest(ticker="vwce"))
+
+    assert asset_repo.create.call_args.kwargs["asset_type"] == "etf"
+    day, close = next(iter(prices.record_closes.call_args.args[1].items()))
+    assert (close, prices.record_closes.call_args.kwargs) == (
+        Decimal("120"),
+        {"source": "yahoo", "is_synthetic": True},
+    )
+    assert isinstance(day, date)
+
+
+def test_create_from_provider_without_a_price_stores_no_history(
+    service: AssetService,
+    asset_repo: MagicMock,
+    asset_classes: MagicMock,
+    currencies: MagicMock,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+) -> None:
+    asset_repo.find_by_ticker.return_value = None
+    asset_classes.get_or_create_by_name.return_value = SimpleNamespace(id=4)
+    currencies.get_or_create_by_code.return_value = SimpleNamespace(id=5)
+    provider.quotes["NOPX"] = make_quote(
+        "NOPX", current_price=None, regular_market_price=None, previous_close=None
+    )
+
+    service.create_from_provider(AssetFromProviderRequest(ticker="nopx"))
+
+    prices.record_closes.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("quote_type", "expected"),
+    [
+        ("EQUITY", "stock"),
+        ("ETF", "etf"),
+        ("MUTUALFUND", "stock"),
+        ("CRYPTOCURRENCY", "stock"),
+        ("SOMETHING", "stock"),
+    ],
+)
+def test_asset_type_follows_the_provider_quote_type(
+    service: AssetService,
+    asset_repo: MagicMock,
+    asset_classes: MagicMock,
+    currencies: MagicMock,
+    provider: FakeMarketDataProvider,
+    quote_type: str,
+    expected: str,
+) -> None:
+    asset_repo.find_by_ticker.return_value = None
+    asset_classes.get_or_create_by_name.return_value = SimpleNamespace(id=4)
+    currencies.get_or_create_by_code.return_value = SimpleNamespace(id=5)
+    provider.quotes["XYZ"] = make_quote("XYZ", quote_type=quote_type)
+
+    service.create_from_provider(AssetFromProviderRequest(ticker="xyz"))
+
+    assert asset_repo.create.call_args.kwargs["asset_type"] == expected
+
+
+def test_accept_for_refresh_dedupes_keeps_order_and_drops_archived(
+    service: AssetService, asset_repo: MagicMock
+) -> None:
+    asset_repo.list_by_ids.return_value = [
+        SimpleNamespace(id=1, archived_at=None),
+        SimpleNamespace(id=2, archived_at=datetime(2026, 1, 1, tzinfo=UTC)),
+        SimpleNamespace(id=3, archived_at=None),
+    ]
+
+    assert service.accept_for_refresh([3, 1, 2, 3]) == [3, 1]
+    asset_repo.list_by_ids.assert_called_once_with([3, 1, 2])
+
+
+def test_accept_for_refresh_rejects_an_unknown_id(
+    service: AssetService, asset_repo: MagicMock
+) -> None:
+    asset_repo.list_by_ids.return_value = [SimpleNamespace(id=1, archived_at=None)]
+
+    with pytest.raises(AssetNotFoundError):
+        service.accept_for_refresh([1, 2])
+
+
+def test_responses_carry_the_price_status_and_flag_a_priceless_asset_stale(
+    service: AssetService, asset_repo: MagicMock, prices: MagicMock
+) -> None:
+    priced = _list_asset(id=1, ticker="AAPL")
+    priceless = _list_asset(id=2, ticker="NONE")
+    asset_repo.list_all.return_value = [priced, priceless]
+    prices.latest_quotes.return_value = {
+        1: PriceQuote(
+            asset_id=1,
+            price_date=date(2026, 10, 1),
+            close=Decimal("10"),
+            currency_id=2,
+            source="manual",
+            is_synthetic=False,
+            stale=False,
+        )
+    }
+
+    first, second = service.list_responses("a", include_archived=True)
+
+    assert (first.price_date, first.price_source, first.stale) == (
+        date(2026, 10, 1),
+        "manual",
+        False,
+    )
+    assert (second.price_date, second.price_source, second.stale) == (None, None, True)
+    asset_repo.list_all.assert_called_once_with(
+        search="a",
+        asset_type=None,
+        asset_class_id=None,
+        country=None,
+        include_archived=True,
+    )
+
+
+def _list_asset(**overrides: object) -> SimpleNamespace:
+    values: dict[str, object] = {
+        "id": 1,
+        "ticker": "AAPL",
+        "name": "Apple",
+        "asset_class_id": 3,
+        "currency_id": 2,
+        "current_price": Decimal("10"),
+        "exchange": "",
+        "sector": "",
+        "isin": None,
+        "mic": None,
+        "country": None,
+        "asset_type": "stock",
+        "archived_at": None,
+        "updated_at": None,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)

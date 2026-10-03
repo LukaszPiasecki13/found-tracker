@@ -14,13 +14,15 @@ from app.modules.assets.schemas.currencies import (
     CurrencyCreateRequest,
     CurrencyUpdateRequest,
 )
+from app.modules.assets.services.fx_rates import FxRateService
 
 
 class CurrencyService:
     """Currency CRUD; codes are unique and stored uppercase."""
 
-    def __init__(self, repository: CurrencyRepository) -> None:
+    def __init__(self, repository: CurrencyRepository, fx_rates: FxRateService) -> None:
         self._repo = repository
+        self._fx_rates = fx_rates
 
     @staticmethod
     def _normalize_code(code: str) -> str:
@@ -44,11 +46,16 @@ class CurrencyService:
                     raise CurrencyAlreadyExistsError
                 if data.base_currency_id is not None:
                     self._require_base_currency(data.base_currency_id)
-                return self._repo.create(
+                currency = self._repo.create(
                     code=code,
                     exchange_rate=data.exchange_rate,
                     base_currency_id=data.base_currency_id,
                 )
+                if "exchange_rate" in data.model_fields_set:
+                    self._fx_rates.record_manual_rate_to_base(
+                        currency, data.exchange_rate
+                    )
+                return currency
         except IntegrityError as err:
             self._raise_if_code_taken(code, err)
             raise
@@ -67,6 +74,10 @@ class CurrencyService:
                 if values.get("base_currency_id") is not None:
                     self._require_base_currency(values["base_currency_id"])
                 apply_changes(currency, values)
+                if "exchange_rate" in values:
+                    self._fx_rates.record_manual_rate_to_base(
+                        currency, values["exchange_rate"]
+                    )
                 return self._repo.update(currency)
         except IntegrityError as err:
             if "code" in values:

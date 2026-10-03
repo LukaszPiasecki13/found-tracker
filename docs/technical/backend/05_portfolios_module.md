@@ -65,6 +65,7 @@ Wszystkie reguły liczbowe są w `PortfolioLedger` (§4); router i schematy ich 
 | 404 | `PORTFOLIO_NOT_FOUND` | portfel nie istnieje lub nie należy do użytkownika (także `portfolio_id` w treści operacji i `portfolio_name` pozycji) |
 | 404 | `OPERATION_NOT_FOUND` | operacja nie istnieje lub nie należy do użytkownika |
 | 409 | `PORTFOLIO_ALREADY_EXISTS` | nazwa zajęta u tego właściciela (tworzenie i zmiana nazwy) |
+| 409 | `ASSET_ARCHIVED` | nowa operacja na zarchiwizowanym walorze (po `asset_id` albo `ticker`); odwołaj archiwizację w `assets`, by go użyć |
 | 409 | `CONCURRENT_CHANGE` | wyścig na unikalnym kluczu przy rejestracji operacji (ten sam nowy ticker/klasa/waluta jednocześnie); ponowienie żądania się powiedzie |
 | 400 | `CURRENCY_NOT_FOUND` | nieznana `base_currency_id` |
 | 400 | `ASSET_NOT_FOUND` | nieznany `asset_id`; nieznany `ticker` bez `asset_class` |
