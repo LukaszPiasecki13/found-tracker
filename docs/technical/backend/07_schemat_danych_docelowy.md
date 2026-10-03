@@ -354,7 +354,7 @@ Implementacja zadań jest wspólna: CLI `python -m app.cli <zadanie>` i **nadrab
 | `last_ok_day` | `Date` | tak | ostatni dzień (Europe/Warsaw), dla którego przebieg się powiódł — warunek „zaległość” |
 | `last_error` | `String(200)` | tak | skrót błędu, bez sekretów |
 
-**Blokada [propozycja]:** przebieg otwiera transakcję i wykonuje `SELECT … FROM job_run WHERE job_name = :n FOR UPDATE SKIP LOCKED`; brak wiersza w wyniku = inny przebieg trwa, przebieg się kończy bez pracy. Wiersze tworzy seed (`INSERT … ON CONFLICT DO NOTHING`). Pooler transakcyjny Supabase nie dopuszcza blokad sesyjnych ani `pg_advisory_lock` na poziomie sesji — blokada wierszowa w transakcji jest dozwolona. Nie używamy `flock`. Zewnętrzny harmonogram (jedna linia cron) jest opcjonalny.
+**Blokada:** blokadą jest wyłącznie wiersz w transakcji; `last_status` i `last_started_at` są informacyjne, a przebieg bez `last_finished_at` po 30 minutach uznaje się za przerwany. Przebieg otwiera transakcję i wykonuje `SELECT … FROM job_run WHERE job_name = :n FOR UPDATE SKIP LOCKED`; brak wiersza w wyniku = inny przebieg trwa, przebieg się kończy bez pracy. Wiersze tworzy seed (`INSERT … ON CONFLICT DO NOTHING`). Pooler transakcyjny Supabase nie dopuszcza blokad sesyjnych ani `pg_advisory_lock` na poziomie sesji — blokada wierszowa w transakcji jest dozwolona. Nie używamy `flock`. Zewnętrzny harmonogram (jedna linia cron) jest opcjonalny.
 
 ## 8. Konflikty z istniejącym kodem
 
