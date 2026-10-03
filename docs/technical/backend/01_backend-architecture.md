@@ -1,7 +1,7 @@
 ---
 id: be-architecture
 status: current
-last_reviewed: 2026-10-01
+last_reviewed: 2026-10-03
 type: mixed
 scope: backend/architecture
 applies_to:
