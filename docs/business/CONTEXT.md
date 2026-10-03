@@ -23,7 +23,7 @@ Stan posiadania jednego waloru w jednym portfelu: ilość, średnia cena zakupu,
 _Unikać_: holding, udział
 
 **Operacja** (`portfolios_operation`)
-Zdarzenie zapisane przez użytkownika, niezmienne co do znaczenia: `buy`, `sell`, `deposit`, `withdrawal`, `dividend`, `interest`, `fee`, `fx_exchange` (przewalutowanie), `split`. Operacje są źródłem prawdy o portfelu. Usunięcie lub edycja Operacji wymusza przebudowę salda i Pozycji z pozostałej historii.
+Zdarzenie zapisane przez użytkownika, niezmienne co do znaczenia: `buy`, `sell`, `deposit`, `withdrawal`, `dividend`, `interest`, `fee`, `currency_exchange` (przewalutowanie), `split`. Operacje są źródłem prawdy o portfelu. Usunięcie lub edycja Operacji wymusza przebudowę salda i Pozycji z pozostałej historii.
 _Unikać_: transakcja (w kodzie tylko w nazwie technicznej `transaction()` — granica commitu, nie pojęcie domenowe), wpis
 
 **Saldo gotówki**
