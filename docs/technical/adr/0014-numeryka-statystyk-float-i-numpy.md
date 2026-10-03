@@ -10,13 +10,13 @@ last_reviewed: 2026-10-03
 
 Pieniądze, ilości, koszt i `twr_index` — `Decimal`, `domain/` tylko ze stdlib. `float` i `numpy` wyłącznie w `services/`. Zamyka wariant (a) [ADR-0005](0005-warstwa-domeny.md), uzupełnia [ADR-0010](0010-decimal-i-precyzja-pieniedzy.md).
 
-**Rozstrzyga:** D11 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E3.1.
+**Blokuje:** E3.1.
 
 ## Kontekst
 
 - Metryki są w `services/metrics.py` (`numpy`, `backend/app/modules/portfolios/services/metrics.py:31`); ADR-0010 dopuszcza `float` tylko w wektorach wykresów, nie rozstrzyga skalarów ani przechowywanego `twr_index`.
 - Test czystości (`portfolios/tests/unit/test_domain_purity.py:17`) jest per moduł.
-- Dowód: [metodyka §10.1](../../research/05_metodyka_metryk.md).
+- Dowód: [metodyka §10.1](../../research/00_analiza_koncowa.md).
 
 ## Decyzja
 

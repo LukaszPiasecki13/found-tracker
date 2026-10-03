@@ -8,9 +8,9 @@ last_reviewed: 2026-10-03
 
 # Migracje tylko z `autogenerate`; dzień Operacji to `operation_day` (Europe/Warsaw) z `sequence`; dane startują od zera
 
-Schemat zmienia wyłącznie `alembic revision --autogenerate`. Dane powstają przez seed albo import, nie przez migracje. Porządek i snapshoty opierają się na `operation_day` (D13) i `sequence`.
+Schemat zmienia wyłącznie `alembic revision --autogenerate`. Dane powstają przez seed albo import, nie przez migracje. Porządek i snapshoty opierają się na `operation_day` i `sequence`.
 
-**Rozstrzyga:** D16 i techniczną część D13 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)).
+**Rozstrzyga:** D16 i techniczną część D13 ([roadmapa](../../research/00_analiza_koncowa.md)).
 
 ## Kontekst
 

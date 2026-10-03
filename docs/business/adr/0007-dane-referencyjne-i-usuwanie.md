@@ -10,21 +10,21 @@ last_reviewed: 2026-10-03
 
 Walory, ceny ręczne i benchmarki są globalne w instancji; zapisuje je tylko właściciel, rejestracja jest zamknięta. Walor z historią archiwizujemy zamiast usuwać.
 
-**Rozstrzyga:** D14, D15. **Blokuje:** E1.5, E2.3, E4.1 (E0.6 to konfiguracja, nie jest blokowane).
+**Blokuje:** E1.5, E2.3, E4.1 (E0.6 to konfiguracja, nie jest blokowane).
 
 ## Kontekst
 
-- `assets_asset`, `assets_currency`, `assets_assetclass` nie mają `owner_id`; zapis `assets/*` nie sprawdza właściciela, `POST /auth/register` jest otwarty ([dowód 06](../../research/06_stan_found-tracker_vs_cel.md), §2, G20, G21). Założenie: jeden użytkownik ([plan](../../plans/02_roadmapa_funkcjonalna.md), §1).
+- `assets_asset`, `assets_currency`, `assets_assetclass` nie mają `owner_id`; zapis `assets/*` nie sprawdza właściciela, `POST /auth/register` jest otwarty ([dowód 06](../../research/00_analiza_koncowa.md), §2, G20, G21). Założenie: jeden użytkownik ([plan](../../research/00_analiza_koncowa.md), §1).
 - Usuwanie dziś: Walor w użyciu → 409 (`backend/app/modules/assets/exceptions.py:89`); Portfel kasuje kaskadowo Operacje i Pozycje (`portfolio.py:60-65`); brak soft-delete — [ADR-0011](../../technical/adr/0011-audyt-odlozony.md) odłożył audyt.
 
 ## Decyzja
 
-**A. Własność danych referencyjnych (D14)**
+**A. Własność danych referencyjnych**
 1. Walory, Klasy waloru, Waluty, kursy, ceny (też `source = manual`) i benchmarki to wspólna przestrzeń instancji. Odczyt: każdy uwierzytelniony. Zapis: wyłącznie właściciel instancji.
 2. Właściciel = użytkownik z `is_owner` (`Boolean`, NOT NULL, domyślnie `false`) **[propozycja]**, ustawianą dla pierwszego konta (E0.6). Brak flagi → `403` `REFERENCE_DATA_OWNER_ONLY`.
 3. Rejestracja zamknięta konfiguracją (E0.6). Dane użytkownika (Portfele, Operacje, Grupy) zostają per `owner_id`.
 
-**B. Usuwanie (D15)**
+**B. Usuwanie**
 
 | Obiekt | Zasada | Błąd |
 |---|---|---|

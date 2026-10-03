@@ -10,7 +10,7 @@ last_reviewed: 2026-10-03
 
 `app/cli.py` jest driverem ([ADR-0002](0002-sesja-poza-zadaniem-entrypointy-i-wiring.md), R8): parsuje argumenty, woła funkcję z `entrypoints.py`, drukuje wynik, ustala kod wyjścia. Backend usypia się (Render), więc zaległości nadrabia pierwsze żądanie dnia. Brak Celery/Redis.
 
-**Rozstrzyga:** D8 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)). **Blokuje:** E0.6, E0.8, E1.4, E2.0, E4.5.
+**Blokuje:** E0.6, E0.8, E1.4, E2.0, E4.5.
 
 ## Kontekst
 

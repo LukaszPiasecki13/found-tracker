@@ -10,7 +10,7 @@ last_reviewed: 2026-10-03
 
 `Currency.exchange_rate` i `Asset.current_price` przestają być źródłem prawdy; kurs krzyżowy składa `portfolios`.
 
-**Rozstrzyga:** D5, część D7 ([roadmapa](../../plans/02_roadmapa_funkcjonalna.md)); reszta — [ADR-0016](0016-snapshoty-dzienne-i-przebudowa.md). **Blokuje:** E0.1, E1.1, E1.2, E1.5, E2.3.
+**Blokuje:** E0.1, E1.1, E1.2, E1.5, E2.3.
 
 ## Kontekst
 
@@ -40,7 +40,7 @@ last_reviewed: 2026-10-03
 
 **6. Kurs krzyżowy składa `portfolios`.** `assets` zwraca tylko kursy bezpośrednie i odwrotne (`GET /assets/currencies/rate`). `FxMapBuilder` w `portfolios`: para → odwrotność → pivot [PLN, waluta systemowa] **[propozycja]**; mapa `{(z, do): Decimal}` na dzień wyceny. Brak kursu → `RATE_MISSING`. `domain/` dostaje tylko mapę.
 
-**7. Dwa kursy na zdarzenie (D5)**
+**7. Dwa kursy na zdarzenie**
 
 | Kurs | Miejsce | Do czego |
 |---|---|---|
