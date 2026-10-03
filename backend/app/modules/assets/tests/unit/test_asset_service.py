@@ -270,7 +270,7 @@ def test_get_or_create_by_ticker_returns_existing_without_writing(
     asset_repo.find_by_ticker.return_value = existing
 
     result = service.get_or_create_by_ticker(
-        "cdr", asset_class_name="Stock", currency_id=1
+        "cdr", asset_class_name="Stock", fallback_currency_id=1
     )
 
     assert result is existing
@@ -291,7 +291,7 @@ def test_get_or_create_by_ticker_creates_without_committing(
     asset_repo.create.return_value = created
 
     result = service.get_or_create_by_ticker(
-        " cdr ", asset_class_name="Stock", currency_id=3
+        " cdr ", asset_class_name="Stock", fallback_currency_id=3
     )
 
     assert result is created
@@ -310,9 +310,52 @@ def test_get_or_create_by_ticker_rejects_unknown_currency(
     currencies.find_by_id.return_value = None
 
     with pytest.raises(UnknownCurrencyError):
-        service.get_or_create_by_ticker("CDR", asset_class_name="Stock", currency_id=9)
+        service.get_or_create_by_ticker(
+            "CDR", asset_class_name="Stock", fallback_currency_id=9
+        )
 
     asset_repo.create.assert_not_called()
+
+
+def test_get_or_create_by_ticker_uses_the_provider_quote_currency(
+    service: AssetService,
+    asset_repo: MagicMock,
+    asset_classes: MagicMock,
+    currencies: MagicMock,
+    provider: FakeMarketDataProvider,
+) -> None:
+    asset_repo.find_by_ticker.return_value = None
+    asset_classes.get_or_create_by_name.return_value = SimpleNamespace(id=7)
+    currencies.get_or_create_by_code.return_value = SimpleNamespace(id=5)
+    provider.quotes["AAPL"] = make_quote("AAPL", currency="USD")
+
+    service.get_or_create_by_ticker(
+        "aapl", asset_class_name="Stock", fallback_currency_id=3
+    )
+
+    currencies.get_or_create_by_code.assert_called_once_with("USD")
+    asset_repo.create.assert_called_once_with(
+        ticker="AAPL", name="AAPL", asset_class_id=7, currency_id=5
+    )
+
+
+def test_get_or_create_by_ticker_falls_back_when_the_provider_is_down(
+    service: AssetService,
+    asset_repo: MagicMock,
+    asset_classes: MagicMock,
+    provider: FakeMarketDataProvider,
+) -> None:
+    asset_repo.find_by_ticker.return_value = None
+    asset_classes.get_or_create_by_name.return_value = SimpleNamespace(id=7)
+    provider.failing.add("AAPL")
+
+    service.get_or_create_by_ticker(
+        "AAPL", asset_class_name="Stock", fallback_currency_id=3
+    )
+
+    asset_repo.create.assert_called_once_with(
+        ticker="AAPL", name="AAPL", asset_class_id=7, currency_id=3
+    )
 
 
 # --- create_from_provider ---

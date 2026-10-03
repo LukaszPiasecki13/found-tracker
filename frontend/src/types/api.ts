@@ -39,11 +39,13 @@ export interface Pocket {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  positions_value?: number;
-  total_value?: number;
+  // Null when a position has no currency rate (see rate_missing).
+  positions_value?: number | null;
+  total_value?: number | null;
   total_fees?: number;
-  total_profit_loss?: number;
-  total_return_pct?: number;
+  total_profit_loss?: number | null;
+  total_return_pct?: number | null;
+  rate_missing?: boolean;
 }
 
 export interface Position {
@@ -61,10 +63,12 @@ export interface Position {
   // Calculated fields
   cost_basis?: number;
   cost_basis_in_portfolio_currency?: number;
-  market_value?: number;
-  unrealized_pnl?: number;
-  return_pct?: number;
-  portfolio_weight_pct?: number;
+  // Null when no rate turns the asset's currency into the portfolio's.
+  market_value?: number | null;
+  unrealized_pnl?: number | null;
+  return_pct?: number | null;
+  portfolio_weight_pct?: number | null;
+  rate_missing?: boolean;
 }
 
 export type OperationType = 'buy' | 'sell' | 'deposit' | 'withdrawal' | 'dividend';
@@ -143,7 +147,22 @@ export interface CreateOperationRequest {
 }
 
 // Error Response
+export interface ValidationDetail {
+  type: string;
+  loc: (string | number)[];
+  msg: string;
+}
+
+// Error body: `code` is the stable identifier, `detail` a message or, for 422,
+// the list of invalid fields.
 export interface ApiError {
-  detail?: string;
-  [key: string]: unknown;
+  detail?: string | ValidationDetail[];
+  code?: string;
+}
+
+export interface FxRate {
+  from_currency: string;
+  to_currency: string;
+  rate: number;
+  via: 'identity' | 'direct' | 'inverse' | 'cross';
 }

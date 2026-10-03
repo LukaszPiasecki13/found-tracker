@@ -123,7 +123,7 @@ class LedgerState:
                 return position
         return None
 
-    def _with_position(self, updated: PositionState) -> tuple[PositionState, ...]:
+    def with_position(self, updated: PositionState) -> tuple[PositionState, ...]:
         """Positions with `updated` replacing the one for its asset, or
         appended when the asset has none yet."""
         if self.position(updated.asset_id) is None:
@@ -132,7 +132,7 @@ class LedgerState:
             updated if p.asset_id == updated.asset_id else p for p in self.positions
         )
 
-    def _without_position(self, asset_id: int) -> tuple[PositionState, ...]:
+    def without_position(self, asset_id: int) -> tuple[PositionState, ...]:
         return tuple(p for p in self.positions if p.asset_id != asset_id)
 
 
@@ -197,7 +197,7 @@ def _buy(state: LedgerState, operation: OperationInput) -> LedgerState:
     return replace(
         state,
         cash_balance=state.cash_balance - total_cost,
-        positions=state._with_position(position),
+        positions=state.with_position(position),
     )
 
 
@@ -213,9 +213,9 @@ def _sell(state: LedgerState, operation: OperationInput) -> LedgerState:
     proceeds = (quantity * operation.price - operation.fee) * operation.fx_rate
     remaining = held.quantity - quantity
     if remaining == _ZERO:
-        positions = state._without_position(asset_id)
+        positions = state.without_position(asset_id)
     else:
-        positions = state._with_position(
+        positions = state.with_position(
             replace(
                 held, quantity=remaining, total_fees=held.total_fees + operation.fee
             )
@@ -256,7 +256,7 @@ def _dividend(state: LedgerState, operation: OperationInput) -> LedgerState:
     return replace(
         state,
         cash_balance=state.cash_balance + (amount - operation.fee) * operation.fx_rate,
-        positions=state._with_position(position),
+        positions=state.with_position(position),
     )
 
 

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import type { UserProfile, LoginRequest, RegisterRequest } from '../types/api';
-import { getErrorMessage } from '../lib/api';
+import { getErrorMessage, refreshTokens } from '../lib/api';
 import { useSnackbar } from 'notistack';
 
 interface AuthContextType {
@@ -50,17 +50,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return;
 
     const refreshInterval = setInterval(async () => {
-      const refreshToken = localStorage.getItem('refresh');
-      if (refreshToken) {
-        try {
-          const { access } = await authService.refreshToken(refreshToken);
-          localStorage.setItem('access', access);
-        } catch (error) {
-          console.error('Token refresh failed:', error);
-          logout();
-        }
+      try {
+        await refreshTokens();
+      } catch (error) {
+        console.error('Token refresh failed:', error);
+        logout();
       }
-    }, 1000 * 60 * 14); // Refresh every 14 minutes (tokens usually expire in 15 mins)
+    }, 1000 * 60 * 20); // The access token lives 30 minutes (backend default)
 
     return () => clearInterval(refreshInterval);
   }, [user]);

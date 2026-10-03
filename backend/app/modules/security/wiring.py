@@ -1,9 +1,8 @@
 """Composition root for security (ADR-0002): the only place that assembles
 its services. No FastAPI, no `dependencies.py`, no commit.
 
-`core_data`'s wiring is imported as a module, not by name: `core_data.services`
-uses `security.services.password`, so the two modules depend on each other and a
-module import keeps this file independent of import order.
+`core_data`'s wiring is imported as a module, as every module's wiring reaches
+another's (see `01_backend-architecture.md` §2.4).
 """
 
 from sqlalchemy.orm import Session

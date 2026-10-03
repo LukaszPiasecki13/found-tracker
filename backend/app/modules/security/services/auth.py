@@ -1,3 +1,7 @@
+from app.core.passwords import (
+    burn_password_verification,
+    verify_password,
+)
 from app.modules.core_data.models.user import User
 from app.modules.core_data.services.users import UserService
 from app.modules.security.constants import TOKEN_TYPE_REFRESH
@@ -7,10 +11,6 @@ from app.modules.security.errors import (
     RefreshUserNotFoundError,
 )
 from app.modules.security.schemas.auth import LoginRequest, TokenResponse
-from app.modules.security.services.password import (
-    burn_password_verification,
-    verify_password,
-)
 from app.modules.security.services.token import TokenService, parse_user_id
 
 

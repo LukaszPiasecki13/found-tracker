@@ -6,7 +6,9 @@ import secrets
 import bcrypt
 
 from app.core.errors import ValidationException
-from app.modules.security.constants import MAX_PASSWORD_BYTES
+
+# bcrypt ignores (and bcrypt>=5 rejects) anything past 72 bytes of input.
+MAX_PASSWORD_BYTES = 72
 
 
 def hash_password(password: str) -> str:

@@ -3,5 +3,6 @@
 TOKEN_TYPE_ACCESS = "access"
 TOKEN_TYPE_REFRESH = "refresh"
 
-# bcrypt ignores (and bcrypt>=5 rejects) anything past 72 bytes of input.
-MAX_PASSWORD_BYTES = 72
+# Per client IP (see `core/rate_limit.py`).
+LOGIN_RATE_LIMIT = "5/minute"
+REFRESH_RATE_LIMIT = "10/minute"

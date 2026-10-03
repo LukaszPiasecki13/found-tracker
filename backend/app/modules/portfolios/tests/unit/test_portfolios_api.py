@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.core.errors import register_error_handlers
 from app.modules.portfolios.api import (
+    fx_rates_router,
     metrics_router,
     operations_router,
     portfolios_router,
@@ -19,6 +20,7 @@ from app.modules.portfolios.api import (
     router,
 )
 from app.modules.portfolios.dependencies import (
+    get_fx_rate_service,
     get_metrics_service,
     get_operation_service,
     get_portfolio_service,
@@ -28,9 +30,12 @@ from app.modules.portfolios.exceptions import (
     OperationRejectedError,
     PortfolioAlreadyExistsError,
     PortfolioNotFoundError,
+    RateMissingError,
 )
+from app.modules.portfolios.schemas.fx_rates import FxRateResponse
 from app.modules.portfolios.schemas.metrics import PortfolioVectorsResponse
 from app.modules.portfolios.schemas.portfolios import PortfolioSummaryResponse
+from app.modules.portfolios.schemas.positions import PositionResponse
 from app.modules.security.dependencies import get_current_user
 
 USER = SimpleNamespace(id=7, email="user@example.com", is_active=True)
@@ -43,6 +48,7 @@ class Services(SimpleNamespace):
     positions: MagicMock
     operations: MagicMock
     metrics: MagicMock
+    fx_rates: MagicMock
 
 
 @pytest.fixture
@@ -52,6 +58,7 @@ def services() -> Services:
         positions=MagicMock(),
         operations=MagicMock(),
         metrics=MagicMock(),
+        fx_rates=MagicMock(),
     )
 
 
@@ -69,6 +76,7 @@ def build_client(
     app.dependency_overrides[get_position_service] = lambda: services.positions
     app.dependency_overrides[get_operation_service] = lambda: services.operations
     app.dependency_overrides[get_metrics_service] = lambda: services.metrics
+    app.dependency_overrides[get_fx_rate_service] = lambda: services.fx_rates
     if authenticated:
         app.dependency_overrides[get_current_user] = lambda: USER
     return TestClient(app, raise_server_exceptions=False)
@@ -121,7 +129,13 @@ def _operation(**overrides: object) -> SimpleNamespace:
     [
         (router,),
         # Worst case: the `{portfolio_id}` router registered first.
-        (portfolios_router, positions_router, operations_router, metrics_router),
+        (
+            portfolios_router,
+            positions_router,
+            operations_router,
+            metrics_router,
+            fx_rates_router,
+        ),
     ],
 )
 def test_static_paths_are_never_captured_by_portfolio_id(
@@ -135,6 +149,7 @@ def test_static_paths_are_never_captured_by_portfolio_id(
     assert client.get("/portfolios/positions?portfolio_name=Main").json() == []
     assert client.get("/portfolios/operations").json() == []
     assert client.get("/portfolios/portfolio-vectors").json() == {}
+    assert client.get("/portfolios/fx-rate").status_code == 422  # reached its own route
     services.portfolios.get_detail.assert_not_called()
 
 
@@ -161,6 +176,7 @@ def test_non_numeric_ids_are_not_routed(services: Services) -> None:
         ("PUT", "/portfolios/operations/1"),
         ("DELETE", "/portfolios/operations/1"),
         ("GET", "/portfolios/portfolio-vectors"),
+        ("GET", "/portfolios/fx-rate?from_currency=EUR&to_currency=PLN"),
     ],
 )
 def test_every_endpoint_requires_authentication(
@@ -211,7 +227,92 @@ def test_list_returns_valued_summaries_as_numbers(services: Services) -> None:
         "total_profit_loss": 1033.5,
         "total_return_pct": 103.35,
         "total_fees": 1.5,
+        "rate_missing": False,
     }
+
+
+def test_summary_without_a_rate_has_null_totals_and_the_flag(
+    services: Services,
+) -> None:
+    services.portfolios.list_summaries.return_value = [
+        PortfolioSummaryResponse(
+            **dict(vars(_portfolio())),
+            positions_value=None,
+            total_value=None,
+            total_profit_loss=None,
+            total_return_pct=None,
+            total_fees=D("1.5"),
+            rate_missing=True,
+        )
+    ]
+
+    response = build_client(services).get("/portfolios/")
+
+    [body] = response.json()
+    assert body["rate_missing"] is True
+    assert body["positions_value"] is None
+    assert body["total_value"] is None
+    assert body["total_profit_loss"] is None
+    assert body["total_return_pct"] is None
+    assert body["total_fees"] == 1.5
+    assert body["cash_balance"] == 799.0
+
+
+def test_position_without_a_rate_has_null_values_but_keeps_its_cost(
+    services: Services,
+) -> None:
+    services.positions.list_valued.return_value = [
+        PositionResponse.model_validate(
+            {
+                "id": 5,
+                "portfolio_id": 3,
+                "asset_id": 9,
+                "asset": {
+                    "id": 9,
+                    "ticker": "BARC",
+                    "name": "Barclays",
+                    "asset_class": {"id": 1, "name": "Stock"},
+                    "currency": {
+                        "id": 4,
+                        "code": "GBP",
+                        "exchange_rate": D("1"),
+                        "base_currency_id": None,
+                    },
+                    "current_price": D("2.5"),
+                    "exchange": "LSE",
+                    "sector": "",
+                    "updated_at": NOW,
+                },
+                "quantity": D("10"),
+                "average_buy_price": D("2"),
+                "average_fx_rate": D("5"),
+                "total_fees": D("0"),
+                "total_dividends": D("0"),
+                "opened_at": NOW,
+                "updated_at": NOW,
+                "cost_basis": D("20"),
+                "cost_basis_in_portfolio_currency": D("100"),
+                "market_value": None,
+                "unrealized_pnl": None,
+                "return_pct": None,
+                "portfolio_weight_pct": None,
+                "rate_missing": True,
+            }
+        )
+    ]
+
+    response = build_client(services).get(
+        "/portfolios/positions", params={"portfolio_name": "Main"}
+    )
+
+    [body] = response.json()
+    assert body["rate_missing"] is True
+    assert body["market_value"] is None
+    assert body["unrealized_pnl"] is None
+    assert body["return_pct"] is None
+    assert body["portfolio_weight_pct"] is None
+    assert body["cost_basis"] == 20.0
+    assert body["cost_basis_in_portfolio_currency"] == 100.0
 
 
 def test_create_returns_201_with_the_entity(services: Services) -> None:
@@ -292,6 +393,19 @@ def test_positions_require_a_portfolio_name(services: Services) -> None:
     assert client.get("/portfolios/positions").status_code == 422
     client.get("/portfolios/positions", params={"portfolio_name": "Main"})
     services.positions.list_valued.assert_called_once_with(7, "Main")
+    services.positions.refresh_valued.assert_not_called()
+
+
+def test_refreshing_positions_is_a_post(services: Services) -> None:
+    client = build_client(services)
+    services.positions.refresh_valued.return_value = []
+
+    response = client.post(
+        "/portfolios/positions/refresh", params={"portfolio_name": "Main"}
+    )
+
+    assert response.status_code == 200
+    services.positions.refresh_valued.assert_called_once_with(7, "Main")
 
 
 # --- Operations ---
@@ -506,3 +620,56 @@ def test_vectors_pass_the_frontends_camel_case_parameters(services: Services) ->
         "2025-01-02",
     )
     assert query.vectors == '["pocket_value_vector","assets"]'
+
+
+# --- FX rate ---
+
+
+def test_fx_rate_returns_the_rate_as_a_number(services: Services) -> None:
+    services.fx_rates.quote.return_value = FxRateResponse(
+        from_currency="EUR", to_currency="PLN", rate=D("4.32"), via="cross"
+    )
+
+    response = build_client(services).get(
+        "/portfolios/fx-rate", params={"from_currency": "eur", "to_currency": "PLN"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "from_currency": "EUR",
+        "to_currency": "PLN",
+        "rate": 4.32,
+        "via": "cross",
+    }
+    services.fx_rates.quote.assert_called_once_with("eur", "PLN")
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {},
+        {"from_currency": "EUR"},
+        {"from_currency": "EU", "to_currency": "PLN"},
+        {"from_currency": "EUR", "to_currency": "PLN1"},
+        {"from_currency": "E1R", "to_currency": "PLN"},
+    ],
+)
+def test_fx_rate_rejects_bad_codes_with_422(
+    services: Services, params: dict[str, str]
+) -> None:
+    response = build_client(services).get("/portfolios/fx-rate", params=params)
+
+    assert response.status_code == 422
+    services.fx_rates.quote.assert_not_called()
+
+
+def test_fx_rate_errors_keep_the_contract_with_code(services: Services) -> None:
+    services.fx_rates.quote.side_effect = RateMissingError
+    client = build_client(services)
+
+    response = client.get(
+        "/portfolios/fx-rate", params={"from_currency": "GBP", "to_currency": "PLN"}
+    )
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "RATE_MISSING"

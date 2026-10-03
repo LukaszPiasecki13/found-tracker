@@ -54,20 +54,14 @@ class PortfolioBalanceLike(Protocol):
     def total_deposited(self) -> Decimal: ...
 
 
-class CurrencyRateLike(Protocol):
-    @property
-    def exchange_rate(self) -> Decimal: ...
-
-
 class QuotedAssetLike(Protocol):
-    """An asset with its current price and quote currency."""
+    """An asset with its current price and quote currency (by id: the rate
+    into the portfolio's currency comes from the caller)."""
 
     @property
     def current_price(self) -> Decimal: ...
     @property
     def currency_id(self) -> int: ...
-    @property
-    def currency(self) -> CurrencyRateLike: ...
 
 
 class HoldingLike(Protocol):

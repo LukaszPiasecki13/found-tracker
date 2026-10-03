@@ -20,7 +20,7 @@ from app.modules.assets.exceptions import (
     CurrencyInUseError,
     CurrencyNotFoundError,
 )
-from app.modules.security.dependencies import get_current_user
+from app.modules.security.dependencies import get_current_admin, get_current_user
 
 
 @pytest.fixture
@@ -41,6 +41,7 @@ def client(asset_classes: MagicMock, currencies: MagicMock) -> TestClient:
     app.dependency_overrides[get_asset_class_service] = lambda: asset_classes
     app.dependency_overrides[get_currency_service] = lambda: currencies
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    app.dependency_overrides[get_current_admin] = lambda: SimpleNamespace(id=1)
     return TestClient(app, raise_server_exceptions=False)
 
 

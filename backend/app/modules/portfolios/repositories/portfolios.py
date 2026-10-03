@@ -1,12 +1,12 @@
 """Portfolio repository for data access. Every read is scoped to an owner."""
 
-from sqlalchemy import Select, select
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import Select, exists, select
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.infrastructure.sql.repository import SQLRepository
 from app.modules.assets.models import Asset
 from app.modules.portfolios.exceptions import PortfolioNotFoundError
-from app.modules.portfolios.models import Portfolio, Position
+from app.modules.portfolios.models import Operation, Portfolio, Position
 
 
 def _owned_with_holdings() -> Select[tuple[Portfolio]]:
@@ -30,9 +30,6 @@ def _owned_with_holdings() -> Select[tuple[Portfolio]]:
 
 class PortfolioRepository(SQLRepository):
     """Repository for Portfolio model database operations."""
-
-    def __init__(self, session: Session):
-        super().__init__(session)
 
     def list_by_owner(self, owner_id: int, name: str | None = None) -> list[Portfolio]:
         """The owner's portfolios, newest first; `name` filters by exact name."""
@@ -60,6 +57,23 @@ class PortfolioRepository(SQLRepository):
             raise PortfolioNotFoundError
         return portfolio
 
+    def lock_owned(self, portfolio_id: int, owner_id: int) -> None:
+        """Take a row lock on the owner's portfolio until the transaction ends,
+        so concurrent writers of its cash and positions run one after another.
+        Raises PortfolioNotFoundError (also for another owner's)."""
+        stmt = (
+            select(Portfolio.id)
+            .where(Portfolio.id == portfolio_id, Portfolio.owner_id == owner_id)
+            .with_for_update()
+        )
+        if self.session.execute(stmt).first() is None:
+            raise PortfolioNotFoundError
+
+    def has_operations(self, portfolio_id: int) -> bool:
+        """Whether any operation was recorded in the portfolio."""
+        stmt = select(exists().where(Operation.portfolio_id == portfolio_id))
+        return bool(self.session.execute(stmt).scalar())
+
     def find_by_owner_and_name(self, owner_id: int, name: str) -> Portfolio | None:
         stmt = _owned_with_holdings().where(
             Portfolio.owner_id == owner_id, Portfolio.name == name
@@ -84,17 +98,12 @@ class PortfolioRepository(SQLRepository):
             total_deposited=0,
             is_active=True,
         )
-        self.session.add(portfolio)
-        self.flush()
-        self.refresh(portfolio)
-        return portfolio
+        return self.save_new(portfolio)
 
     def update(self, portfolio: Portfolio) -> Portfolio:
         """Write pending changes; refreshed so stored (rounded) values and the
         new `updated_at` are loaded."""
-        self.flush()
-        self.refresh(portfolio)
-        return portfolio
+        return self.persist(portfolio)
 
     def delete(self, portfolio: Portfolio) -> None:
         """Delete a portfolio together with its positions and operations."""

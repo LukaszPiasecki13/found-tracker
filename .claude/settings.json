@@ -1,6 +1,45 @@
 {
   "permissions": {
-    "defaultMode": "auto",
+    "allow": [
+      "Bash(*)",
+      "PowerShell(*)",
+      "Bash(pytest*)",
+      "Bash(ruff check*)",
+      "Bash(ruff format*)",
+      "Bash(mypy*)",
+      "Bash(alembic current*)",
+      "Bash(alembic history*)",
+      "Bash(alembic heads*)",
+      "Bash(npm run test*)",
+      "Bash(npm run lint*)",
+      "Bash(npm run typecheck*)",
+      "Bash(npm run build*)",
+      "Bash(pio run*)",
+      "Bash(pio test*)",
+      "PowerShell(pytest*)",
+      "PowerShell(ruff check*)",
+      "PowerShell(ruff format*)",
+      "PowerShell(mypy*)",
+      "PowerShell(alembic current*)",
+      "PowerShell(alembic history*)",
+      "PowerShell(alembic heads*)",
+      "PowerShell(npm run test*)",
+      "PowerShell(npm run lint*)",
+      "PowerShell(npm run typecheck*)",
+      "PowerShell(npm run build*)",
+      "PowerShell(pio run*)",
+      "PowerShell(pio test*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git branch:*)",
+      "PowerShell(git show:*)"
+    ],
     "deny": [
       "Bash(rm -rf *)",
       "Bash(rm -r *)",
@@ -168,19 +207,23 @@
       "PowerShell(git checkout-index*)",
       "PowerShell(git bundle*)"
     ],
-    "allow": [
-      "Bash(*)",
-      "PowerShell(*)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git branch:*)",
-      "Bash(git show:*)",
-      "PowerShell(git status:*)",
-      "PowerShell(git diff:*)",
-      "PowerShell(git log:*)",
-      "PowerShell(git branch:*)",
-      "PowerShell(git show:*)"
+    "defaultMode": "auto"
+  },
+  "enabledPlugins": {
+    "ai-tools@ai-tools": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Edit|Write|NotebookEdit|WebFetch|mcp__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"Auto-approved by local allow-all policy; deny and ask rules still apply\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

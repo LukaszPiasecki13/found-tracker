@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import dayjs from 'dayjs';
 import { useCreateOperation } from '../../hooks/useOperations';
+import { useFxRate } from '../../hooks/useFxRate';
 import { usePocket } from '../../hooks/usePockets';
 import type { Position } from '../../types/api';
 
@@ -39,20 +40,31 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
 
   const selectedPosition = positions.find((p) => p.id === selectedPositionId);
 
-  // Check if currencies are different and update FX rate
+  // Prefill the rate with the real cross rate (asset currency -> portfolio currency); when it
+  // is unknown the field stays editable and the user types the rate themselves.
+  const assetCurrencyCode = selectedPosition?.asset.currency.code;
+  const pocketCurrencyCode = pocket?.base_currency.code;
+  const needsRate = !!assetCurrencyCode && !!pocketCurrencyCode && assetCurrencyCode !== pocketCurrencyCode;
+  const {
+    data: fxQuote,
+    isError: isFxRateUnavailable,
+    isLoading: isFxRateLoading,
+  } = useFxRate(
+    needsRate ? assetCurrencyCode : undefined,
+    needsRate ? pocketCurrencyCode : undefined
+  );
+
   useEffect(() => {
-    if (selectedPosition && pocket) {
-      const assetCurrency = selectedPosition.asset.currency.code;
-      const pocketCurrency = pocket.base_currency.code;
-      
-      if (assetCurrency !== pocketCurrency) {
-        const rate = selectedPosition.asset.currency.exchange_rate || 1;
-        setFxRate(rate.toString());
-      } else {
-        setFxRate('1');
-      }
+    if (!needsRate) {
+      setFxRate('1');
+    } else if (fxQuote) {
+      setFxRate(fxQuote.rate.toString());
+    } else {
+      // No quote (loading or unknown): never keep the previous asset's rate or a silent 1;
+      // the empty required field forces a deliberate manual entry.
+      setFxRate('');
     }
-  }, [selectedPosition, pocket]);
+  }, [needsRate, fxQuote]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,7 +222,11 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                       fullWidth
                       disabled={createOperationMutation.isPending}
                       inputProps={{ step: '0.0001', min: '0' }}
-                      helperText="Podaj aktualny kurs wymiany waluty aktywa do waluty portfela"
+                      helperText={
+                        isFxRateUnavailable
+                          ? 'Brak kursu w systemie — wpisz go ręcznie'
+                          : 'Podaj aktualny kurs wymiany waluty aktywa do waluty portfela'
+                      }
                     />
                   </>
                 )}
@@ -330,7 +346,9 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
             type="submit"
             variant="contained"
             color="warning"
-            disabled={createOperationMutation.isPending || !selectedPosition || !quantity || !price}
+            disabled={
+              createOperationMutation.isPending || isFxRateLoading || !selectedPosition || !quantity || !price
+            }
           >
             {createOperationMutation.isPending ? <CircularProgress size={24} /> : 'Sprzedaj'}
           </Button>

@@ -63,11 +63,11 @@ def test_api_error_renders_detail_and_code() -> None:
     }
 
 
-def test_code_is_omitted_when_not_given() -> None:
+def test_a_generic_code_by_status_is_used_when_none_is_given() -> None:
     response = _client().get("/no-code")
 
     assert response.status_code == 409
-    assert response.json() == {"detail": "Already there"}
+    assert response.json() == {"detail": "Already there", "code": "CONFLICT"}
 
 
 def test_api_error_headers_are_forwarded() -> None:
@@ -110,3 +110,19 @@ def test_unhandled_exception_never_leaks_internals(
 )
 def test_subclasses_map_to_their_status(error: APIError, status_code: int) -> None:
     assert error.status_code == status_code
+
+
+def test_request_validation_errors_use_the_envelope_and_do_not_echo_input() -> None:
+    app = FastAPI()
+    register_error_handlers(app)
+
+    @app.post("/login")
+    def login(body: dict[str, str]) -> None: ...
+
+    response = TestClient(app).post("/login", json=["secret-password"])
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "VALIDATION_ERROR"
+    assert set(body["detail"][0]) <= {"type", "loc", "msg"}
+    assert "secret-password" not in response.text

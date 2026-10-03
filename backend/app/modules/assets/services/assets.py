@@ -5,6 +5,8 @@ from decimal import Decimal
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.entities import apply_changes
+from app.core.market_data import MarketDataUnavailableError
 from app.modules.assets.constants import (
     DEFAULT_ASSET_CLASS_NAME,
     LOCAL_SEARCH_LIMIT,
@@ -13,6 +15,7 @@ from app.modules.assets.constants import (
 from app.modules.assets.exceptions import (
     AssetAlreadyExistsError,
     AssetInUseError,
+    AssetNotFoundOnProviderError,
     UnknownAssetClassError,
     UnknownCurrencyError,
 )
@@ -125,8 +128,7 @@ class AssetService:
                     self._require_asset_class(values["asset_class_id"])
                 if "currency_id" in values:
                     self._require_currency(values["currency_id"])
-                for field, value in values.items():
-                    setattr(asset, field, value)
+                apply_changes(asset, values)
                 return self._repo.update(asset)
         except IntegrityError as err:
             if "ticker" in values:
@@ -189,11 +191,15 @@ class AssetService:
     # --- Cores for multi-module operations (caller owns the transaction) ---
 
     def get_or_create_by_ticker(
-        self, ticker: str, *, asset_class_name: str, currency_id: int
+        self, ticker: str, *, asset_class_name: str, fallback_currency_id: int
     ) -> Asset:
         """Existing asset with this (normalized) ticker, or a new one named after
         the ticker, in class `asset_class_name` (created when missing), flushed so
         it has an id. Raises UnknownCurrencyError.
+
+        The new asset is quoted in the provider's currency for the ticker (created
+        when missing); only when the provider has no quote - or is down - does it
+        fall back to `fallback_currency_id`, as the price is then unknown anyway.
 
         No-commit core — transaction belongs to caller.
         """
@@ -201,7 +207,10 @@ class AssetService:
         asset = self._repo.find_by_ticker(ticker)
         if asset is not None:
             return asset
-        self._require_currency(currency_id)
+        currency_id = self._quote_currency_id(ticker)
+        if currency_id is None:
+            self._require_currency(fallback_currency_id)
+            currency_id = fallback_currency_id
         asset_class = self._asset_classes.get_or_create_by_name(asset_class_name)
         return self._repo.create(
             ticker=ticker,
@@ -211,6 +220,15 @@ class AssetService:
         )
 
     # --- Helpers ---
+
+    def _quote_currency_id(self, ticker: str) -> int | None:
+        """The id of the currency the provider quotes `ticker` in, `None` when
+        the provider does not know the ticker or is unavailable."""
+        try:
+            quote = self._market_data.get_quote(ticker)
+        except AssetNotFoundOnProviderError, MarketDataUnavailableError:
+            return None
+        return self._currencies.get_or_create_by_code(quote.currency).id
 
     def _require_asset_class(self, asset_class_id: int) -> None:
         if self._asset_classes.find_by_id(asset_class_id) is None:

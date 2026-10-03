@@ -3,6 +3,8 @@ from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager, contextmanager
 
 from sqlalchemy import Connection, Engine, create_engine, event
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -10,12 +12,10 @@ logger = logging.getLogger(__name__)
 
 def _mask_url(url: str) -> str:
     """Mask password in a database URL for safe logging."""
-    if "://" in url and "@" in url:
-        scheme, rest = url.split("://", 1)
-        creds, host = rest.split("@", 1)
-        user = creds.split(":")[0] if ":" in creds else creds
-        return f"{scheme}://{user}:***@{host}"
-    return url
+    try:
+        return make_url(url).render_as_string(hide_password=True)
+    except ArgumentError:
+        return "<unparseable database url>"
 
 
 class SQLConnectionFactory:
@@ -149,6 +149,3 @@ class SQLConnectionFactory:
                     exc,
                 )
         self._engines.clear()
-
-
-sql_factory = SQLConnectionFactory()

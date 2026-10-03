@@ -5,7 +5,6 @@ Expected vectors are worked out by hand from the rules the Django
 `services/metrics.py` docstring), with fixed prices instead of Yahoo Finance.
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -22,6 +21,7 @@ from app.modules.portfolios.exceptions import (
     InvalidDateError,
     InvalidDateRangeError,
     InvalidVectorsError,
+    PriceDataMissingError,
     UnsupportedIntervalError,
 )
 from app.modules.portfolios.schemas.metrics import PortfolioVectorsQuery
@@ -65,6 +65,7 @@ def _op(
     price: str = "0",
     amount: str | None = None,
     fee: str = "0",
+    fx_rate: str = "1",
 ) -> SimpleNamespace:
     asset = (
         SimpleNamespace(ticker=ticker, asset_class=SimpleNamespace(name=asset_class))
@@ -80,6 +81,7 @@ def _op(
         price=D(price),
         amount=D(amount) if amount is not None else None,
         fee=D(fee),
+        fx_rate=D(fx_rate),
     )
 
 
@@ -167,17 +169,17 @@ def test_all_vectors_by_default(
     assert body["asset_classes"] == {"ETF": BBB, "Stock": AAA}
     assert body["net_deposits_vector"] == NET_DEPOSITS
     assert body["transaction_cost_vector"] == TRANSACTION_COST
-    assert body["profit_vector"] == [0.0, 8.0, 20.5, 20.5, 20.5, 43.0, 49.0]
+    assert body["profit_vector"] == [0.0, 8.0, 20.5, 20.5, 20.5, 46.0, 52.0]
     assert body["free_cash_vector"] == [
         1000.0,
         798.0,
         748.0,
         748.0,
         748.0,
-        846.5,
-        746.5,
+        849.5,
+        749.5,
     ]
-    portfolio_value = [1000.0, 1008.0, 1020.5, 1020.5, 1020.5, 1043.0, 949.0]
+    portfolio_value = [1000.0, 1008.0, 1020.5, 1020.5, 1020.5, 1046.0, 952.0]
     assert body["portfolio_value_vector"] == portfolio_value
     assert body["pocket_value_vector"] == portfolio_value
     assert list(body) == [
@@ -239,35 +241,48 @@ def test_weekend_end_carries_the_friday_close_without_current_price(
     assert ("current", "AAA") not in prices.calls
 
 
-def test_failing_vector_is_zeros_and_the_others_still_come(
-    operation_repo: MagicMock,
-    operations: list,
-    prices: FakePrices,
-    caplog: pytest.LogCaptureFixture,
+def test_provider_outage_fails_the_request_instead_of_drawing_zeros(
+    operation_repo: MagicMock, operations: list, prices: FakePrices
 ) -> None:
     prices.failing.add("BBB")
-    query = _query('["assets", "profit_vector", "net_deposits_vector"]')
+    query = _query('["assets", "profit_vector"]')
 
-    with caplog.at_level(logging.ERROR):
-        body = _service(operation_repo, operations, prices).portfolio_vectors(1, query)
-
-    assert body.root["assets"] == [0.0] * 7
-    assert body.root["profit_vector"] == [0.0] * 7
-    assert body.root["net_deposits_vector"] == NET_DEPOSITS
-    assert "Failed to compute portfolio vector assets" in caplog.text
+    with pytest.raises(MarketDataUnavailableError):
+        _service(operation_repo, operations, prices).portfolio_vectors(1, query)
 
 
-def test_ticker_without_any_price_fails_its_vector(
+def test_ticker_without_any_price_fails_the_request(
     operation_repo: MagicMock, prices: FakePrices
 ) -> None:
     operations = [_op("buy", _at(2), ticker="ZZZ", quantity="1", price="1")]
 
-    body = _service(operation_repo, operations, prices).portfolio_vectors(
-        1, _query('["assets", "transaction_cost_vector"]')
+    with pytest.raises(PriceDataMissingError) as exc_info:
+        _service(operation_repo, operations, prices).portfolio_vectors(
+            1, _query('["assets"]')
+        )
+
+    assert (exc_info.value.status_code, exc_info.value.code) == (
+        502,
+        "PRICE_DATA_MISSING",
     )
 
-    assert body.root["assets"] == [0.0] * 7
-    assert body.root["transaction_cost_vector"] == [0.0] + [1.0] * 6
+
+def test_the_cost_and_cash_vectors_carry_the_operations_fx_rate(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    operations = [
+        _op("deposit", _at(1), amount="1000"),
+        _op("buy", _at(2), ticker="AAA", quantity="10", price="20", fx_rate="4"),
+        _op("dividend", _at(3), ticker="AAA", amount="5", fee="1", fx_rate="4"),
+    ]
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(
+        1, _query('["transaction_cost_vector", "free_cash_vector"]', end="2025-01-03")
+    )
+
+    assert body.root["transaction_cost_vector"] == [0.0, 800.0, 804.0]
+    # The ledger's cash: 1000 - 200 * 4, then + (5 - 1) * 4.
+    assert body.root["free_cash_vector"] == [1000.0, 200.0, 216.0]
 
 
 def test_timezone_aware_operation_lands_on_its_utc_day(
@@ -340,6 +355,11 @@ def test_no_operations_is_an_empty_object_whatever_the_parameters(
         (_query(end="2025-13-01"), InvalidDateError, "INVALID_DATE"),
         (_query(start="01.01.2025"), InvalidDateError, "INVALID_DATE"),
         (_query(start="2025-01-08"), InvalidDateRangeError, "INVALID_DATE_RANGE"),
+        (
+            _query(start="1900-01-01", end="2025-01-01"),
+            InvalidDateRangeError,
+            "INVALID_DATE_RANGE",
+        ),
         (_query(interval="1wk"), UnsupportedIntervalError, "UNSUPPORTED_INTERVAL"),
     ],
 )

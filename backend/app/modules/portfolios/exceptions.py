@@ -7,7 +7,9 @@ its message and `code` (ADR-0007). Violations of the ledger's rules come from
 `OperationRejectedError` with the domain's own `code`.
 """
 
-from app.core.errors import BadRequestError, ConflictError, NotFoundError
+from fastapi import status
+
+from app.core.errors import APIError, BadRequestError, ConflictError, NotFoundError
 
 # --- Not found (404): the resource does not exist or is not the caller's ---
 
@@ -26,6 +28,13 @@ class OperationNotFoundError(NotFoundError):
         super().__init__("Operation not found", code="OPERATION_NOT_FOUND")
 
 
+class RateMissingError(NotFoundError):
+    """A currency of the pair has no quote yet (see `services/fx.py`)."""
+
+    def __init__(self) -> None:
+        super().__init__("Currency rate not available", code="RATE_MISSING")
+
+
 # --- Conflict (409): uniqueness ---
 
 
@@ -34,6 +43,14 @@ class PortfolioAlreadyExistsError(ConflictError):
         super().__init__(
             "Portfolio with this name already exists",
             code="PORTFOLIO_ALREADY_EXISTS",
+        )
+
+
+class PortfolioCurrencyLockedError(ConflictError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Base currency cannot change once the portfolio has operations",
+            code="PORTFOLIO_CURRENCY_LOCKED",
         )
 
 
@@ -92,7 +109,9 @@ class InvalidDateError(BadRequestError):
 class InvalidDateRangeError(BadRequestError):
     def __init__(self) -> None:
         super().__init__(
-            "Start date cannot be after end date.", code="INVALID_DATE_RANGE"
+            "Start date cannot be after end date, and the range is limited to "
+            "about ten years.",
+            code="INVALID_DATE_RANGE",
         )
 
 
@@ -114,4 +133,15 @@ class ConcurrentChangeError(ConflictError):
         super().__init__(
             "The data changed concurrently; retry the request",
             code="CONCURRENT_CHANGE",
+        )
+
+
+class PriceDataMissingError(APIError):
+    """A held ticker has no price at all, so its value cannot be drawn."""
+
+    def __init__(self, ticker: str) -> None:
+        super().__init__(
+            f"No price data for {ticker}",
+            status.HTTP_502_BAD_GATEWAY,
+            code="PRICE_DATA_MISSING",
         )

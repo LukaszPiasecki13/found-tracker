@@ -12,6 +12,7 @@ from contextlib import contextmanager
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.entities import apply_changes
 from app.modules.assets.services.assets import AssetService
 from app.modules.portfolios.domain import (
     LedgerState,
@@ -82,7 +83,8 @@ class OperationService:
     # --- Writes ---
 
     def record(self, data: OperationCreateRequest, owner_id: int) -> Operation:
-        """Apply a new operation to the portfolio's current state and store it.
+        """Store a new operation and rebuild the portfolio from its whole history
+        (the operation may be back-dated), under a row lock on the portfolio.
 
         Raises PortfolioNotFoundError, UnknownAssetError,
         AssetClassRequiredError, OperationRejectedError (ledger rules,
@@ -98,21 +100,10 @@ class OperationService:
 
     def _record(self, data: OperationCreateRequest, owner_id: int) -> Operation:
         with self._operation_repo.transaction():
+            self._portfolio_repo.lock_owned(data.portfolio_id, owner_id)
             portfolio = self._portfolio_repo.get_owned(data.portfolio_id, owner_id)
             asset_id = self._resolve_asset_id(data, portfolio)
-            positions = self._position_repo.list_by_portfolio(portfolio.id)
-            operation = OperationInput(
-                operation_type=data.operation_type,
-                asset_id=asset_id,
-                quantity=data.quantity,
-                price=data.price,
-                amount=data.amount,
-                fee=data.fee,
-                fx_rate=data.fx_rate,
-            )
-            state = self._apply(LedgerState.of(portfolio, positions), operation)
-            self._store_state(portfolio, positions, state)
-            return self._operation_repo.create(
+            operation = self._operation_repo.create(
                 portfolio_id=portfolio.id,
                 asset_id=asset_id,
                 operation_type=data.operation_type.value,
@@ -124,6 +115,8 @@ class OperationService:
                 notes=data.notes,
                 operation_date=data.operation_date,
             )
+            self._rebuild(portfolio.id, owner_id)
+            return operation
 
     def update(
         self, operation_id: int, data: OperationUpdateRequest, owner_id: int
@@ -138,8 +131,8 @@ class OperationService:
         }
         with self._operation_repo.transaction():
             operation = self._operation_repo.get_owned(operation_id, owner_id)
-            for field, value in values.items():
-                setattr(operation, field, value)
+            self._portfolio_repo.lock_owned(operation.portfolio_id, owner_id)
+            apply_changes(operation, values)
             operation = self._operation_repo.update(operation)
             self._rebuild(operation.portfolio_id, owner_id)
             return operation
@@ -151,6 +144,7 @@ class OperationService:
         with self._operation_repo.transaction():
             operation = self._operation_repo.get_owned(operation_id, owner_id)
             portfolio_id = operation.portfolio_id
+            self._portfolio_repo.lock_owned(portfolio_id, owner_id)
             self._operation_repo.delete(operation)
             self._rebuild(portfolio_id, owner_id)
 
@@ -161,7 +155,8 @@ class OperationService:
     ) -> int | None:
         """`asset_id` if it names an asset; else the asset with `ticker`,
         created (no-commit core, ADR-0008) in class `asset_class` and the
-        portfolio's base currency when unknown; else no asset."""
+        provider's quote currency (the portfolio's base currency when the
+        provider has no quote) when unknown; else no asset."""
         if data.asset_id is not None:
             asset = self._assets.find_by_id(data.asset_id)
             if asset is None:
@@ -176,13 +171,9 @@ class OperationService:
             asset = self._assets.get_or_create_by_ticker(
                 data.ticker,
                 asset_class_name=data.asset_class,
-                currency_id=portfolio.base_currency_id,
+                fallback_currency_id=portfolio.base_currency_id,
             )
         return asset.id
-
-    def _apply(self, state: LedgerState, operation: OperationInput) -> LedgerState:
-        with _ledger_errors_rejected():
-            return self._ledger.apply(state, operation)
 
     def _rebuild(self, portfolio_id: int, owner_id: int) -> None:
         """Replay the portfolio's history (`operation_date`, `created_at`, `id`)

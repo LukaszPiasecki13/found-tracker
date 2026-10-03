@@ -3,7 +3,6 @@
 from decimal import Decimal
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.infrastructure.sql.repository import SQLRepository
 from app.modules.assets.exceptions import CurrencyNotFoundError
@@ -12,9 +11,6 @@ from app.modules.assets.models.currencies import Currency
 
 class CurrencyRepository(SQLRepository):
     """Repository for Currency model database operations."""
-
-    def __init__(self, session: Session):
-        super().__init__(session)
 
     def list_all(self) -> list[Currency]:
         """All currencies ordered by code."""

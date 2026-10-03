@@ -24,5 +24,16 @@ def list_positions(
     user: User = Depends(get_current_user),
     service: PositionService = Depends(get_position_service),
 ):
-    """Valued positions; refreshes currency rates and asset prices first."""
+    """Valued positions at the stored prices (no side effects)."""
     return service.list_valued(user.id, query.portfolio_name)
+
+
+@router.post("/refresh", response_model=list[PositionResponse])
+def refresh_positions(
+    query: PositionListQuery = Depends(),
+    user: User = Depends(get_current_user),
+    service: PositionService = Depends(get_position_service),
+):
+    """Refresh currency rates and asset prices from the market-data provider,
+    then return the valued positions."""
+    return service.refresh_valued(user.id, query.portfolio_name)

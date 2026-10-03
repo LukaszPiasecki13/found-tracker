@@ -4,6 +4,7 @@ from app.modules.assets.services import AssetService, CurrencyService, MarketDat
 from app.modules.portfolios import wiring
 from app.modules.portfolios.domain import PortfolioLedger, PortfolioValuator
 from app.modules.portfolios.services import (
+    FxMapBuilder,
     MetricsService,
     OperationService,
     PortfolioService,
@@ -26,6 +27,8 @@ def test_builders_assemble_every_service_on_one_session() -> None:
     # Every repository in the graph shares the request session (ADR-0001).
     assert portfolios._repo.session is session
     assert isinstance(portfolios._currencies, CurrencyService)
+    assert isinstance(portfolios._fx, FxMapBuilder)
+    assert isinstance(positions._fx, FxMapBuilder)
     assert positions._repo.session is session
     assert isinstance(positions._market_data, MarketDataService)
     assert operations._portfolio_repo.session is session
