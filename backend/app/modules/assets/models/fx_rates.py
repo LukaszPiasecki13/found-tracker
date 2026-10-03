@@ -66,8 +66,6 @@ class FxRate(Base):
     rate_date: Mapped[date] = mapped_column(Date, nullable=False)
     rate: Mapped[Decimal] = mapped_column(Numeric(18, 9), nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)
-    # Publisher's table number as evidence (e.g. NBP "187/A/NBP/2026").
-    table_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_synthetic: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

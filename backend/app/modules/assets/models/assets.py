@@ -37,11 +37,10 @@ class Asset(Base):
     mic: Mapped[str | None] = mapped_column(String(4), nullable=True)
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     asset_type: Mapped[str] = mapped_column(
-        String(20),
+        String(10),
         nullable=False,
-        default="user_asset",
-        server_default=text("'user_asset'"),
-        index=True,
+        default="stock",
+        server_default=text("'stock'"),
     )
     # Set for an archived asset: hidden from search and new operations, kept in
     # history and valuation; ticker refreshes stop.

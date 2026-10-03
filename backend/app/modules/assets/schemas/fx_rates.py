@@ -63,7 +63,6 @@ class FxRateLookupResponse(BaseModel):
     rate: DecimalNumber
     rate_date: date
     source: str
-    table_no: str | None = None
     is_synthetic: bool
     stale: bool
     via: Literal["identity", "direct", "inverse"]
@@ -75,7 +74,6 @@ class FxRateItemResponse(BaseModel):
     rate_date: date
     rate: DecimalNumber
     source: str
-    table_no: str | None = None
     is_synthetic: bool
 
 
@@ -93,5 +91,4 @@ class FxRateResponse(BaseModel):
     rate_date: date
     rate: DecimalNumber
     source: str
-    table_no: str | None = None
     is_synthetic: bool

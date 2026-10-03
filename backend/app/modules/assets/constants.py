@@ -15,33 +15,14 @@ QUOTE_TYPE_ASSET_CLASSES: dict[str, str] = {
 }
 DEFAULT_ASSET_CLASS_NAME = "Stock"
 
-# The closed set of asset types (the behaviour axis, next to the user-editable
-# asset class). `user_asset` is for assets the user prices by hand.
-ASSET_TYPES: tuple[str, ...] = (
-    "stock",
-    "etf",
-    "fund",
-    "treasury_bond",
-    "bond",
-    "crypto",
-    "currency",
-    "commodity",
-    "deposit",
-    "user_asset",
-)
-DEFAULT_ASSET_TYPE = "user_asset"
+# The closed set of asset types (the instrument kind; the user-editable asset
+# class is a separate axis). The module covers stocks and ETFs.
+ASSET_TYPES: tuple[str, ...] = ("stock", "etf")
+DEFAULT_ASSET_TYPE = "stock"
 
-# Provider `quoteType` -> asset type for assets created from the provider.
-QUOTE_TYPE_ASSET_TYPES: dict[str, str] = {
-    "EQUITY": "stock",
-    "ETF": "etf",
-    "MUTUALFUND": "fund",
-    "CRYPTOCURRENCY": "crypto",
-    "CRYPTO": "crypto",
-    "CURRENCY": "currency",
-    "FUTURE": "commodity",
-}
-DEFAULT_PROVIDER_ASSET_TYPE = "stock"
+# Provider `quoteType` -> asset type for assets created from the provider; any
+# other quote type is a stock.
+QUOTE_TYPE_ASSET_TYPES: dict[str, str] = {"ETF": "etf"}
 
 # Sources of price and FX-rate observations.
 SOURCE_MANUAL = MANUAL_SOURCE
