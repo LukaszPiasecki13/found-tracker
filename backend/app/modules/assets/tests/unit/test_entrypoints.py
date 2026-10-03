@@ -2,7 +2,6 @@
 (ADR-0002) and delegate to the services; no commit happens here."""
 
 from contextlib import contextmanager
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -75,18 +74,4 @@ def test_refresh_fx_rates_delegates_to_the_market_data_service(
     assert entrypoints.refresh_fx_rates() == 3
 
     market_data.refresh_currency_rates.assert_called_once_with()
-    scope.commit.assert_not_called()
-
-
-def test_backfill_history_returns_the_seeded_counts(
-    scope: MagicMock, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    backfill = MagicMock()
-    backfill.backfill.return_value = SimpleNamespace(prices=4, rates=2)
-    monkeypatch.setattr(
-        entrypoints, "build_history_backfill_service", lambda session: backfill
-    )
-
-    assert entrypoints.backfill_history() == (4, 2)
-
     scope.commit.assert_not_called()

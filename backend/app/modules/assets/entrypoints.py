@@ -1,6 +1,5 @@
 """Operations on `assets` that run outside an HTTP request (ADR-0002): the
-scheduled and manual refreshes of prices and exchange rates, and the one-off
-seeding of the history from the cached columns.
+scheduled and manual refreshes of prices and exchange rates.
 
 The only place of this module that opens a session outside a request. Both jobs
 are idempotent for daily closes: a second run on the same day rewrites the same
@@ -12,11 +11,7 @@ as a background task by `POST /assets/refresh-prices`.
 from collections.abc import Sequence
 
 from app.core.dependencies import session_scope
-from app.modules.assets.wiring import (
-    build_asset_service,
-    build_history_backfill_service,
-    build_market_data_service,
-)
+from app.modules.assets.wiring import build_asset_service, build_market_data_service
 
 
 def refresh_prices(asset_ids: Sequence[int] | None = None) -> int:
@@ -41,12 +36,3 @@ def refresh_fx_rates() -> int:
     returns how many currencies were updated."""
     with session_scope() as session:
         return build_market_data_service(session).refresh_currency_rates()
-
-
-def backfill_history() -> tuple[int, int]:
-    """Seed the price and rate history from the cached `current_price` and
-    `exchange_rate` of data that predates it; returns `(prices, rates)` seeded.
-    Run once after the history migration; running it again seeds nothing."""
-    with session_scope() as session:
-        result = build_history_backfill_service(session).backfill()
-    return result.prices, result.rates
