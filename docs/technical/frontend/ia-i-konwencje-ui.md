@@ -3,16 +3,16 @@ id: fe-ia-ui-conventions
 status: draft
 type: mixed
 scope: frontend/ia-ui
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 ---
 
 # Jak zorganizowane są ekrany, trasy i konwencje UI frontendu FundTrackera?
 
 > **Projekt docelowy (L2, draft).** Opisuje stan docelowy wynikający z roadmapy ([plan](../../plans/02_roadmapa_funkcjonalna.md)), nie stan kodu — ten opisują dokumenty modułów i kod. Obowiązuje po akceptacji ADR-ów, na które się powołuje.
 
-Dokument zamyka luki frontendowe znalezione w przeglądzie roadmapy: brak mapy ekranów, trasy po nazwie, rozproszone formatowanie, brak słownika flag jakości danych, brak decyzji o bibliotece wykresów, kliencie API i testach. Stan faktyczny frontendu: [architektura frontendu](./frontend-architecture.md). Kroki: [E0–E5](../../plans/03_roadmapa_etapy_E0-E5.md), [E6–E11](../../plans/04_roadmapa_etapy_E6-E11.md). Zasady produktowe: P2 (metodologia w UI), P6 (kokpit → Portfel → walor → operacja, mobile do przeglądania), P7 (jakość danych widoczna).
+Dokument zamyka luki frontendowe znalezione w przeglądzie roadmapy: brak mapy ekranów, trasy po nazwie, rozproszone formatowanie, brak słownika flag jakości danych, brak decyzji o bibliotece wykresów, kliencie API i testach. Stan faktyczny frontendu: [architektura frontendu](./frontend-architecture.md). Kroki: [E0–E5](../../plans/03_roadmapa_etapy_E0-E5.md); pozostałe etapy w [planie](../../plans/02_roadmapa_funkcjonalna.md). Zasady produktowe: P2 (metodologia w UI), P6 (kokpit → Portfel → walor → operacja, mobile do przeglądania), P7 (jakość danych widoczna).
 
-Konwencja oznaczeń: **[propozycja]** = decyzja, której plan nie rozstrzyga (zebrane w „Otwarte punkty”). Nowe pojęcia słownikowe (Grupa portfeli, Przelew, Przewalutowanie, Partia, Paczka importu) są **proponowane** (D3). Nazwy nowych endpointów (poza `performance`, E3.1) są roboczymi propozycjami; źródłem prawdy będzie dokument kontraktu API.
+Konwencja oznaczeń: **[propozycja]** = decyzja, której plan nie rozstrzyga (zebrane w „Otwarte punkty”). Nowe pojęcia słownikowe (Grupa portfeli, Przewalutowanie, Partia, Paczka importu) są **proponowane** (D3). Nazwy nowych endpointów (poza `performance`, E3.1) są roboczymi propozycjami; źródłem prawdy będzie dokument kontraktu API.
 
 ## 1. Mapa ekranów i tras
 
@@ -26,7 +26,7 @@ Konwencja oznaczeń: **[propozycja]** = decyzja, której plan nie rozstrzyga (ze
 | Dwie nawigacje, które się rozjeżdżają: sidebar (Dashboard, Operacje, Porównaj portfele, „Moje Portfele”) i zakładki nagłówka (Dashboard, **Portfele** i **Analizy** bez linku, Operacje) | `sidebar.tsx:35-39,75-120`, `dashboard-header.tsx:75-80` |
 | Martwe odwołania: `/analytics`, `/alerts` w `getTabValue`; link `/settings` bez trasy (wpada w fallback `*`) | `dashboard-header.tsx:47-55,94`, `App.tsx:97` |
 | Mobile: wysuwane menu (`Drawer temporary` poniżej `md`) + hamburger; bez dolnej nawigacji, bez manifestu PWA | `sidebar.tsx:43,130-141`, `dashboard-header.tsx:61-70`, `index.html` |
-| Brak ekranów: widok waloru, struktura, wyniki, dywidendy, import, podatki, planowanie, alerty, dane, ustawienia, metodologia | `src/pages/` (8 plików) |
+| Brak ekranów: widok waloru, struktura, wyniki, dywidendy, import, dane, ustawienia, metodologia | `src/pages/` (8 plików) |
 
 ### 1.2 Drzewo docelowe
 
@@ -38,23 +38,16 @@ Zasada: **URL jest źródłem prawdy o zakresie** (Portfel / Grupa / „Wszystki
     (domyślna) Pozycje          /portfolios/:id
     operations                  Historia operacji (filtry, paginacja)                    E2.7
     allocation                  Struktura                                                E3.3
-    performance                 Wyniki (TWR, XIRR, wykresy)                              E3.1, E3.5
+    performance                 Wyniki (TWR, XIRR, benchmark, wykresy)                   E3.1, E3.5
     income                      Dywidendy i odsetki                                      E3.6
     closed                      Zamknięte pozycje                                        E3.2
-    risk                        Ryzyko                                                   E7
-    calendar                    Kalendarz dywidend i wykupów (zakres)                    E8.6, E5.2
 /groups/:id                     Grupa portfeli — te same zakładki bez „operations"      E2.1
 /groups/all                     „Wszystkie portfele" (wirtualna Grupa) [propozycja]
 /assets/:id                     Widok waloru (opcjonalnie ?portfolio=<id>)               E3.8
-/operations                     Historia operacji ze wszystkich Portfeli; ?status=draft = szkice do akceptacji   E2.7, E8.5
+/operations                     Historia operacji ze wszystkich Portfeli                 E2.7
 /compare                        Porównanie Portfeli na TWR                               E3.5
-/groups/all/calendar            Kalendarz globalny: dywidendy, prognoza, wykupy (nie osobna trasa `/calendar`)   E8.6, E5.2
-/bonds                          Obligacje skarbowe (wycena z listów emisyjnych)          E5.1
-/import                         Lista szkiców i paczek importu
-/import/new, /import/:batchId   Kreator importu                                          E4.1-E4.3
-/taxes/:year                    Podatki (PIT-38, szkic do weryfikacji)                   E6
-/planning/...                   rebalancing, goals, fire, montecarlo                     E9
-/alerts                         Alerty                                                   E10.1
+/import                         Lista paczek importu (później, XTB)
+/import/new, /import/:batchId   Kreator importu (później)                                E4
 /data                           Dane i jakość (odświeżenia, błędy dostawców), lista obserwowanych   E1.7, E1.8
 /settings                       Ustawienia                                               E0.9
 /methodology                    Jak liczymy                                              E3.7
@@ -66,7 +59,7 @@ Zasada: **URL jest źródłem prawdy o zakresie** (Portfel / Grupa / „Wszystki
 | Element | Decyzja |
 |---|---|
 | Desktop | **Jedna** nawigacja: sidebar. Usunąć zakładki nagłówka i `getTabValue` (`dashboard-header.tsx:47-55,75-80`); nagłówek zostaje na tytuł, wybór zakresu i menu użytkownika |
-| Sidebar | Kokpit · Portfele (rozwijana lista z `id`) · Grupy · Operacje · Kalendarz · Obligacje · Import · Podatki · Planowanie · Alerty · Dane · Ustawienia · Metodologia. Pozycji bez gotowego ekranu **nie** pokazujemy (koniec martwych linków, E0.7) |
+| Sidebar | Kokpit · Portfele (rozwijana lista z `id`) · Grupy · Operacje · Import (po wdrożeniu) · Dane · Ustawienia · Metodologia. Pozycji bez gotowego ekranu **nie** pokazujemy (koniec martwych linków, E0.7) |
 | Mobile (poniżej `md`) | Do E11.1: obecny hamburger + `Drawer`. Od E11.1: dolna nawigacja (Kokpit, Portfele, Operacje, „Więcej”) + przycisk „Dodaj operację”, reszta w „Więcej” [propozycja] |
 | Zakres | Zakładki Portfela/Grupy to podtrasy; wybrana zakładka jest zachowywana przy przełączaniu Portfela |
 | 404 | Zamiast cichego `Navigate "/"` (`App.tsx:97`) ekran „Nie znaleziono” z linkiem do kokpitu [propozycja] |
@@ -77,8 +70,8 @@ Zasada: **URL jest źródłem prawdy o zakresie** (Portfel / Grupa / „Wszystki
 |---|---|---|
 | Kokpit, Portfel (pozycje), widok waloru | pełne | pozycje jako karty zamiast szerokiej tabeli (`PositionsTable.tsx`) |
 | Dodanie operacji | pełne | `OperationFormDialog` na pełnym ekranie (`fullScreen` poniżej `sm`) |
-| Historia operacji, wyniki, struktura, dywidendy, alerty | przegląd | wykresy w jednej kolumnie; edycja masowa niedostępna |
-| Import (kreator), podatki, planowanie, ustawienia zaawansowane | **tylko desktop** | na telefonie komunikat „Otwórz na komputerze” + link; bez blokady routingu |
+| Historia operacji, wyniki, struktura, dywidendy | przegląd | wykresy w jednej kolumnie; edycja masowa niedostępna |
+| Import (kreator), ustawienia | **tylko desktop** | na telefonie komunikat „Otwórz na komputerze” + link; bez blokady routingu |
 
 ### 1.5 Przekierowania ze starych tras (E0.10)
 
@@ -100,7 +93,7 @@ Dziś 8 niezależnych `Intl.NumberFormat`: 4 walutowe (`PositionsTable.tsx:39`, 
 | Funkcja | Reguła | Dziś / źródło reguły |
 |---|---|---|
 | `formatMoney(v, currency)` | waluta **zawsze podana jawnie**: waluta Portfela, waluta waloru, a w kokpicie waluta wyświetlania (E0.9); 2 miejsca (0 w skrótach kokpitu); locale `pl-PL` | koniec `currency: 'PLN'` na sztywno |
-| `formatQuantity(v)` | do 9 miejsc, bez zer końcowych (kolumna `Numeric(18, 9)`, `schemas/operations.py:18`) [propozycja] | dziś `toFixed(4)` (`PositionsTable.tsx:75`) ucina ułamki krypto |
+| `formatQuantity(v)` | do 9 miejsc, bez zer końcowych (kolumna `Numeric(18, 9)`, `schemas/operations.py:18`) [propozycja] | dziś `toFixed(4)` (`PositionsTable.tsx:75`) ucina ułamkowe ilości |
 | `formatPrice(v, currency)` | min. 2, maks. 4 miejsca | j.w. |
 | `formatRate(v)` | kurs walutowy: 4–6 miejsc [propozycja] | `fx_rate` `Numeric(18, 9)` |
 | `formatPercent(v)` | 2 miejsca, **jawny znak** (+/−); `null` → „—” (np. annualizacja < 365 dni, E3.1) | dziś `toFixed(2)` bez spójnego znaku |
@@ -188,9 +181,9 @@ Rozwiązanie: `lib/errors.ts` — `parseApiError(error)` → `{ status, code?, d
 | `EMAIL_ALREADY_REGISTERED` | 409 | „Ten e-mail jest już zarejestrowany.” | `core_data/services/users.py:30` |
 | `IRR_UNDEFINED`, `IRR_AMBIGUOUS`, `PERIOD_SHORTER_THAN_ONE_YEAR` | **200 inline** (`reason` w metryce, nie błąd; mapowane przez `MetricLabel`) | „XIRR nieokreślony (brak przepływów o różnych znakach).” / „XIRR niejednoznaczny — pokazuję TWR.” / „< 1 roku, bez annualizacji” | E3.1 |
 | `REGISTRATION_DISABLED` | 403 | „Rejestracja jest wyłączona.” | E0.6 |
-| `REFERENCE_DATA_OWNER_ONLY`, `PORTFOLIO_CURRENCY_LOCKED`, `PORTFOLIO_ACCOUNT_TYPE_LOCKED` | 403 / 409 | „Tylko właściciel zmienia dane globalne.” / „Waluty i typu rachunku nie zmienisz, gdy są operacje.” | E0.6, E0.8; kody `UPPER_SNAKE` |
+| `REFERENCE_DATA_OWNER_ONLY`, `PORTFOLIO_CURRENCY_LOCKED` | 403 / 409 | „Tylko właściciel zmienia dane globalne.” / „Waluty Portfela nie zmienisz, gdy są operacje.” | E0.6, E0.8; kody `UPPER_SNAKE` |
 
-Kody nowych kroków (cofnięcie paczki z edycjami `IMPORT_BATCH_HAS_EDITS` E4.1/D15, przelewy E2.3, `LOT_SELECTION_INVALID` E2.4) są dopisywane do słownika w tym samym kroku, w którym backend je wprowadza (definicja ukończenia, pkt 5).
+Kody nowych kroków (cofnięcie paczki z edycjami `IMPORT_BATCH_HAS_EDITS` E4.1/D15) są dopisywane do słownika w tym samym kroku, w którym backend je wprowadza (definicja ukończenia, pkt 5).
 
 ### 2.8 Dostępność
 
@@ -212,14 +205,12 @@ Zainstalowany `recharts ^3.7.0` (`package.json`); zawartość wersji 3.7.0 spraw
 | Wymaganie | Krok | Recharts 3.7 | Realizacja |
 |---|---|---|---|
 | Mapa cieplna miesiąc × rok | E3.5 | brak | **własny `HeatmapGrid`** (siatka CSS/SVG, skala dywergentna, wartość w komórce) |
-| Macierz korelacji | E7.3 | brak | ten sam `HeatmapGrid` (skala −1…+1, wartość w komórce) |
 | Mapa cieplna Portfela (kafelek ∝ wartość) | E3.5 | `Treemap` z własnym `content` | Recharts |
 | Wykres ceny z markerami operacji i dywidend | E3.8 | `ComposedChart` + `Line` + `Scatter` (lub `ReferenceDot`) | Recharts; własny tooltip i kształt markera (kupno/sprzedaż/dywidenda różnią się kształtem, nie tylko kolorem) |
-| Histogram czasu pod wodą (TUW) | E7.3 | `BarChart` na przedziałach | Recharts; przedziały liczy backend/serwis |
 | Struktura w czasie (warstwowy) | E3.3 | `AreaChart` ze `stackId`; udziały 100% przez normalizację danych po stronie serwera | Recharts |
-| Obsunięcie, wartość vs wpłaty, TWR vs benchmarki | E3.5, E7.3 | `AreaChart`/`LineChart` | Recharts |
+| Wartość vs wpłaty, TWR vs benchmark | E3.5 | `AreaChart`/`LineChart` | Recharts |
 
-**Rekomendacja [propozycja]: zostać przy Recharts + własny `HeatmapGrid`; nie dodawać drugiej biblioteki.** Uzasadnienie: jedyne dwa typy bez wsparcia (mapa miesiąc × rok, macierz korelacji) są prostą siatką wartości, dla której biblioteka wykresów daje mało ponad CSS; druga biblioteka oznacza drugi system motywów, tooltipów i dostępności oraz większy bundle [rozmiar niezmierzony]. Koszt własnego komponentu: jeden komponent ok. 150–250 linii + testy jednostkowe skali kolorów **[wniosek]**, ponownie użyty w dwóch ekranach.
+**Rekomendacja [propozycja]: zostać przy Recharts + własny `HeatmapGrid`; nie dodawać drugiej biblioteki.** Uzasadnienie: jedyny typ bez wsparcia (mapa miesiąc × rok) jest prostą siatką wartości, dla której biblioteka wykresów daje mało ponad CSS; druga biblioteka oznacza drugi system motywów, tooltipów i dostępności oraz większy bundle [rozmiar niezmierzony]. Koszt własnego komponentu: jeden komponent ok. 150–250 linii + testy jednostkowe skali kolorów **[wniosek]**.
 
 Kiedy zmienić zdanie: wykres ceny z markerami przy tysiącach punktów okaże się za wolny albo potrzebne będą świece/wskaźniki — wtedy rozważyć wyspecjalizowaną bibliotekę (np. lightweight-charts) **tylko** dla widoku waloru; ocena wymaga pomiaru na danych 10 lat (E11.7). Wspólne reguły: skale kolorów bezpieczne dla daltonistów (nie para czerwony–zielony; znak zawsze w tekście), wartości wykresów to `float` (ADR-0010, wektory), format osi z `lib/format.ts`.
 
@@ -229,44 +220,37 @@ Kiedy zmienić zdanie: wykres ceny z markerami przy tysiącach punktów okaże s
 
 Dziś trzy osobne dialogi na `useState`: `BuyAssetDialog.tsx` (392 linie), `SellAssetDialog.tsx` (343), `CashOperationDialog.tsx` (130); `react-hook-form` i `@mui/x-date-pickers` są w `package.json`, ale **nie są importowane** w `src/`; brak dialogu dywidendy i edycji (`PUT /portfolios/operations/{id}` istnieje — `operations.py:41-42` — ale `operationService.ts` nie ma `updateOperation`).
 
-Jeden `OperationFormDialog` (tryb: utwórz / edytuj) z konfiguracją pól per typ; wybór typu na górze; React Hook Form (już zależność) z funkcjami walidacji, bez nowej biblioteki schematów [propozycja]. Zbiór typów i pól: E2.3, D9; kolumny z `ratio`/`counter_asset_id` nie są w D9 (przegląd roadmapy) — **[propozycja]** do kontraktu.
+Jeden `OperationFormDialog` (tryb: utwórz / edytuj) z konfiguracją pól per typ; wybór typu na górze; React Hook Form (już zależność) z funkcjami walidacji, bez nowej biblioteki schematów [propozycja]. Zbiór typów i pól: E2.3, D9; kolumny `ratio`/`counter_*` nie są w D9 (przegląd roadmapy) — **[propozycja]** do kontraktu.
 
 | Typ | Pola wymagane | Pola opcjonalne | Krok |
 |---|---|---|---|
-| `buy`, `sell` | Portfel, data, Walor, ilość, cena | prowizja, kurs brokera, data rozrachunku, notatka | dziś |
-| `dividend` | Portfel, data, Walor, kwota | WHT (osobna operacja `tax`), notatka | dziś (brak UI → E0.7) |
+| `buy`, `sell` | Portfel, data, Walor, ilość, cena | prowizja, kurs brokera, notatka | dziś |
+| `dividend` | Portfel, data, Walor, kwota (w walucie wypłaty) | notatka | dziś (brak UI → E0.7) |
 | `deposit`, `withdrawal` | Portfel, data, kwota | prowizja, waluta | dziś (prowizja → E0.7) |
-| `interest`, `fee` | Portfel, data, kwota, waluta | Walor, flaga „koszt podatkowy” (`fee`) | E2.3 |
-| `tax` | Portfel, data, kwota, waluta | Walor/dywidenda, której dotyczy | E2.3 |
-| Przelew (gotówka/walory) | Portfel źródłowy i docelowy, data, kwota **lub** Walor + ilość | kurs, data rozrachunku | E2.3 |
-| Przewalutowanie | Portfel, data, kwota z + waluta, kwota do + waluta | kurs, prowizja | E2.2 |
-| `adjustment` | Portfel, data, kwota/ilość, uzasadnienie | — | E2.3 |
+| `interest`, `fee` | Portfel, data, kwota, waluta | Walor | E2.3 |
+| Przewalutowanie | Portfel, data, kwota z + waluta, kwota do + waluta | kurs, prowizja (w walucie wychodzącej) | E2.2 |
 | `split` | Portfel, data, Walor, proporcja nowe:stare | — | E8.1 |
 
-Walidacja klienta to **kształt i wygoda** (wymagane pola, liczba, zakresy kolumn `Numeric(18, 9)`/`(18, 2)`, `extra="forbid"` po stronie API), nie reguły księgi; autorytatywny jest backend (`INSUFFICIENT_CASH`, `INSUFFICIENT_QUANTITY`, 2.7). Podpowiedzi: sprzedaż > posiadana ilość i zakup > gotówka dają ostrzeżenie przed wysłaniem (nie blokadę — tryb automatycznych wpłat E2.2b); data w przyszłości = ostrzeżenie [propozycja]. Domyślny kurs z tego samego źródła co wycena (E0.1).
+Walidacja klienta to **kształt i wygoda** (wymagane pola, liczba, zakresy kolumn `Numeric(18, 9)`/`(18, 2)`, `extra="forbid"` po stronie API), nie reguły księgi; autorytatywny jest backend (`INSUFFICIENT_CASH`, `INSUFFICIENT_QUANTITY`, 2.7). Podpowiedzi: sprzedaż > posiadana ilość i zakup > gotówka dają ostrzeżenie przed wysłaniem (nie blokadę — opcjonalne automatyczne wpłaty E2.2b (`auto_funding`)); data w przyszłości = ostrzeżenie [propozycja]. Domyślny kurs z tego samego źródła co wycena (E0.1).
 
-**Szkice** (E8.5/E9.6/E10.3): propozycje to Operacje `status=draft`, widoczne w `/operations?status=draft` z akcjami „Akceptuj” (`POST …/accept`, opcjonalna korekta pól) i „Odrzuć” (`…/void`); licznik szkiców przy pozycji „Operacje”.
+**Podgląd skutku** („przed → po”): gotówka per waluta, ilość i średnia cena pozycji, zużyte Partie, zysk zrealizowany (E2.4). Źródłem jest endpoint dry-run `POST /portfolios/operations/preview` (nowy, ta sama walidacja i `PortfolioLedger` bez zapisu) [propozycja], wywoływany z opóźnieniem 300 ms; błędy księgi pokazują się w podglądzie jako komunikaty z 2.7. Edycja: ostrzeżenie „zmiana przebuduje pozycje od <data>” (przebudowa — E0.3/P3); typ, walor i Portfel w trybie edycji tylko do odczytu (`OperationUpdateRequest`, `schemas/operations.py:61-73`).
 
-**Podgląd skutku** („przed → po”): gotówka per waluta, ilość i średnia cena pozycji, zysk zrealizowany (E2.4). Źródłem jest endpoint dry-run `POST /portfolios/operations/preview` (nowy, ta sama walidacja i `PortfolioLedger` bez zapisu) [propozycja], wywoływany z opóźnieniem 300 ms; błędy księgi pokazują się w podglądzie jako komunikaty z 2.7. Edycja: ostrzeżenie „zmiana przebuduje pozycje od <data>” (przebudowa — E0.3/P3); typ, walor i Portfel w trybie edycji tylko do odczytu (`OperationUpdateRequest`, `schemas/operations.py:61-73`).
+### 4.2 Kreator importu XTB (E4) — później
 
-### 4.2 Kreator importu (E4.1–E4.3)
-
-Desktop-only (1.4). Stan paczki: **szkic → zatwierdzona → cofnięta** (D15). Wzorzec konkurenta: podgląd w tabeli przed importem ([myfund](../../research/competitors/01_myfund.md)); słabość do pokonania: „godziny ręcznego poprawiania”.
+Desktop-only (1.4). Implementacja po przeglądzie reszty; najpierw tylko adapter XTB, kolejne źródła później ([ADR-0018](../adr/0018-architektura-importu.md)). Stan paczki: **szkic → zatwierdzona → cofnięta** (D15). Wzorzec konkurenta: podgląd w tabeli przed importem ([myfund](../../research/competitors/01_myfund.md)); słabość do pokonania: „godziny ręcznego poprawiania”.
 
 | Krok | Ekran | Zachowanie | Endpoint (nowy) [propozycja] |
 |---|---|---|---|
-| 1. Plik | wybór parsera/źródła, Portfel docelowy, wgranie pliku | `sha256` pliku → „ten plik już zaimportowano” (backend zwraca istniejącą paczkę, E4.1) | `POST /portfolios/imports` |
-| 2. Mapowanie | tylko CSV/XLSX (E4.2): kolumny, separator, przecinek dziesiętny, kodowanie (UTF-8, cp1250), format daty; zapis szablonu | podgląd 10 pierwszych wierszy na żywo | `PUT /portfolios/imports/{id}/mapping` |
-| 3. Podgląd i naprawa | tabela wierszy z surową etykietą; filtry `row_status`: wszystkie / `ok` / **`duplicate`** / **`unrecognized`** / **`error`** / `skip`; liczniki; wiersz pomijany = `skip` | edycja wiersza (typ, walor, ilość, cena, waluta, kurs) w panelu bocznym; rozpoznanie waloru (ISIN, ticker + giełda); walidacja brutto = ilość × cena ± prowizja; wiersz poprawiony ręcznie oznaczony | `GET …/{id}/rows`, `PATCH …/{id}/rows/{row}` |
-| 4. Szkic trwały | automatyczny zapis na serwerze | powrót pod `/import/:batchId` po zamknięciu karty | j.w. |
-| 5. Zatwierdzenie | podsumowanie: liczba operacji, pominięte duplikaty, skutek (gotówka/pozycje) | jedna transakcja i jeden `rebuild` (ADR-0008, E4.1) | `POST …/{id}/commit` |
-| 6. Cofnięcie | lista paczek `/import`, akcja „Cofnij” z potwierdzeniem | blokada z listą operacji, jeśli któraś była edytowana (D15) | `POST …/{id}/revert` |
+| 1. Plik | Portfel docelowy, wgranie pliku XTB | `sha256` pliku → „ten plik już zaimportowano” (backend zwraca istniejącą paczkę, E4.1) | `POST /portfolios/imports` |
+| 2. Podgląd i naprawa | tabela wierszy z surową etykietą; filtry `row_status`: wszystkie / `ok` / **`duplicate`** / **`unrecognized`** / **`error`** / `skip`; liczniki; wiersz pomijany = `skip` | edycja wiersza (typ, walor, ilość, cena, waluta, kurs) w panelu bocznym; rozpoznanie waloru (ISIN, ticker + giełda); walidacja brutto = ilość × cena ± prowizja; wiersz poprawiony ręcznie oznaczony; szkic zapisany na serwerze (powrót pod `/import/:batchId`) | `GET …/{id}/rows`, `PATCH …/{id}/rows/{row}` |
+| 3. Zatwierdzenie | podsumowanie: liczba operacji, pominięte duplikaty, skutek (gotówka/pozycje) | jedna transakcja i jeden `rebuild` (ADR-0008, E4.1) | `POST …/{id}/commit` |
+| 4. Cofnięcie | lista paczek `/import`, akcja „Cofnij” z potwierdzeniem | blokada z listą operacji, jeśli któraś była edytowana (D15) | `POST …/{id}/revert` |
 
 **Paginacja 2000 wierszy:** paginacja **po stronie serwera** (koperta jak w E2.7: `items`, `total`, `limit`, `offset`; filtr `row_status`), 100–200 wierszy na stronę; bez wirtualizacji (brak nowej zależności) [propozycja]. Filtry i strona są w URL (query), by odświeżenie karty nie gubiło widoku. Kryterium E4.1: 2000 wierszy < 10 s dotyczy zatwierdzenia, nie renderu.
 
 ### 4.3 Ustawienia (E0.9)
 
-Formularz sekcyjny z jednym przyciskiem „Zapisz” i stanem „niezapisane zmiany” (bez autozapisu) [propozycja]. Pola: waluta wyświetlania (domyślnie PLN), próg nieaktualnej ceny (dni), stopa wolna od ryzyka (E7.2); strefa czasowa jest stała (Europe/Warsaw, ADR-0019), bez pola. Kolejne sekcje dopisywane przez kroki: progi kondycji (`condition_thresholds`, E7.6), tryb prywatności (E11.2; ustawienie przeglądarki, nie serwera), token API (E10.4), alerty (E10.1). Zmiana waluty wyświetlania unieważnia klucze kokpitu i wyników. Endpointy: `GET/PUT /settings` [propozycja], pola wg kontraktu API.
+Formularz sekcyjny z jednym przyciskiem „Zapisz” i stanem „niezapisane zmiany” (bez autozapisu) [propozycja]. Pola: waluta wyświetlania (domyślnie PLN), próg nieaktualnej ceny (dni), benchmark (jeden Walor-indeks do porównania, E3.5); strefa czasowa jest stała (Europe/Warsaw, ADR-0019), bez pola. Kolejne sekcje dopisywane przez kroki: tryb prywatności (E11.2; ustawienie przeglądarki, nie serwera). Zmiana waluty wyświetlania unieważnia klucze kokpitu i wyników. Endpointy: `GET/PUT /settings` [propozycja], pola wg kontraktu API.
 
 ## 5. Infrastruktura frontendu
 
@@ -328,16 +312,12 @@ Legenda endpointów: **ist.** = istnieje w `backend/app/modules/*/api`; **nowy**
 | Grupa portfeli (`/groups/:id`) | `GroupPage` (zakładki jak Portfel), `GroupFormDialog` | nowy: CRUD Grup, agregaty zakresu | E2.1, E3.1 |
 | Widok waloru (`/assets/:id`) | `AssetPage`, `PriceChartWithMarkers`, `LotsTable`, `MetricLabel` | ist. `GET /assets/{id}`; nowy: historia cen, partie, operacje waloru | E1.1, E2.4, E3.8 |
 | Historia operacji (`/portfolios/:id/operations`, `/operations`) | `OperationsTable` (paginacja/filtry serwerowe), `OperationFormDialog` (edycja) | ist. `GET/PUT/DELETE /portfolios/operations…` (dziś goła lista bez paginacji, `operations.py:23-29`); nowy: koperta z paginacją i filtrami | E0.7, E2.7 |
-| Struktura (`…/allocation`) | `AllocationChart` (`PieChartCard`, `AreaChartCard` warstwowy), `MetricLabel` | nowy: alokacja wg Walorów, Klas, sektora, waluty, kraju, tagów | E3.3 |
-| Wyniki (`…/performance`, `/compare`) | `PerformancePage`, `LineChartCard`, `HeatmapGrid`, `DateRangePicker`, `MetricLabel` | ist. `GET /portfolios/portfolio-vectors` (dziś); nowy: `GET /portfolios/{id}/performance` (E3.1), szeregi benchmarków | E3.1, E3.5, E1.6 |
-| Dywidendy i kalendarz (`…/income`, `/groups/all/calendar`) | `IncomeChart`, `CalendarTable`, `MetricLabel` | nowy: dochód pasywny, prognoza 12 mies. | E3.6, E8.6, E5.2 |
-| Obligacje (`/bonds`) | `BondsTable`, `BondFormDialog` | nowy: wycena serii, kalendarz wykupów | E5.1, E5.2 |
+| Struktura (`…/allocation`) | `AllocationChart` (`PieChartCard`, `AreaChartCard` warstwowy), `MetricLabel` | nowy: alokacja wg Walorów, Klas, sektora, waluty, kraju | E3.3 |
+| Wyniki (`…/performance`, `/compare`) | `PerformancePage`, `LineChartCard`, `HeatmapGrid`, `DateRangePicker`, `MetricLabel` | ist. `GET /portfolios/portfolio-vectors` (dziś); nowy: `GET /portfolios/{id}/performance` (E3.1), seria benchmarku | E3.1, E3.5 |
+| Dywidendy i odsetki (`…/income`) | `IncomeChart`, `MetricLabel` | nowy: dochód pasywny (`GET {S}/income`) | E3.6 |
 | Zamknięte pozycje (`…/closed`) | `ClosedPositionsTable`, `MetricLabel` | nowy: raport z partii | E3.2 |
-| Import — kreator (`/import/new`, `/import/:batchId`, `/import`) | `ImportWizard`, `ImportRowsTable`, `RowEditPanel`, `BatchList` | nowy: p. 4.2 | E4.1–E4.3 |
-| Podatki (`/taxes/:year`) | `TaxReportPage`, `LossRegisterTable` | nowy: raport PIT-38, rejestr strat | E6.2, E6.5 |
-| Planowanie (`/planning/...`) | `RebalancePage`, `GoalPage`, `FirePage`, `MonteCarloChart` | nowy: wzorce, rebalancing, cele, symulacja | E9.1–E9.5 |
-| Alerty (`/alerts`) | `AlertsTable`, `AlertFormDialog` | nowy: reguły i log | E10.1 |
-| Dane i jakość (`/data`) | `DataStatusPage`, `WatchlistTable`, `ManualPriceDialog` | nowy: status odświeżeń, ceny ręczne, lista obserwowanych | E1.5, E1.7, E1.8 |
+| Import — kreator (`/import/new`, `/import/:batchId`, `/import`) | `ImportWizard`, `ImportRowsTable`, `RowEditPanel`, `BatchList` | nowy: p. 4.2 (później) | E4 |
+| Dane i jakość (`/data`) | `DataStatusPage`, `WatchlistTable`, `ManualPriceDialog` | nowy: status odświeżeń i zadań w tle, ceny ręczne (awaryjne), lista obserwowanych | E1.5, E1.7, E1.8 |
 | Ustawienia (`/settings`) | `SettingsPage` (sekcje) | nowy: `GET/PUT /settings` (4.3) | E0.9 |
 | Metodologia (`/methodology`) | `MethodologyPage` (kotwice per `method`) | brak (treść statyczna) | E3.7 |
 | Logowanie/rejestracja (`/login`, `/register`) | `LoginPage`, `RegisterPage`, `ProtectedRoute` | ist. `POST /auth/login`, `/auth/token/refresh`, `POST /auth/register` | E0.6 (zamknięcie rejestracji) |
@@ -354,4 +334,4 @@ Legenda endpointów: **ist.** = istnieje w `backend/app/modules/*/api`; **nowy**
 | 6 | Nawigacja mobilna (dolny pasek) wchodzi dopiero w E11.1 — do tego czasu hamburger | akceptacja kolejności |
 | 7 | Wybór narzędzia do generowania typów OpenAPI i skryptu zrzutu schematu (niezweryfikowane lokalnie) | E0.7 |
 | 8 | Zachowanie `getErrorMessage` przy 422 (lista w `detail`) — do sprawdzenia uruchomieniem; `npm run build` z niedziałającym `index.html` — do potwierdzenia | brak `node_modules` w środowisku autora |
-| 10 | Próbki plików do kreatora (eksport myfund, wyciągi brokerów) potrzebne do ostatecznego kształtu kroków 2–3 | właściciel; E4.2a, E4.3 |
+| 9 | Zanonimizowana próbka eksportu XTB potrzebna do ostatecznego kształtu kroku 2 kreatora | właściciel; E4 |
