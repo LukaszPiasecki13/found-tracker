@@ -311,7 +311,7 @@ class ImportService:
         except ValueError:
             message = f"Unknown operation type '{row.operation_type}'"
             return ImportRowStatus.UNRECOGNIZED, message, None
-        if row.amount == _ZERO:
+        if row.amount == _ZERO and operation_type != OperationType.SPLIT:
             return ImportRowStatus.SKIP, "Zero amount - nothing to record", None
         if row.external_ref in existing_refs:
             return ImportRowStatus.DUPLICATE, "Already recorded", None
@@ -330,9 +330,9 @@ class ImportService:
         if asset is None:
             # Asset does not exist: will be created at commit time
             message = f"Asset '{app_tick}' will be created"
-            return ImportRowStatus.OK, _join(message, _fx_message(row)), None
+            return ImportRowStatus.OK, _join(message, _row_note(row)), None
         # Asset exists and is not archived
-        return ImportRowStatus.OK, _fx_message(row), asset.id
+        return ImportRowStatus.OK, _row_note(row) or None, asset.id
 
     # --- Assets ---
 
@@ -413,6 +413,13 @@ def _fx_message(row: ParsedRow) -> str | None:
     if rate == 1:
         return None
     return f"Price is in another currency: rate {rate:.4f} taken from the amount"
+
+
+def _row_note(row: ParsedRow) -> str:
+    split = None
+    if row.ratio is not None:
+        split = f"Split {format(row.ratio.normalize(), 'f')}:1"
+    return _join(_fx_message(row), split)
 
 
 def _join(*parts: str | None) -> str:

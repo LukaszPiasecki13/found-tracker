@@ -13,16 +13,20 @@ import {
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
+  Edit as EditIcon,
   Add as AddIcon,
   TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { usePockets, useDeletePocket } from '../hooks/usePockets';
 import AddPocketDialog from './dialogs/AddPocketDialog';
+import EditPocketDialog from './dialogs/EditPocketDialog';
 import RateMissingChip from './RateMissingChip';
+import type { Pocket } from '../types/api';
 
 const PocketsList: React.FC = () => {
   const navigate = useNavigate();
   const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [editingPocket, setEditingPocket] = useState<Pocket | null>(null);
   const { data: pockets, isLoading, error } = usePockets();
   const deletePocketMutation = useDeletePocket();
 
@@ -31,6 +35,11 @@ const PocketsList: React.FC = () => {
     if (window.confirm('Czy na pewno chcesz usunąć ten portfel?')) {
       deletePocketMutation.mutate(id);
     }
+  };
+
+  const handleEdit = (e: React.MouseEvent, pocket: Pocket) => {
+    e.stopPropagation();
+    setEditingPocket(pocket);
   };
 
   const handlePocketClick = (name: string) => {
@@ -112,13 +121,22 @@ const PocketsList: React.FC = () => {
                         sx={{ mt: 0.5 }}
                       />
                     </Box>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => handleDelete(e, pocket.id)}
-                      disabled={deletePocketMutation.isPending}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    <Box display="flex">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleEdit(e, pocket)}
+                        disabled={deletePocketMutation.isPending}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleDelete(e, pocket.id)}
+                        disabled={deletePocketMutation.isPending}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
                   </Box>
 
                   <Box>
@@ -182,6 +200,10 @@ const PocketsList: React.FC = () => {
         open={openAddDialog}
         onClose={() => setOpenAddDialog(false)}
       />
+
+      {editingPocket && (
+        <EditPocketDialog pocket={editingPocket} onClose={() => setEditingPocket(null)} />
+      )}
     </>
   );
 };

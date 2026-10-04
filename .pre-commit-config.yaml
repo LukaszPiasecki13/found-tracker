@@ -5,14 +5,14 @@ repos:
         name: ruff check (backend)
         entry: ruff check
         language: system
-        files: ^backend/
+        files: ^backend/.*\.py$
         exclude: ^backend/alembic/
         pass_filenames: true
       - id: ruff-format
         name: ruff format (backend)
         entry: ruff format
         language: system
-        files: ^backend/
+        files: ^backend/.*\.py$
         exclude: ^backend/alembic/
         pass_filenames: true
       - id: eslint-frontend
@@ -23,15 +23,19 @@ repos:
         pass_filenames: false
       - id: typecheck-frontend
         name: tsc -b (frontend)
-        entry: npm --prefix frontend exec tsc -- -b
+        entry: bash
+        args: [-c, "cd frontend && npm exec tsc -- -b"]
         language: system
         files: ^frontend/.*\.(ts|tsx)$
         pass_filenames: false
 
-  # Knowledge-base validator (R-13). `rev` is the ai-tools commit this was set up
-  # against; bump it with `pre-commit autoupdate` once that commit is pushed.
-  - repo: https://github.com/lukaszpiasecki13/ai-tools
-    rev: 9684984
+  # Knowledge-base validator (R-13). Local hook pointing to ai-tools.
+  - repo: local
     hooks:
       - id: kb-validate
+        name: knowledge-base validator
+        entry: python .claude/skills/knowledge-base/scripts/kb_validate.py
+        language: system
         args: [--root, ., --strict]
+        always_run: true
+        pass_filenames: false

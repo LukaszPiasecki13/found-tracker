@@ -1,7 +1,7 @@
 ---
 id: be-import
 status: current
-last_reviewed: 2026-10-03
+last_reviewed: 2026-10-04
 type: mixed
 scope: backend/import
 applies_to:
@@ -57,15 +57,18 @@ Wszystko jest scoped do właściciela; cudzy portfel lub paczka → 404. Metoda 
 
 ## 3. Adapter XTB
 
-Operacje powstają **wyłącznie z arkusza `Cash Operations`** (źródło prawdy); `Open Positions` i `Closed Positions` służą tylko do oczekiwań. Kolumny są czytane po nagłówkach, nie po literach.
+Operacje powstają z arkusza `Cash Operations` (źródło prawdy); jedynym wyjątkiem są splity (niżej). `Open Positions` i `Closed Positions` służą poza tym do oczekiwań. Kolumny są czytane po nagłówkach, nie po literach.
 
 | Typ w XTB | Wynik | Uwagi |
 |---|---|---|
 | `Deposit` / `Withdrawal` | `deposit` / `withdrawal` | kwota bezwzględna; znak musi się zgadzać (wpłata +, wypłata −), inaczej wiersz `unrecognized` |
 | `Stock purchase` / `Stock sell` | `buy` / `sell` | ilość i cena z `Comment` (`OPEN BUY 84 @ 40.710`, `CLOSE BUY 40/84 @ 40.730` — przy `40/84` ilością jest 40); kwota z kolumny `Amount` |
 | `Dividend` | `dividend` | z walorem (ticker); gdy w dniu wypłaty nie ma otwartej pozycji (księga by odrzuciła), `ImportService` księguje ją jako `interest` bez waloru z komunikatem i notatką „Dividend TICKER: …” |
-| `Free funds interest`, `Free funds interest tax`, `Withholding tax`, `SEC fee`, `Close trade` (CFD), `Swap` (CFD) | `interest` gdy kwota > 0, `fee` gdy < 0 | gotówka bez waloru; notatka „Typ \| TICKER \| komentarz”. Nazwy typów znaczą tu „przychód / koszt gotówkowy”. Bez tych wierszy saldo konta nie zgadza się z brokerem, a księga odrzuca zakupy i wypłaty finansowane CFD i odsetkami |
+| `Free funds interest`, `Free funds interest tax`, `Withholding tax`, `SEC fee`, `Close trade` (CFD), `Swap` (CFD), `Correction` | `interest` gdy kwota > 0, `fee` gdy < 0 | gotówka bez waloru; notatka „Typ \| TICKER \| komentarz”. Nazwy typów znaczą tu „przychód / koszt gotówkowy”. Bez tych wierszy saldo konta nie zgadza się z brokerem, a księga odrzuca zakupy i wypłaty finansowane CFD i odsetkami |
+| transfer pozycji w `Closed Positions` (komentarz „… Transfer Out”) | `split` | wiersz bez gotówki (`amount` 0), `ratio` = ilość pozycji otwartych przez transfer ÷ ilość zamkniętych; patrz niżej |
 | inny typ | wiersz `unrecognized` | |
+
+**Splity.** XTB księguje split jako transfer pozycji: stare pozycje są zamykane korektą z komentarzem „STC Transfer Out”, a nowe (ilość × `ratio`) otwierają się w ciągu godzin bez wiersza w `Cash Operations`. Bez tego późniejsze sprzedaże dotyczyłyby akcji, których księga nie widzi. Parser wykrywa transfer w `Closed Positions`, a pozycje po splicie zlicza z obu arkuszy (zamknięte i jeszcze otwarte), pomijając te, których otwarcie ma wiersz gotówkowy `OPEN`; okno to 6 godzin. Wiersz ma datę zamknięcia starych pozycji i numer po ostatnim wierszu `Cash Operations`. Transfer bez zmiany ilości (`ratio` 1) nie jest splitem, a transfer, po którym nie znaleziono nowych pozycji, to wiersz `unrecognized` (nieznany `ratio`).
 
 - **Daty:** komórki daty czytane są jako `datetime` i uznawane za UTC; liczba (serial Excela, system 1900) jest przeliczana awaryjnie.
 - **`external_ref`:** transakcje `xtb:pos:{Position ID}:{open|close}`, reszta `xtb:cash:{ID}`. Gdy ten sam ref ma kilka wierszy (zanonimizowane ID), dopisywany jest czas wiersza (i numer wystąpienia) — deterministycznie, więc ponowne wczytanie tego samego eksportu nadal się deduplikuje.

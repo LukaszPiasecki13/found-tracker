@@ -819,3 +819,35 @@ def test_a_unique_race_on_the_source_id_is_a_409(
 
     with pytest.raises(ConcurrentChangeError):
         _upload(service)
+
+
+def test_a_split_row_is_recorded_though_it_moves_no_cash(
+    service: ImportService,
+    parser: FakeParser,
+    operations: MagicMock,
+) -> None:
+    split = _row(
+        3,
+        "split",
+        ticker="DNP.PL",
+        exchange_hint="PL",
+        amount=D("0"),
+        ratio=D("10.000000"),
+        notes="Split 10:1 (XTB transfer)",
+    )
+    parser.result = ParseResult(rows=[_buy(2), split])
+    operations.record_many_core.return_value = [
+        SimpleNamespace(id=101),
+        SimpleNamespace(id=102),
+    ]
+
+    response = _upload(service)
+
+    assert _statuses(response) == {2: "ok", 3: "ok"}
+    row = next(r for r in response.rows if r.row_number == 3)
+    assert row.message and "Split 10:1" in row.message
+    drafts = operations.record_many_core.call_args.args[0]
+    assert [(d.operation_type, d.ratio) for d in drafts] == [
+        ("buy", None),
+        ("split", D("10.000000")),
+    ]

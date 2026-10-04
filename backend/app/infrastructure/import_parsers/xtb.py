@@ -1,8 +1,10 @@
 """XTB account-report adapter (`.xlsx`) for the `ImportParser` port.
 
-Operations come only from the `Cash Operations` sheet (the source of truth);
-`Open Positions` and `Closed Positions` are read for the expectations the
-imported operations are verified against. `openpyxl` is imported only here.
+Operations come from the `Cash Operations` sheet (the source of truth), plus
+the stock splits: XTB books a split as a position transfer that has no cash
+row, so it is derived from `Closed Positions` and `Open Positions`, which are
+also read for the expectations the imported operations are verified against.
+`openpyxl` is imported only here.
 
 The archive is checked *before* it is opened (zip/XML bombs): total uncompressed
 size, entry count and compression ratio are capped, and so is the row count.
@@ -12,8 +14,8 @@ import re
 import zipfile
 from collections import Counter
 from collections.abc import Iterator
-from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from typing import Any
@@ -56,6 +58,7 @@ _INCOME_COST_TYPES = frozenset(
         "sec fee",
         "close trade",
         "swap",
+        "correction",
     }
 )
 _CLASS_NAMES = {"STOCK": "Stock", "ETF": "ETF"}
@@ -77,6 +80,11 @@ _TRADE_COMMENT = re.compile(
     re.IGNORECASE,
 )
 _EXCEL_EPOCH = datetime(1899, 12, 30, tzinfo=UTC)
+# A split is booked as a transfer: the old positions are closed with a comment
+# "... Transfer Out" and the new ones open within hours, `ratio` times the volume.
+_TRANSFER_OUT = "transfer out"
+_TRANSFER_WINDOW = timedelta(hours=6)
+_RATIO_PLACES = Decimal("0.000001")
 
 type _Cells = dict[str, Any]
 
@@ -171,6 +179,61 @@ def _table(
         raise ImportParseError(f"Header row not found in sheet '{name}'")
 
 
+@dataclass(frozen=True, slots=True)
+class _Lot:
+    """A position (or the part of it a closing row covers), as the Closed and
+    Open Positions sheets list it."""
+
+    ticker: str
+    category: str
+    volume: Decimal
+    opened: datetime
+    closed: datetime | None
+    position_id: str
+    transfer_out: bool
+
+
+def _closed_lot(cells: _Cells) -> _Lot | None:
+    ticker = _text(cells.get("Ticker"))
+    volume = _decimal(cells.get("Volume"))
+    opened = _timestamp(cells.get("Open Time (UTC)"))
+    closed = _timestamp(cells.get("Close Time (UTC)"))
+    if not ticker or volume is None or volume <= 0 or opened is None or closed is None:
+        return None
+    return _Lot(
+        ticker=ticker,
+        category=_text(cells.get("Category")),
+        volume=volume,
+        opened=opened,
+        closed=closed,
+        position_id=_text(cells.get("Position ID")),
+        transfer_out=_TRANSFER_OUT in _text(cells.get("Comment")).lower(),
+    )
+
+
+def _open_lot(cells: _Cells) -> _Lot | None:
+    ticker = _text(cells.get("Ticker"))
+    volume = _decimal(cells.get("Volume"))
+    opened = _timestamp(cells.get("Open time (UTC)"))
+    if (
+        _text(cells.get("Type")).upper() != "BUY"
+        or not ticker
+        or volume is None
+        or volume <= 0
+        or opened is None
+    ):
+        return None
+    return _Lot(
+        ticker=ticker,
+        category=_text(cells.get("Category")),
+        volume=volume,
+        opened=opened,
+        closed=None,
+        position_id=_text(cells.get("Instrument/Position")),
+        transfer_out=False,
+    )
+
+
 class _RowError(Exception):
     """A row that cannot become an operation; becomes a `ParseIssue`."""
 
@@ -212,6 +275,9 @@ class XtbParser:
             if _CASH_SHEET not in workbook.sheetnames:
                 raise ImportParseError(f"Sheet '{_CASH_SHEET}' not found")
             rows, issues, cash_total = self._cash_operations(workbook)
+            split_rows, split_issues = self._splits(workbook, rows, issues)
+            rows += split_rows
+            issues += split_issues
             expectations = ImportExpectations(
                 open_positions=self._open_positions(workbook),
                 cash_total=cash_total,
@@ -308,6 +374,79 @@ class XtbParser:
             price=Decimal(match["price"]),
             external_ref=f"xtb:pos:{position_id}:{match['phase'].lower()}",
         )
+
+    # --- Splits ---
+
+    def _splits(
+        self, workbook: Any, rows: list[ParsedRow], issues: list[ParseIssue]
+    ) -> tuple[list[ParsedRow], list[ParseIssue]]:
+        """The splits found in the position sheets: the ratio is the volume of
+        the positions opened by the transfer over the volume it closed. A
+        transfer that keeps the volume is no split. Their rows are numbered
+        after the last Cash Operations row."""
+        opened_by_cash = {
+            row.external_ref.split(":")[2]
+            for row in rows
+            if row.external_ref.startswith("xtb:pos:")
+            and row.external_ref.endswith(":open")
+        }
+        lots = [
+            lot
+            for _, cells in _table(workbook, _CLOSED_SHEET, "Instrument")
+            if (lot := _closed_lot(cells)) is not None
+        ]
+        lots += [
+            lot
+            for _, cells in _table(workbook, _OPEN_SHEET, "Product", also="Volume")
+            if (lot := _open_lot(cells)) is not None
+        ]
+        transfers: dict[tuple[str, date], list[_Lot]] = {}
+        for lot in lots:
+            if lot.transfer_out and lot.closed is not None:
+                transfers.setdefault((lot.ticker, lot.closed.date()), []).append(lot)
+
+        numbered = [row.row_number for row in rows] + [i.row_number for i in issues]
+        last_row = max(numbered, default=0)
+        split_rows: list[ParsedRow] = []
+        split_issues: list[ParseIssue] = []
+        for (ticker, _), old in sorted(transfers.items(), key=lambda t: t[0][1]):
+            moved = min(lot.closed for lot in old if lot.closed is not None)
+            old_volume = sum((lot.volume for lot in old), Decimal(0))
+            new_volume = sum(
+                (
+                    lot.volume
+                    for lot in lots
+                    if lot.ticker == ticker
+                    and not lot.transfer_out
+                    and lot.position_id not in opened_by_cash
+                    and moved < lot.opened <= moved + _TRANSFER_WINDOW
+                ),
+                Decimal(0),
+            )
+            number = last_row + len(split_rows) + len(split_issues) + 1
+            if new_volume == 0:
+                message = (
+                    f"{ticker}: a position transfer (split) was found but not the "
+                    "positions it opened - the ratio is unknown"
+                )
+                split_issues.append(ParseIssue(number, message, {"Ticker": ticker}))
+                continue
+            ratio = (new_volume / old_volume).quantize(_RATIO_PLACES)
+            if ratio == 1:
+                continue
+            row = ParsedRow(
+                row_number=number,
+                operation_type="split",
+                operation_date=moved,
+                amount=Decimal(0),
+                external_ref=f"xtb:split:{ticker}",
+                notes=f"Split {format(ratio.normalize(), 'f')}:1 (XTB transfer)",
+                ratio=ratio,
+            )
+            split_rows.append(
+                self._asset(row, {"Ticker": ticker, "Category": old[0].category})
+            )
+        return split_rows, split_issues
 
     # --- Expectations ---
 

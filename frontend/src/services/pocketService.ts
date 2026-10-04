@@ -1,5 +1,5 @@
 import api from '../lib/api';
-import type { Pocket, CreatePocketRequest, Currency } from '../types/api';
+import type { Pocket, CreatePocketRequest, UpdatePocketRequest, Currency } from '../types/api';
 
 export const pocketService = {
   async getPockets(): Promise<Pocket[]> {
@@ -26,6 +26,11 @@ export const pocketService = {
 
   async createPocket(data: CreatePocketRequest): Promise<Pocket> {
     const response = await api.post<Pocket>('/portfolios/', data);
+    return response.data;
+  },
+
+  async updatePocket(id: number, data: UpdatePocketRequest): Promise<Pocket> {
+    const response = await api.patch<Pocket>(`/portfolios/${id}`, data);
     return response.data;
   },
 

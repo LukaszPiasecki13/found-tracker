@@ -45,7 +45,7 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 
 ## ADR-y techniczne
 
-Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyje w front-matterze (`status:`). ADR-y 0013–0017 i 0019–0020 mają status **Accepted**; 0018 (import) oraz 0001–0012 są `Proposed` — status zmienia człowiek.
+Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyje w front-matterze (`status:`). ADR-y 0013–0017 i 0019–0020 mają status **Accepted**; 0018 (import), 0021 oraz 0001–0012 są `Proposed` — status zmienia człowiek.
 
 | Dokument | Decyzja |
 |---|---|
@@ -69,6 +69,7 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`0018`](./technical/adr/0018-architektura-importu.md) | Import: port parsera, paczki importu z cofnięciem, adapter XTB jako pierwszy; implementacja później (propozycja) |
 | [`0019`](./technical/adr/0019-migracje-danych-i-kolumny-dat.md) | Dane od zera (seed/import); migracje tylko `autogenerate`; `operation_day` nową kolumną (propozycja) |
 | [`0020`](./technical/adr/0020-plaski-model-operacji.md) | Operacja jako płaska tabela; `status`, `sequence` (propozycja) |
+| [`0021`](./technical/adr/0021-tolerancja-ujemnego-salda-przy-zakupie.md) | Zakup może zejść najwyżej 0,50 poniżej zera salda; reszta operacji nie (propozycja) |
 
 ## L2 — Kontrakty
 

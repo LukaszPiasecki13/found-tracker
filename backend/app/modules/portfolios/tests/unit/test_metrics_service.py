@@ -66,6 +66,7 @@ def _op(
     amount: str | None = None,
     fee: str = "0",
     fx_rate: str = "1",
+    ratio: str | None = None,
 ) -> SimpleNamespace:
     asset = (
         SimpleNamespace(ticker=ticker, asset_class=SimpleNamespace(name=asset_class))
@@ -82,6 +83,7 @@ def _op(
         amount=D(amount) if amount is not None else None,
         fee=D(fee),
         fx_rate=D(fx_rate),
+        ratio=D(ratio) if ratio is not None else None,
     )
 
 
@@ -423,3 +425,26 @@ def test_interest_and_fee_move_cash_and_profit_but_not_the_net_deposits(
     # The ledger's cash: 1000, + 5 interest, - 2 charge.
     assert body.root["free_cash_vector"] == [1000.0, 1005.0, 1003.0]
     assert body.root["profit_vector"] == [0.0, 5.0, 3.0]
+
+
+def test_a_split_scales_the_quantity_held_before_it(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    """The provider's closes are already adjusted for the split, so the 2 shares
+    bought before the 10:1 split are valued as the 20 they became."""
+    prices.history["AAA"] = {
+        date(2025, 1, 2): D("10"),
+        date(2025, 1, 3): D("10.5"),
+        date(2025, 1, 4): D("11"),
+    }
+    operations = [
+        _op("deposit", _at(1), amount="1000"),
+        _op("buy", _at(2), ticker="AAA", quantity="2", price="100"),
+        _op("split", _at(4), ticker="AAA", ratio="10"),
+    ]
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(
+        1, _query('["assets"]', end="2025-01-05")
+    )
+
+    assert body.root["assets"] == {"AAA": [0.0, 200.0, 210.0, 220.0, 220.0]}

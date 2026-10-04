@@ -160,9 +160,23 @@ def test_buy_may_spend_the_cash_exactly(ledger: PortfolioLedger) -> None:
 
 def test_buy_beyond_cash_is_insufficient_cash(ledger: PortfolioLedger) -> None:
     with pytest.raises(InsufficientCashError) as exc_info:
-        ledger.apply(cash("201.99"), buy("10", "20", fee="2"))
+        ledger.apply(cash("201.49"), buy("10", "20", fee="2"))
 
     assert exc_info.value.code == "INSUFFICIENT_CASH"
+
+
+def test_buy_may_overdraw_the_cash_by_a_rounding_tolerance(
+    ledger: PortfolioLedger,
+) -> None:
+    # 202 costs, 201.50 in cash: exactly the tolerance - allowed, cash goes negative.
+    state = ledger.apply(cash("201.50"), buy("10", "20", fee="2"))
+
+    assert state.cash_balance == D("-0.50")
+
+
+def test_a_withdrawal_may_not_use_the_buy_tolerance(ledger: PortfolioLedger) -> None:
+    with pytest.raises(InsufficientCashError):
+        ledger.apply(cash("100"), withdrawal("100.01"))
 
 
 def test_buy_of_a_second_asset_keeps_the_first_position(
@@ -454,6 +468,7 @@ def test_state_and_inputs_read_orm_like_rows() -> None:
         amount=D("1"),
         fee=D("0"),
         fx_rate=D("1"),
+        ratio=None,
     )
 
     state = LedgerState.of(portfolio, [row])
@@ -554,3 +569,73 @@ def test_rebuild_with_interest_and_fee_equals_applying_one_by_one(
     assert ledger.rebuild(history) == state
     assert state.cash_balance == D("1000") - D("200") + D("0.4") + D("100") - D("100")
     assert state.total_deposited == D("900")
+
+
+# --- Split ---
+
+
+def split(ratio: str | None, asset: int | None = ASSET) -> OperationInput:
+    return OperationInput(
+        OperationType.SPLIT,
+        asset_id=asset,
+        ratio=None if ratio is None else D(ratio),
+    )
+
+
+def test_split_multiplies_the_quantity_and_divides_the_price_keeping_the_cost(
+    ledger: PortfolioLedger,
+) -> None:
+    state = ledger.apply(cash("1000"), buy("2", "100", fee="1"))
+
+    after = ledger.apply(state, split("10"))
+
+    position = after.position(ASSET)
+    assert position is not None
+    assert position.quantity == D("20")
+    assert position.average_buy_price == D("10.05")  # (2 * 100 + 1) / 2 / 10
+    assert position.quantity * position.average_buy_price == D("201")  # the cost
+    assert position.total_fees == D("1")
+    assert after.cash_balance == state.cash_balance
+
+
+def test_a_reverse_split_shrinks_the_position(ledger: PortfolioLedger) -> None:
+    state = ledger.apply(cash("1000"), buy("10", "10"))
+
+    after = ledger.apply(state, split("0.1"))
+
+    position = after.position(ASSET)
+    assert position is not None
+    assert (position.quantity, position.average_buy_price) == (D("1"), D("100"))
+
+
+def test_the_new_quantity_can_be_sold_after_a_split(ledger: PortfolioLedger) -> None:
+    state = ledger.apply(cash("1000"), buy("3.6334", "100"))
+    state = ledger.apply(state, split("10"))
+
+    state = ledger.apply(state, sell("7.334", "12"))
+
+    position = state.position(ASSET)
+    assert position is not None
+    assert position.quantity == D("29")
+
+
+def test_split_needs_an_open_position(ledger: PortfolioLedger) -> None:
+    with pytest.raises(PositionNotFoundError):
+        ledger.apply(cash("100"), split("10"))
+
+
+def test_split_needs_an_asset(ledger: PortfolioLedger) -> None:
+    with pytest.raises(AssetRequiredError):
+        ledger.apply(cash("100"), split("10", asset=None))
+
+
+@pytest.mark.parametrize("ratio", [None, "0", "-2"])
+def test_split_needs_a_positive_ratio(
+    ledger: PortfolioLedger, ratio: str | None
+) -> None:
+    state = ledger.apply(cash("1000"), buy("1", "10"))
+
+    with pytest.raises(InvalidOperationError) as exc_info:
+        ledger.apply(state, split(ratio))
+
+    assert exc_info.value.field == "ratio"

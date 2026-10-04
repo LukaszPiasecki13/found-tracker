@@ -14,6 +14,7 @@ class OperationType(StrEnum):
     DIVIDEND = "dividend"
     INTEREST = "interest"
     FEE = "fee"
+    SPLIT = "split"
 
 
 class ImportStatus(StrEnum):
@@ -39,7 +40,12 @@ class ImportRowStatus(StrEnum):
 
 # Operations that concern one asset (and therefore require one).
 ASSET_OPERATIONS: frozenset[OperationType] = frozenset(
-    {OperationType.BUY, OperationType.SELL, OperationType.DIVIDEND}
+    {
+        OperationType.BUY,
+        OperationType.SELL,
+        OperationType.DIVIDEND,
+        OperationType.SPLIT,
+    }
 )
 # Operations that move cash in or out of the portfolio (never with an asset).
 CASH_OPERATIONS: frozenset[OperationType] = frozenset(

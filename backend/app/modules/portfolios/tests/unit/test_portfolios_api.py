@@ -432,6 +432,7 @@ def test_operations_list_filters_by_portfolio_name(services: Services) -> None:
             "amount": 1000.0,
             "fee": 0.0,
             "fx_rate": 1.0,
+            "ratio": None,
             "notes": None,
             "operation_date": "2026-01-02T00:00:00Z",
             "created_at": "2026-01-02T00:00:00Z",

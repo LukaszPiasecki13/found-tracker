@@ -109,6 +109,7 @@ class OperationRepository(SQLRepository):
         operation_date: datetime,
         external_ref: str | None = None,
         import_batch_id: int | None = None,
+        ratio: Decimal | None = None,
     ) -> Operation:
         """Create an operation; refreshed so stored (rounded) values and
         `created_at` are loaded."""
@@ -125,6 +126,7 @@ class OperationRepository(SQLRepository):
             operation_date=operation_date,
             external_ref=external_ref,
             import_batch_id=import_batch_id,
+            ratio=ratio,
         )
         return self.save_new(operation)
 

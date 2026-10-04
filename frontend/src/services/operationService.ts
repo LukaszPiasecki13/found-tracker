@@ -1,5 +1,11 @@
 import api from '../lib/api';
-import type { Operation, CreateOperationRequest, AssetClass, Asset } from '../types/api';
+import type {
+  Operation,
+  CreateOperationRequest,
+  UpdateOperationRequest,
+  AssetClass,
+  Asset,
+} from '../types/api';
 
 export const operationService = {
   async getOperations(pocketName?: string): Promise<Operation[]> {
@@ -11,6 +17,11 @@ export const operationService = {
 
   async createOperation(data: CreateOperationRequest): Promise<Operation> {
     const response = await api.post<Operation>('/portfolios/operations', data);
+    return response.data;
+  },
+
+  async updateOperation(id: number, data: UpdateOperationRequest): Promise<Operation> {
+    const response = await api.patch<Operation>(`/portfolios/operations/${id}`, data);
     return response.data;
   },
 

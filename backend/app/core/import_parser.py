@@ -40,7 +40,8 @@ class ParsedRow:
     source and is stable across exports. `asset_class` is the asset's class
     name when known from the source (e.g. from XTB's Category column); for
     asset-bound operations (buy/sell/dividend) with unknown ticker, this guides
-    automatic asset creation.
+    automatic asset creation. `ratio` is read only by a "split" row (the
+    quantity is multiplied by it; no cash moves, `amount` is 0).
     """
 
     row_number: int
@@ -55,6 +56,7 @@ class ParsedRow:
     fee: Decimal = Decimal("0")
     notes: str = ""
     asset_class: str | None = None
+    ratio: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)

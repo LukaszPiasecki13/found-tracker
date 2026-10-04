@@ -73,6 +73,7 @@ def _stored(operation_type: str, **values: Any) -> SimpleNamespace:
         "amount": None,
         "fee": D("0"),
         "fx_rate": D("1"),
+        "ratio": None,
         "notes": None,
         "operation_date": WHEN,
     }
@@ -135,6 +136,7 @@ def service(
                     amount=operation.amount,
                     fee=operation.fee,
                     fx_rate=operation.fx_rate,
+                    ratio=operation.ratio,
                     notes=operation.notes,
                     operation_date=operation.operation_date,
                     external_ref=operation.external_ref,
@@ -193,6 +195,7 @@ def test_record_deposit_rebuilds_cash_and_stores_the_operation(
         amount=D("100.5"),
         fee=D("0.5"),
         fx_rate=D("1"),
+        ratio=None,
         notes="n",
         operation_date=datetime(2026, 1, 2),
     )
@@ -675,8 +678,6 @@ def test_list_operations_is_owner_scoped(
 
 
 def test_operation_types_are_the_catalog_the_api_documents() -> None:
-    # `interest` and `fee` come with the import (ADR-0018); the frontend's
-    # operation list does not know them yet.
     assert {t.value for t in OperationType} == {
         "buy",
         "sell",
@@ -685,6 +686,7 @@ def test_operation_types_are_the_catalog_the_api_documents() -> None:
         "dividend",
         "interest",
         "fee",
+        "split",
     }
 
 

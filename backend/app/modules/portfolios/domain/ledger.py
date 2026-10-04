@@ -35,6 +35,10 @@ from app.modules.portfolios.domain.protocols import (
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
+# Brokers settle fractional-share trades to the cent, so a real account may sit a few
+# cents below zero after a purchase (ADR-0021). Only a buy may overdraw, by this much.
+BUY_OVERDRAFT_TOLERANCE = Decimal("0.50")
+
 
 def _operation_type(value: str) -> OperationType:
     try:
@@ -48,7 +52,8 @@ def _operation_type(value: str) -> OperationType:
 @dataclass(frozen=True, slots=True)
 class OperationInput:
     """One operation as the ledger applies it. `amount` matters only for cash
-    operations and dividends; `quantity`/`price` only for buy and sell."""
+    operations and dividends; `quantity`/`price` only for buy and sell; `ratio`
+    only for a split."""
 
     operation_type: OperationType
     asset_id: int | None = None
@@ -57,6 +62,7 @@ class OperationInput:
     amount: Decimal | None = None
     fee: Decimal = _ZERO
     fx_rate: Decimal = _ONE
+    ratio: Decimal | None = None
 
     @classmethod
     def from_operation(cls, operation: OperationLike) -> OperationInput:
@@ -70,6 +76,7 @@ class OperationInput:
             amount=operation.amount,
             fee=operation.fee,
             fx_rate=operation.fx_rate,
+            ratio=operation.ratio,
         )
 
 
@@ -162,6 +169,12 @@ def _amount(operation: OperationInput) -> Decimal:
     return operation.amount
 
 
+def _ratio(operation: OperationInput) -> Decimal:
+    if operation.ratio is None:
+        raise InvalidOperationError("ratio must be > 0", field="ratio")
+    return operation.ratio
+
+
 # --- Effects (called only after validation) ---
 
 
@@ -170,7 +183,7 @@ def _buy(state: LedgerState, operation: OperationInput) -> LedgerState:
     quantity, price, fee = operation.quantity, operation.price, operation.fee
     fx_rate = operation.fx_rate
     total_cost = (quantity * price + fee) * fx_rate
-    if state.cash_balance < total_cost:
+    if state.cash_balance + BUY_OVERDRAFT_TOLERANCE < total_cost:
         raise InsufficientCashError(state.cash_balance, total_cost)
 
     held = state.position(asset_id)
@@ -276,6 +289,22 @@ def _dividend(state: LedgerState, operation: OperationInput) -> LedgerState:
     )
 
 
+def _split(state: LedgerState, operation: OperationInput) -> LedgerState:
+    """A split: the held quantity grows `ratio` times and the unit price shrinks
+    as much, so the position's total cost stays and no cash moves."""
+    asset_id = _asset_id(operation)
+    ratio = _ratio(operation)
+    held = state.position(asset_id)
+    if held is None:
+        raise PositionNotFoundError(operation.operation_type, asset_id)
+    position = replace(
+        held,
+        quantity=held.quantity * ratio,
+        average_buy_price=held.average_buy_price / ratio,
+    )
+    return replace(state, positions=state.with_position(position))
+
+
 class PortfolioLedger:
     """Validates operations and folds them into a portfolio's `LedgerState`.
 
@@ -283,7 +312,8 @@ class PortfolioLedger:
     `wiring.py`. Rules: buy/sell need an asset, quantity > 0, price > 0,
     fee >= 0, fx_rate > 0; deposit/withdrawal need amount > 0, fee >= 0 and no
     asset; interest/fee need amount > 0, fee >= 0 and no asset (cash moves,
-    deposits do not); dividend needs an asset, amount > 0, fee >= 0, fx_rate > 0.
+    deposits do not); dividend needs an asset, amount > 0, fee >= 0, fx_rate > 0;
+    split needs an asset and ratio > 0 (cash does not move).
     """
 
     def validate(self, operation: OperationInput) -> None:
@@ -315,6 +345,8 @@ class PortfolioLedger:
                 _require_positive("amount", operation.amount)
                 _require_non_negative("fee", operation.fee)
                 _require_positive("fx_rate", operation.fx_rate)
+            case OperationType.SPLIT:
+                _require_positive("ratio", operation.ratio)
 
     def apply(self, state: LedgerState, operation: OperationInput) -> LedgerState:
         """`state` after `operation`; validates first. Raises a
@@ -336,6 +368,8 @@ class PortfolioLedger:
                 return _interest(state, operation)
             case OperationType.FEE:
                 return _charge(state, operation)
+            case OperationType.SPLIT:
+                return _split(state, operation)
 
     def rebuild(self, operations: Iterable[OperationInput]) -> LedgerState:
         """Fold a whole history, already in chronological order

@@ -13,13 +13,6 @@ export const importService = {
     return response.data;
   },
 
-  async getImportBatch(portfolioId: number, batchId: number): Promise<ImportBatch> {
-    const response = await api.get<ImportBatch>(
-      `/portfolios/${portfolioId}/imports/${batchId}`
-    );
-    return response.data;
-  },
-
   async previewImport(
     portfolioId: number,
     file: File

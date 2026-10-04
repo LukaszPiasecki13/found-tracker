@@ -15,9 +15,11 @@ import {
 import {
   Add as AddIcon,
   Remove as RemoveIcon,
+  Edit as EditIcon,
   ShowChart as ChartIcon,
   History as HistoryIcon,
   AccountBalance as WalletIcon,
+  CloudUpload as ImportIcon,
 } from '@mui/icons-material';
 import { usePocketByName } from '../hooks/usePockets';
 import { usePositions } from '../hooks/usePositions';
@@ -26,6 +28,8 @@ import RateMissingChip from '../components/RateMissingChip';
 import BuyAssetDialog from '../components/dialogs/BuyAssetDialog';
 import SellAssetDialog from '../components/dialogs/SellAssetDialog';
 import CashOperationDialog from '../components/dialogs/CashOperationDialog';
+import ImportDialog from '../components/dialogs/ImportDialog';
+import EditPocketDialog from '../components/dialogs/EditPocketDialog';
 
 const PocketDetailsPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -38,6 +42,8 @@ const PocketDetailsPage: React.FC = () => {
   const [openBuyDialog, setOpenBuyDialog] = useState(false);
   const [openSellDialog, setOpenSellDialog] = useState(false);
   const [openCashDialog, setOpenCashDialog] = useState(false);
+  const [openImportDialog, setOpenImportDialog] = useState(false);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
 
   if (pocketLoading) {
     return (
@@ -98,6 +104,12 @@ const PocketDetailsPage: React.FC = () => {
         </Box>
 
         <ButtonGroup variant="outlined">
+          <Button
+            startIcon={<EditIcon />}
+            onClick={() => setOpenEditDialog(true)}
+          >
+            Edytuj
+          </Button>
           <Button
             startIcon={<ChartIcon />}
             onClick={() => navigate(`/pockets/${slug}/charts`)}
@@ -217,6 +229,13 @@ const PocketDetailsPage: React.FC = () => {
         >
           Gotówka
         </Button>
+        <Button
+          variant="outlined"
+          startIcon={<ImportIcon />}
+          onClick={() => setOpenImportDialog(true)}
+        >
+          Import
+        </Button>
       </Box>
 
       {/* Positions Table */}
@@ -243,11 +262,28 @@ const PocketDetailsPage: React.FC = () => {
         pocketId={pocket.id}
         positions={positions || []}
       />
-      <CashOperationDialog 
-        open={openCashDialog} 
+      <CashOperationDialog
+        open={openCashDialog}
         onClose={() => setOpenCashDialog(false)}
         pocketId={pocket.id}
       />
+      <ImportDialog
+        open={openImportDialog}
+        onClose={() => setOpenImportDialog(false)}
+        pocketId={pocket.id}
+      />
+      {openEditDialog && (
+        <EditPocketDialog
+          pocket={pocket}
+          onClose={() => setOpenEditDialog(false)}
+          onSaved={(updated) => {
+            // The route is keyed by the portfolio name, so a rename moves the page.
+            if (updated.name !== pocket.name) {
+              navigate(`/pockets/${encodeURIComponent(updated.name)}`, { replace: true });
+            }
+          }}
+        />
+      )}
     </Box>
   );
 };

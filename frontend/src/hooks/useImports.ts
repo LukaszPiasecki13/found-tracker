@@ -11,21 +11,6 @@ export const useImports = (portfolioId: number | undefined) => {
   });
 };
 
-export const useImportBatch = (
-  portfolioId: number | undefined,
-  batchId: number | undefined
-) => {
-  return useQuery({
-    queryKey: ['import-batch', portfolioId, batchId],
-    queryFn: () =>
-      importService.getImportBatch(
-        portfolioId as number,
-        batchId as number
-      ),
-    enabled: !!portfolioId && !!batchId,
-  });
-};
-
 export const usePreviewImport = () => {
   return useMutation({
     mutationFn: ({
@@ -86,10 +71,6 @@ export const useRevertImportBatch = () => {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: ['imports', variables.portfolioId],
-      });
-      // The reverted batch no longer exists: drop it instead of refetching.
-      queryClient.removeQueries({
-        queryKey: ['import-batch', variables.portfolioId, variables.batchId],
       });
       queryClient.invalidateQueries({ queryKey: ['operations'] });
       queryClient.invalidateQueries({ queryKey: ['positions'] });

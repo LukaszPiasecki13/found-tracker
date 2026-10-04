@@ -1,7 +1,7 @@
 ---
 id: be-portfolios-module
 status: current
-last_reviewed: 2026-10-03
+last_reviewed: 2026-10-04
 type: mixed
 scope: backend/portfolios
 applies_to:
@@ -50,11 +50,12 @@ Kwoty w JSON są liczbami (`core.schemas.DecimalNumber`). Schematy żądań maj�
 
 Wszystkie reguły liczbowe są w `PortfolioLedger` (§4); router i schematy ich nie powtarzają.
 
-- **Kupno:** walor, `quantity > 0`, `price > 0`, `fee ≥ 0`, `fx_rate > 0`; koszt `(ilość × cena + opłata) × fx_rate` musi się mieścić w saldzie (równość dozwolona). Średnia cena (w walucie waloru, z opłatą) `(q₀·śr₀ + q·cena + opłata) / (q₀ + q)`; średni kurs ważony ilością `(q₀·fx₀ + q·fx) / (q₀ + q)`; `total_fees += opłata`.
+- **Kupno:** walor, `quantity > 0`, `price > 0`, `fee ≥ 0`, `fx_rate > 0`; koszt `(ilość × cena + opłata) × fx_rate` musi się mieścić w saldzie; zakup może zejść do 0,50 poniżej zera ([ADR-0021](../adr/0021-tolerancja-ujemnego-salda-przy-zakupie.md)). Średnia cena (w walucie waloru, z opłatą) `(q₀·śr₀ + q·cena + opłata) / (q₀ + q)`; średni kurs ważony ilością `(q₀·fx₀ + q·fx) / (q₀ + q)`; `total_fees += opłata`.
 - **Sprzedaż:** walor, te same znaki co kupno; pozycja musi istnieć i mieć dość ilości; wpływ `(ilość × cena − opłata) × fx_rate`; średnie bez zmian (średnia ważona, nie FIFO); `total_fees += opłata`; pozycja o ilości 0 jest usuwana.
 - **Wpłata / wypłata:** bez waloru, `amount > 0`, `fee ≥ 0`. Wpłata: saldo `+= amount − fee`, `total_deposited += amount`. Wypłata: `amount + fee` musi się mieścić w saldzie; saldo `-= amount + fee`, `total_deposited -= amount`.
 - **Odsetki / opłata** (`interest`, `fee`): bez waloru, `amount > 0`, `fee ≥ 0`; **nie ruszają `total_deposited`**. Odsetki: saldo `+= amount − fee`. Opłata (np. podatek od odsetek): `amount + fee` musi się mieścić w saldzie; saldo `-= amount + fee`. W metrykach odsetki są ujemnym kosztem, opłata kosztem — `free_cash` zgadza się z saldem księgi. Pochodzą z importu ([`07_import.md`](./07_import.md)); frontend jeszcze ich nie zna.
 - **Dywidenda:** walor z otwartą pozycją, `amount > 0`, `fee ≥ 0`, `fx_rate > 0`; `total_dividends += amount`, saldo `+= (amount − fee) × fx_rate`.
+- **Split:** walor z otwartą pozycją, `ratio > 0` (kolumna `portfolios_operation.ratio`, [ADR-0020](../adr/0020-plaski-model-operacji.md)); ilość `×= ratio`, średnia cena `÷= ratio`, więc koszt łączny, opłaty i dywidendy zostają, a gotówka się nie zmienia. Wykresy w czasie (`MetricsService`) skalują ilości sprzed splitu przez kolejne splity, bo ceny z dostawcy są już dopasowane do splitów.
 - **`amount` przy kupnie i sprzedaży** jest informacyjny (frontend wysyła `ilość × cena ± opłata`) — zapisywany, nieczytany przez księgę.
 - **Rejestracja operacji** (`POST`): księga stosuje operację do **bieżącego** stanu (salda i pozycji z bazy), niezależnie od `operation_date`.
 - **Edycja / usunięcie operacji:** przebudowa salda i pozycji z całej historii w kolejności `(operation_date, created_at, id)`. Wiersze pozycji walorów, które nadal są w portfelu, są aktualizowane w miejscu (zachowują `id` i `opened_at`); zamknięte — usuwane; nowe — tworzone. Historia, która łamie regułę (np. usunięcie wpłaty, z której opłacono kupno) → 400 z `code`, nic się nie zmienia.

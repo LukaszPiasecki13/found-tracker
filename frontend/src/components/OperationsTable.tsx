@@ -22,10 +22,12 @@ import {
   CircularProgress,
   IconButton,
 } from '@mui/material';
-import { Delete as DeleteIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import type { Operation } from '../types/api';
 import { useDeleteOperation } from '../hooks/useOperations';
+import { getOperationTypeLabel } from '../lib/operations';
+import EditOperationDialog from './dialogs/EditOperationDialog';
 
 interface OperationsTableProps {
   operations: Operation[];
@@ -37,25 +39,13 @@ const columnHelper = createColumnHelper<Operation>();
 
 const OperationsTable: React.FC<OperationsTableProps> = ({ operations, isLoading, showPocket = false }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [editingOperation, setEditingOperation] = React.useState<Operation | null>(null);
   const deleteOperationMutation = useDeleteOperation();
 
   const handleDelete = (id: number) => {
     if (window.confirm('Czy na pewno chcesz usunąć tę operację? Spowoduje to cofnięcie jej efektów.')) {
       deleteOperationMutation.mutate(id);
     }
-  };
-
-  const getOperationTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      buy: 'Kupno',
-      sell: 'Sprzedaż',
-      deposit: 'Wpłata',
-      withdrawal: 'Wypłata',
-      dividend: 'Dywidenda',
-      interest: 'Odsetki',
-      fee: 'Opłata',
-    };
-    return labels[type] || type;
   };
 
   const getOperationTypeColor = (type: string) => {
@@ -67,6 +57,7 @@ const OperationsTable: React.FC<OperationsTableProps> = ({ operations, isLoading
       dividend: 'primary',
       interest: 'info',
       fee: 'warning',
+      split: 'default',
     };
     return colors[type] || 'default';
   };
@@ -165,13 +156,22 @@ const OperationsTable: React.FC<OperationsTableProps> = ({ operations, isLoading
         id: 'actions',
         header: 'Akcje',
         cell: (info) => (
-          <IconButton
-            size="small"
-            onClick={() => handleDelete(info.row.original.id)}
-            disabled={deleteOperationMutation.isPending}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          <>
+            <IconButton
+              size="small"
+              onClick={() => setEditingOperation(info.row.original)}
+              disabled={deleteOperationMutation.isPending}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => handleDelete(info.row.original.id)}
+              disabled={deleteOperationMutation.isPending}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </>
         ),
       }),
     ],
@@ -242,6 +242,12 @@ const OperationsTable: React.FC<OperationsTableProps> = ({ operations, isLoading
           ))}
         </TableBody>
       </Table>
+      {editingOperation && (
+        <EditOperationDialog
+          operation={editingOperation}
+          onClose={() => setEditingOperation(null)}
+        />
+      )}
     </TableContainer>
   );
 };

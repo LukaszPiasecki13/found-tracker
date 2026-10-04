@@ -71,7 +71,15 @@ export interface Position {
   rate_missing?: boolean;
 }
 
-export type OperationType = 'buy' | 'sell' | 'deposit' | 'withdrawal' | 'dividend' | 'interest' | 'fee';
+export type OperationType =
+  | 'buy'
+  | 'sell'
+  | 'deposit'
+  | 'withdrawal'
+  | 'dividend'
+  | 'interest'
+  | 'fee'
+  | 'split';
 
 export interface Operation {
   id: number;
@@ -144,6 +152,22 @@ export interface CreateOperationRequest {
   operation_date: string;
   ticker?: string;
   asset_class?: string;
+}
+
+// Partial update (PATCH): only the fields that changed are sent.
+export interface UpdatePocketRequest {
+  name?: string;
+  base_currency_id?: number;
+}
+
+export interface UpdateOperationRequest {
+  quantity?: number;
+  price?: number;
+  amount?: number;
+  fee?: number;
+  fx_rate?: number;
+  notes?: string | null;
+  operation_date?: string;
 }
 
 // Error Response

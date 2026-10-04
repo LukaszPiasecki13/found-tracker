@@ -55,6 +55,7 @@ _SUPPORTED_INTERVAL = "1d"
 _DATE_FORMAT = "%Y-%m-%d"
 _SATURDAY = 5
 _ZERO = Decimal("0")
+_ONE = Decimal("1")
 # Longest range of daily points one request may ask for (about ten years).
 _MAX_RANGE_DAYS = 3660
 
@@ -204,15 +205,33 @@ class _VectorCalculator:
         self._closes[ticker] = vector
         return vector
 
-    def _value_vector(self, ticker: str, trades: Iterable[Operation]) -> Vector:
-        quantity = self._running_total(trades, _quantity_change)
+    def _value_vector(self, ticker: str, operations: Iterable[Operation]) -> Vector:
+        ordered = sorted(operations, key=lambda op: _naive_utc(op.operation_date))
+        splits = [
+            (_naive_utc(op.operation_date), op.ratio or _ONE)
+            for op in ordered
+            if op.operation_type == OperationType.SPLIT
+        ]
+
+        def adjusted_change(operation: Operation) -> Decimal:
+            # The provider's closes are adjusted for splits to today's units, so a
+            # trade's quantity is scaled by every split that came after it.
+            when = _naive_utc(operation.operation_date)
+            factor = _ONE
+            for split_date, ratio in splits:
+                if split_date > when:
+                    factor *= ratio
+            return _quantity_change(operation) * factor
+
+        quantity = self._running_total(ordered, adjusted_change)
         return quantity * self._close_vector(ticker)
 
     def _trades(self) -> list[Operation]:
         return [
             op
             for op in self._operations
-            if op.operation_type in (OperationType.BUY, OperationType.SELL)
+            if op.operation_type
+            in (OperationType.BUY, OperationType.SELL, OperationType.SPLIT)
         ]
 
     def _sum_value(self) -> Vector:

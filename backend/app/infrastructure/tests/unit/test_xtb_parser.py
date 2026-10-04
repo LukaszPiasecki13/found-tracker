@@ -16,6 +16,8 @@ from app.infrastructure.tests.xtb_report import (
     COMPLETE_CASH_TOTAL,
     build_xtb_report,
     cash_row,
+    closed_row,
+    transfer_out_row,
 )
 
 D = Decimal
@@ -335,6 +337,8 @@ def test_dividends_carry_their_asset_and_class(parser: XtbParser) -> None:
         ("Swap", -3.0, "fee"),
         ("Close trade", 12.0, "interest"),
         ("Close trade", -12.0, "fee"),
+        ("Correction", 5.34, "interest"),
+        ("Correction", -1.0, "fee"),
     ],
 )
 def test_other_cash_is_booked_as_income_or_cost_by_the_sign(
@@ -364,3 +368,138 @@ def test_a_dividend_without_a_ticker_is_an_issue(parser: XtbParser) -> None:
     result = parser.parse(build_xtb_report(rows))
 
     assert result.rows == [] and len(result.issues) == 1
+
+
+# --- Splits (a position transfer in the position sheets) ---
+
+_BOUGHT = datetime(2026, 1, 2, 10)
+_MOVED = datetime(2026, 1, 5, 7, 0, 0)
+_OPENED = datetime(2026, 1, 5, 7, 30, 0)
+
+
+def _split_cash_rows() -> list[tuple[object, ...]]:
+    return [
+        cash_row("Deposit", datetime(2026, 1, 1, 9), 1000, id_=1, comment="Deposit"),
+        cash_row(
+            "Stock purchase",
+            _BOUGHT,
+            -200,
+            id_=2,
+            ticker="DNP.PL",
+            comment="OPEN BUY 2 @ 100.000",
+            position_id="200",
+        ),
+        cash_row(
+            "Stock sell",
+            datetime(2026, 1, 10, 10),
+            180,
+            id_=3,
+            ticker="DNP.PL",
+            comment="CLOSE BUY 15/15 @ 12.000",
+            position_id="300",
+        ),
+    ]
+
+
+def _split_closed_rows() -> list[tuple[object, ...]]:
+    return [
+        transfer_out_row("DNP.PL", 2, _BOUGHT, _MOVED, "200"),
+        closed_row("DNP.PL", 15, _OPENED, datetime(2026, 1, 10, 10), "300"),
+    ]
+
+
+def test_a_position_transfer_is_a_split_with_the_ratio_of_the_volumes(
+    parser: XtbParser,
+) -> None:
+    report = build_xtb_report(
+        _split_cash_rows(),
+        closed_rows=[
+            *_split_closed_rows(),
+            closed_row("DNP.PL", 5, _OPENED, datetime(2026, 1, 11, 10), "301"),
+        ],
+    )
+
+    result = parser.parse(report)
+
+    assert result.issues == []
+    [split] = [row for row in result.rows if row.operation_type == "split"]
+    assert split.ratio == D("10")  # (15 + 5) / 2
+    assert split.operation_date == datetime(2026, 1, 5, 7, 0, tzinfo=UTC)
+    assert (split.ticker, split.exchange_hint, split.amount) == ("DNP.PL", "PL", 0)
+    assert split.external_ref.startswith("xtb:split:DNP.PL:")
+    assert split.row_number > max(r.row_number for r in result.rows if r is not split)
+
+
+def test_positions_of_the_transfer_that_are_still_open_count_too(
+    parser: XtbParser,
+) -> None:
+    report = build_xtb_report(
+        _split_cash_rows(),
+        closed_rows=_split_closed_rows(),
+        open_lots=[("301", "DNP.PL", 5, _OPENED)],
+    )
+
+    [split] = [r for r in parser.parse(report).rows if r.operation_type == "split"]
+
+    assert split.ratio == D("10")
+
+
+def test_a_position_opened_by_a_cash_row_is_no_part_of_the_transfer(
+    parser: XtbParser,
+) -> None:
+    rows = [
+        *_split_cash_rows(),
+        cash_row(
+            "Stock purchase",
+            datetime(2026, 1, 5, 8, 0),
+            -50,
+            id_=9,
+            ticker="DNP.PL",
+            comment="OPEN BUY 1 @ 50.000",
+            position_id="400",
+        ),
+    ]
+    closed = [
+        *_split_closed_rows(),
+        closed_row(
+            "DNP.PL", 1, datetime(2026, 1, 5, 8, 0), datetime(2026, 1, 12), "400"
+        ),
+    ]
+
+    [split] = [
+        r
+        for r in parser.parse(build_xtb_report(rows, closed_rows=closed)).rows
+        if r.operation_type == "split"
+    ]
+
+    assert split.ratio == D("7.5")  # only the 15 of the transfer over the 2
+
+
+def test_a_transfer_that_keeps_the_volume_is_not_a_split(parser: XtbParser) -> None:
+    report = build_xtb_report(
+        _split_cash_rows(),
+        closed_rows=[
+            transfer_out_row("DNP.PL", 15, _BOUGHT, _MOVED, "200"),
+            closed_row("DNP.PL", 15, _OPENED, datetime(2026, 1, 10, 10), "300"),
+        ],
+    )
+
+    result = parser.parse(report)
+
+    assert [r.operation_type for r in result.rows if r.operation_type == "split"] == []
+    assert result.issues == []
+
+
+def test_a_transfer_without_the_positions_it_opened_is_an_issue(
+    parser: XtbParser,
+) -> None:
+    report = build_xtb_report(
+        _split_cash_rows(),
+        closed_rows=[transfer_out_row("DNP.PL", 2, _BOUGHT, _MOVED, "200")],
+    )
+
+    result = parser.parse(report)
+
+    assert [r for r in result.rows if r.operation_type == "split"] == []
+    [issue] = result.issues
+    assert "ratio is unknown" in issue.message

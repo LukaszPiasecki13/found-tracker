@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { pocketService } from '../services/pocketService';
-import type { CreatePocketRequest } from '../types/api';
+import type { CreatePocketRequest, UpdatePocketRequest } from '../types/api';
 import { getErrorMessage } from '../lib/api';
 
 export const usePockets = () => {
@@ -36,6 +36,26 @@ export const useCreatePocket = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pockets'] });
       enqueueSnackbar('Portfel utworzony pomyślnie', { variant: 'success' });
+    },
+    onError: (error) => {
+      const message = getErrorMessage(error);
+      enqueueSnackbar(message, { variant: 'error' });
+    },
+  });
+};
+
+export const useUpdatePocket = () => {
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: UpdatePocketRequest }) =>
+      pocketService.updatePocket(id, data),
+    onSuccess: () => {
+      // Renaming changes the name-keyed queries too, so the list and positions refetch.
+      queryClient.invalidateQueries({ queryKey: ['pockets'] });
+      queryClient.invalidateQueries({ queryKey: ['positions'] });
+      enqueueSnackbar('Portfel zaktualizowany pomyślnie', { variant: 'success' });
     },
     onError: (error) => {
       const message = getErrorMessage(error);

@@ -26,7 +26,8 @@ class Operation(Base):
     """A recorded event - the source of truth a portfolio's state derives from.
 
     `operation_type` holds an `OperationType` value (buy, sell, deposit,
-    withdrawal, dividend, interest, fee).
+    withdrawal, dividend, interest, fee, split). `ratio` is read only by a
+    split: the quantity is multiplied by it, the unit price divided.
     """
 
     __tablename__ = "portfolios_operation"
@@ -53,6 +54,7 @@ class Operation(Base):
     fx_rate: Mapped[Decimal] = mapped_column(
         Numeric(18, 9), nullable=False, default=Decimal("1")
     )
+    ratio: Mapped[Decimal | None] = mapped_column(Numeric(18, 9), nullable=True)
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Import provenance (ADR-0020): the source's own id, the batch the operation

@@ -38,7 +38,7 @@ class OperationListQuery(BaseModel):
 class OperationCreateRequest(BaseModel):
     """The asset is `asset_id`, or `ticker` (created in class `asset_class`
     when unknown); none for deposits and withdrawals. `amount` is read only by
-    deposits, withdrawals and dividends."""
+    deposits, withdrawals and dividends, `ratio` only by splits."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -50,6 +50,7 @@ class OperationCreateRequest(BaseModel):
     amount: _Numeric18x2 | None = None
     fee: _Numeric18x2 = Decimal("0")
     fx_rate: _Numeric18x9 = Decimal("1")
+    ratio: _Numeric18x9 | None = None
     notes: str | None = None
     operation_date: datetime
     ticker: str | None = Field(
@@ -89,6 +90,7 @@ class OperationResponse(BaseModel):
     amount: DecimalNumber | None = None
     fee: DecimalNumber
     fx_rate: DecimalNumber
+    ratio: DecimalNumber | None = None
     notes: str | None = None
     operation_date: datetime
     created_at: datetime | None = None

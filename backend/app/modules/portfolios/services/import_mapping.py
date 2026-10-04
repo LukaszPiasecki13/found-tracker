@@ -62,6 +62,7 @@ def dedup_key(row: ParsedRow) -> str:
         _plain(row.quantity),
         _plain(row.amount),
         row.operation_type,
+        _plain(row.ratio) if row.ratio is not None else "",
     )
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
@@ -81,6 +82,7 @@ def row_payload(row: ParsedRow) -> dict[str, Any]:
         "notes": row.notes,
         "external_ref": row.external_ref,
         "asset_class": row.asset_class,
+        "ratio": None if row.ratio is None else str(row.ratio),
     }
 
 
@@ -101,6 +103,7 @@ def draft_from_payload(
         fx_rate=Decimal(payload.get("fx_rate", "1")),
         notes=payload["notes"] or None,
         external_ref=payload["external_ref"],
+        ratio=Decimal(payload["ratio"]) if payload.get("ratio") else None,
     )
 
 

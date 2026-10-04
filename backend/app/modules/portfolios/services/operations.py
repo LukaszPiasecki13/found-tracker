@@ -73,6 +73,7 @@ class OperationDraft:
     fx_rate: Decimal = Decimal("1")
     notes: str | None = None
     external_ref: str | None = None
+    ratio: Decimal | None = None
 
     def to_input(self) -> OperationInput:
         return OperationInput(
@@ -83,6 +84,7 @@ class OperationDraft:
             amount=self.amount,
             fee=self.fee,
             fx_rate=self.fx_rate,
+            ratio=self.ratio,
         )
 
 
@@ -224,6 +226,7 @@ class OperationService:
                 amount=data.amount,
                 fee=data.fee,
                 fx_rate=data.fx_rate,
+                ratio=data.ratio,
                 notes=data.notes,
                 operation_date=data.operation_date,
             )
@@ -259,6 +262,7 @@ class OperationService:
                 operation_date=draft.operation_date,
                 external_ref=draft.external_ref,
                 import_batch_id=import_batch_id,
+                ratio=draft.ratio,
             )
             for draft in drafts
         ]

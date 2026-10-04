@@ -100,6 +100,40 @@ COMPLETE_OPEN_POSITIONS: dict[str, float] = {"DNP.PL": 6, "ETFBM40TR.PL": 2}
 COMPLETE_TOTAL_DEPOSITED = Decimal("4700")
 
 
+def closed_row(
+    ticker: str,
+    volume: float,
+    opened: datetime,
+    closed: datetime,
+    position_id: str,
+    comment: str = "",
+) -> tuple[Any, ...]:
+    """A "Closed Positions" row (the columns the parser reads)."""
+    return (
+        ticker.split(".")[0],
+        ticker,
+        "STOCK",
+        "BUY",
+        volume,
+        None,
+        opened,
+        closed,
+        "xStation5",
+        position_id,
+        comment,
+    )
+
+
+def transfer_out_row(
+    ticker: str, volume: float, opened: datetime, closed: datetime, position_id: str
+) -> tuple[Any, ...]:
+    """What XTB writes when a split closes an old position."""
+    row = list(closed_row(ticker, volume, opened, closed, position_id))
+    row[8] = "Correction"
+    row[10] = "STC Transfer Out"
+    return tuple(row)
+
+
 def build_xtb_report(
     cash_rows: list[tuple[Any, ...]] | None = None,
     *,
@@ -107,6 +141,8 @@ def build_xtb_report(
     open_positions: dict[str, float] | None = None,
     closed_profit: float | None = 12.5,
     include_cash_sheet: bool = True,
+    closed_rows: list[tuple[Any, ...]] | None = None,
+    open_lots: list[tuple[str, str, float, datetime]] | None = None,
 ) -> bytes:
     """An .xlsx like XTB's export. `cash_total` is the "Total" row (`None`
     leaves it out); `open_positions` maps tickers to held volume."""
@@ -120,7 +156,23 @@ def build_xtb_report(
     closed.append(("Closed Positions", ""))
     closed.append(("Date from (UTC)", _at(1)))
     closed.append(("Date to (UTC)", _at(28)))
-    closed.append(("Instrument", "Ticker", "Category", "Type", "Volume", "Profit/Loss"))
+    closed.append(
+        (
+            "Instrument",
+            "Ticker",
+            "Category",
+            "Type",
+            "Volume",
+            "Profit/Loss",
+            "Open Time (UTC)",
+            "Close Time (UTC)",
+            "Close Origin",
+            "Position ID",
+            "Comment",
+        )
+    )
+    for closed_position in closed_rows or []:
+        closed.append(closed_position)
     if closed_profit is not None:
         closed.append(("Profit/loss", None, None, None, None, closed_profit))
 
@@ -145,8 +197,18 @@ def build_xtb_report(
     opened.append((None,))
     opened.append(("Note", "Summary values and open positions are shown as of now"))
     opened.append(
-        ("Product", "Instrument/Position", "Ticker", "Category", "Type", "Volume")
+        (
+            "Product",
+            "Instrument/Position",
+            "Ticker",
+            "Category",
+            "Type",
+            "Volume",
+            "Open time (UTC)",
+        )
     )
+    for position_id, ticker, volume, open_time in open_lots or []:
+        opened.append(("My Trades", position_id, ticker, "", "BUY", volume, open_time))
     for ticker, volume in held.items():
         opened.append(("My Trades", ticker.split(".")[0], ticker, "STOCK", "", volume))
         opened.append(("My Trades", 999, ticker, "", "BUY", volume))

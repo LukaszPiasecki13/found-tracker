@@ -16,6 +16,8 @@ from app.infrastructure.tests.xtb_report import (
     COMPLETE_TOTAL_DEPOSITED,
     build_xtb_report,
     cash_row,
+    closed_row,
+    transfer_out_row,
 )
 from app.modules.assets import wiring as assets_wiring
 from app.modules.assets.models import Asset, AssetClass, Currency
@@ -413,3 +415,83 @@ def test_foreign_trade_dividend_and_other_cash_of_a_real_looking_account(
     ).all()
     assert len(operations) == 7
     assert D(str(api.detail(portfolio_id)["cash_balance"])) == D("9999.80")
+
+
+def test_a_split_found_in_the_position_sheets_makes_the_later_sells_valid(
+    api: Api,
+    portfolio_id: int,
+    xtb_assets: dict[str, Asset],
+    integration_session: Session,
+) -> None:
+    """XTB books a 10:1 split as a position transfer with no cash row: the 2
+    shares bought become the 20 that the two sells close."""
+    bought = datetime(2026, 1, 2, 10)
+    moved = datetime(2026, 1, 5, 7)
+    opened = datetime(2026, 1, 5, 7, 30)
+    sold = datetime(2026, 1, 10, 10)
+    rows = [
+        cash_row("Deposit", datetime(2026, 1, 1, 9), 1000, id_=1, comment="Deposit"),
+        cash_row(
+            "Stock purchase",
+            bought,
+            -200,
+            id_=2,
+            ticker="DNP.PL",
+            comment="OPEN BUY 2 @ 100.000",
+            position_id="200",
+        ),
+        cash_row(
+            "Stock sell",
+            sold,
+            180,
+            id_=3,
+            ticker="DNP.PL",
+            comment="CLOSE BUY 15/15 @ 12.000",
+            position_id="300",
+        ),
+        cash_row(
+            "Stock sell",
+            sold,
+            60,
+            id_=4,
+            ticker="DNP.PL",
+            comment="CLOSE BUY 5/5 @ 12.000",
+            position_id="301",
+        ),
+    ]
+    report = build_xtb_report(
+        rows,
+        cash_total=1040,
+        open_positions={},
+        closed_rows=[
+            transfer_out_row("DNP.PL", 2, bought, moved, "200"),
+            closed_row("DNP.PL", 15, opened, sold, "300"),
+            closed_row("DNP.PL", 5, opened, sold, "301"),
+        ],
+    )
+
+    previewed = api.preview(portfolio_id, report)
+
+    assert previewed.status_code == 200, previewed.text
+    body = previewed.json()
+    assert _statuses(body) == ["ok"] * 5
+    split = next(r for r in body["rows"] if r["payload"]["operation_type"] == "split")
+    assert D(split["payload"]["ratio"]) == 10
+    assert "Split 10:1" in split["message"]
+    assert body["reconciliation"]["matched"] is True, body["reconciliation"]
+
+    imported = api.import_file(portfolio_id, report)
+
+    assert imported.status_code == 201, imported.text
+    detail = api.detail(portfolio_id)
+    assert D(str(detail["cash_balance"])) == D("1040")
+    assert detail["positions"] == []
+    stored = integration_session.scalars(
+        select(Operation).where(
+            Operation.portfolio_id == portfolio_id,
+            Operation.operation_type == "split",
+        )
+    ).all()
+    assert [(op.asset_id, op.ratio) for op in stored] == [
+        (xtb_assets["DNP.WA"].id, D("10"))
+    ]
