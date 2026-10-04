@@ -27,6 +27,10 @@ _Unikać_: holding, udział
 Zdarzenie zapisane przez użytkownika, niezmienne co do znaczenia: `buy`, `sell`, `deposit`, `withdrawal`, `dividend`, `interest`, `fee`, `currency_exchange` (przewalutowanie), `split`. Operacje są źródłem prawdy o portfelu. Usunięcie lub edycja Operacji wymusza przebudowę salda i Pozycji z pozostałej historii.
 _Unikać_: transakcja (w kodzie tylko w nazwie technicznej `transaction()` — granica commitu, nie pojęcie domenowe), wpis
 
+**Paczka importu** (`portfolios_import_batch`)
+Jeden zaimportowany plik z banku lub domu maklerskiego i jego los: `committed` (wiersze `ok` stały się Operacjami); cofnięcie usuwa Operacje i samą paczkę razem z plikiem. Przed importem podgląd (niezapisywany) pokazuje wiersze i raport zgodności, który porównuje stan z pliku ze stanem Portfela. Opis działania: [`07_import.md`](../technical/backend/07_import.md).
+_Unikać_: upload (jako nazwa pojęcia), migracja danych
+
 **Saldo gotówki**
 Wolna gotówka Portfela osobno dla każdej Waluty ([ADR 0003](adr/0003-gotowka-wielowalutowa.md)); kolumna `cash_balance` to saldo w walucie bazowej. Zakup je zmniejsza, sprzedaż i dywidenda zwiększają (w walucie wypłaty), wpłata i wypłata zmieniają.
 _Unikać_: cash, środki, wolne środki (zbyt ogólnie)

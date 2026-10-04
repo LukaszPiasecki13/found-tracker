@@ -117,6 +117,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   INVALID_DATE_RANGE: 'Nieprawidłowy zakres dat (maksymalnie około 10 lat)',
   VALIDATION_ERROR: 'Nieprawidłowe dane w formularzu',
   RATE_LIMITED: 'Zbyt wiele prób, spróbuj ponownie za chwilę',
+  IMPORT_PARSER_UNKNOWN: 'Nieznany parser importu',
+  IMPORT_PARSE_FAILED: 'Nie udało się sparsować pliku',
+  IMPORT_FILE_TOO_LARGE: 'Plik jest za duży (maksymalnie 10 MB)',
+  IMPORT_UNRESOLVED_ROWS: 'Paczka zawiera wiersze do rozwiązania',
+  IMPORT_BATCH_STATE_INVALID: 'Nieprawidłowy stan paczki importu',
+  IMPORT_BATCH_HAS_EDITS: 'Paczka zawiera niezatwierdzone zmiany',
+  IMPORT_ALREADY_UPLOADED: 'Ten plik został już wgrany',
+  IMPORT_COMMIT_REJECTED: 'Import nie mógł być zatwierdzony',
+  IMPORT_BATCH_NOT_FOUND: 'Nie znaleziono paczki importu',
 };
 
 // Helper function to extract a user-facing error message

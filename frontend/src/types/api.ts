@@ -71,7 +71,7 @@ export interface Position {
   rate_missing?: boolean;
 }
 
-export type OperationType = 'buy' | 'sell' | 'deposit' | 'withdrawal' | 'dividend';
+export type OperationType = 'buy' | 'sell' | 'deposit' | 'withdrawal' | 'dividend' | 'interest' | 'fee';
 
 export interface Operation {
   id: number;
@@ -165,4 +165,69 @@ export interface FxRate {
   to_currency: string;
   rate: number;
   via: 'identity' | 'direct' | 'inverse' | 'cross';
+}
+
+// Import Types
+export type ImportRowStatus = 'ok' | 'duplicate' | 'unrecognized' | 'error' | 'skip';
+export type ImportBatchStatus = 'committed' | 'reverted';
+
+export interface ImportRowPayload {
+  operation_type?: string;
+  operation_date?: string;
+  amount?: string;
+  quantity?: string;
+  price?: string;
+  fee?: string;
+  ticker?: string | null;
+  exchange_hint?: string | null;
+  notes?: string;
+  external_ref?: string;
+  asset_class?: string | null;
+}
+
+export interface ImportRow {
+  id: number | null;
+  row_number: number;
+  row_status: ImportRowStatus;
+  message: string | null;
+  payload: ImportRowPayload;
+  asset_id: number | null;
+  operation_id: number | null;
+}
+
+export interface ReconciliationDifference {
+  field: string;
+  expected: number | null;
+  actual: number | null;
+}
+
+export interface ReconciliationReport {
+  matched: boolean;
+  differences: ReconciliationDifference[];
+  closed_profit_reported: number | null;
+  ledger_error: string | null;
+}
+
+export interface ImportPreview {
+  parser_id: string;
+  filename: string;
+  sha256: string;
+  existing_batch_id: number | null;
+  rows: ImportRow[];
+  reconciliation: ReconciliationReport | null;
+}
+
+export interface ImportBatchSummary {
+  id: number;
+  portfolio_id: number;
+  parser_id: string;
+  filename: string;
+  sha256: string;
+  status: ImportBatchStatus;
+  created_at: string;
+}
+
+export interface ImportBatch extends ImportBatchSummary {
+  rows: ImportRow[];
+  reconciliation: ReconciliationReport | null;
 }

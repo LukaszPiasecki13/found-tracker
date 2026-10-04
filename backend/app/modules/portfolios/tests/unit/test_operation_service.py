@@ -16,6 +16,8 @@ from app.modules.portfolios.domain import OperationType, PortfolioLedger
 from app.modules.portfolios.exceptions import (
     AssetClassRequiredError,
     ConcurrentChangeError,
+    ImportBatchHasEditsError,
+    ImportCommitRejectedError,
     OperationNotFoundError,
     OperationRejectedError,
     PortfolioNotFoundError,
@@ -25,7 +27,10 @@ from app.modules.portfolios.schemas.operations import (
     OperationCreateRequest,
     OperationUpdateRequest,
 )
-from app.modules.portfolios.services.operations import OperationService
+from app.modules.portfolios.services.operations import (
+    OperationDraft,
+    OperationService,
+)
 
 D = Decimal
 WHEN = datetime(2026, 1, 2, tzinfo=UTC)
@@ -114,10 +119,43 @@ def service(
         )
         return operation
 
+    def create_many(operations: Any) -> list[Any]:
+        # Convert Operation models to SimpleNamespace with assigned IDs for testing.
+        result = []
+        for operation in operations:
+            # Assign ID if not already set.
+            if not hasattr(operation, "id") or operation.id is None:
+                op_ns = SimpleNamespace(
+                    id=len(history) + 1,
+                    portfolio_id=operation.portfolio_id,
+                    asset_id=operation.asset_id,
+                    operation_type=operation.operation_type,
+                    quantity=operation.quantity,
+                    price=operation.price,
+                    amount=operation.amount,
+                    fee=operation.fee,
+                    fx_rate=operation.fx_rate,
+                    notes=operation.notes,
+                    operation_date=operation.operation_date,
+                    external_ref=operation.external_ref,
+                    import_batch_id=operation.import_batch_id,
+                )
+            else:
+                # Already has ID (shouldn't happen in normal flow).
+                op_ns = operation
+            history.append(op_ns)
+            result.append(op_ns)
+        # Update list_by_portfolio to return sorted history.
+        operation_repo.list_by_portfolio.side_effect = lambda _: sorted(
+            history, key=lambda op: (op.operation_date.replace(tzinfo=None), op.id)
+        )
+        return result
+
     portfolio_repo.update.side_effect = lambda entity: entity
     position_repo.update.side_effect = lambda entity: entity
     operation_repo.update.side_effect = lambda entity: entity
     operation_repo.create.side_effect = create
+    operation_repo.create_many.side_effect = create_many
 
     return OperationService(
         portfolio_repo, position_repo, operation_repo, assets, PortfolioLedger()
@@ -636,13 +674,17 @@ def test_list_operations_is_owner_scoped(
     operation_repo.list_by_owner.assert_called_once_with(7, "Main")
 
 
-def test_operation_types_are_the_frontend_ones() -> None:
+def test_operation_types_are_the_catalog_the_api_documents() -> None:
+    # `interest` and `fee` come with the import (ADR-0018); the frontend's
+    # operation list does not know them yet.
     assert {t.value for t in OperationType} == {
         "buy",
         "sell",
         "deposit",
         "withdrawal",
         "dividend",
+        "interest",
+        "fee",
     }
 
 
@@ -675,3 +717,250 @@ def test_an_archived_asset_takes_no_new_operation(
     assert (exc_info.value.status_code, exc_info.value.code) == (409, "ASSET_ARCHIVED")
     operation_repo.create.assert_not_called()
     session.commit.assert_not_called()
+
+
+# --- edited_at (DEC-06) ---
+
+
+def test_update_marks_the_operation_edited_only_when_a_field_really_changes(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    history = _history()
+    buy = history[1]
+    operation_repo.get_owned.return_value = buy
+    operation_repo.list_by_portfolio.return_value = history
+    portfolio_repo.get_owned.return_value = _portfolio(cash="798")
+    position_repo.list_by_portfolio.return_value = [_row(quantity="10")]
+
+    service.update(2, OperationUpdateRequest(price=D("20"), fee=D("2")), owner_id=7)
+    assert getattr(buy, "edited_at", None) is None
+
+    service.update(2, OperationUpdateRequest(price=D("21")), owner_id=7)
+    assert buy.edited_at is not None
+
+
+# --- record_many_core / revert_import_batch_core (import) ---
+
+
+def _draft(row_number: int, operation_type: str, **values: Any) -> OperationDraft:
+    return OperationDraft(
+        row_number=row_number,
+        operation_type=operation_type,
+        operation_date=WHEN,
+        external_ref=f"src:{row_number}",
+        **values,
+    )
+
+
+def test_record_many_core_stores_every_draft_and_rebuilds_once_without_committing(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    operation_repo: MagicMock,
+    session: MagicMock,
+) -> None:
+    portfolio = _portfolio(cash="0", deposited="0")
+    portfolio_repo.get_owned.return_value = portfolio
+    position_repo.list_by_portfolio.return_value = []
+    drafts = [
+        _draft(11, "interest", amount=D("5")),
+        _draft(12, "buy", asset_id=ASSET_ID, quantity=D("10"), price=D("20")),
+    ]
+
+    created = service.record_many_core(drafts, 1, 7, import_batch_id=9)
+
+    assert len(created) == 2
+    portfolio_repo.lock_owned.assert_called_once_with(1, 7)
+    # Verify that create_many was called with operations list.
+    operation_repo.create_many.assert_called_once()
+    operations = operation_repo.create_many.call_args[0][0]
+    refs = [op.external_ref for op in operations]
+    assert refs == ["src:11", "src:12"]
+    assert {op.import_batch_id for op in operations} == {9}
+    # One rebuild: the portfolio is written once; the caller owns the commit.
+    portfolio_repo.update.assert_called_once_with(portfolio)
+    # The fixture history's deposit 1000, + 5 interest, - 10 x 20 bought.
+    assert portfolio.cash_balance == D("805")
+    session.commit.assert_not_called()
+
+
+def test_record_many_core_names_the_row_the_ledger_refused(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    session: MagicMock,
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    position_repo.list_by_portfolio.return_value = []
+    drafts = [
+        _draft(11, "interest", amount=D("5")),
+        _draft(12, "buy", asset_id=ASSET_ID, quantity=D("100"), price=D("20")),
+    ]
+
+    with pytest.raises(ImportCommitRejectedError) as exc_info:
+        service.record_many_core(drafts, 1, 7, import_batch_id=9)
+
+    error = exc_info.value
+    assert (error.row_number, error.code) == (12, "IMPORT_COMMIT_REJECTED")
+    assert error.reason_code == "INSUFFICIENT_CASH"
+    assert error.status_code == 400
+
+
+def test_revert_deletes_the_batch_operations_and_rebuilds(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    history = _history()
+    imported = [_stored("interest", id=3, amount=D("5"), edited_at=None)]
+    operation_repo.list_by_import_batch.return_value = imported
+    operation_repo.list_by_portfolio.return_value = history[:1]
+    portfolio_repo.get_owned.return_value = _portfolio()
+    position_repo.list_by_portfolio.return_value = []
+
+    service.revert_import_batch_core(9, 1, 7)
+
+    operation_repo.delete.assert_called_once_with(imported[0])
+    portfolio_repo.update.assert_called_once()
+
+
+def test_revert_refuses_when_an_operation_was_edited_and_deletes_nothing(
+    service: OperationService, operation_repo: MagicMock
+) -> None:
+    operation_repo.list_by_import_batch.return_value = [
+        _stored("interest", id=3, amount=D("5"), edited_at=None),
+        _stored("fee", id=4, amount=D("1"), edited_at=WHEN),
+    ]
+
+    with pytest.raises(ImportBatchHasEditsError) as exc_info:
+        service.revert_import_batch_core(9, 1, 7)
+
+    assert exc_info.value.operation_ids == [4]
+    assert exc_info.value.code == "IMPORT_BATCH_HAS_EDITS"
+    operation_repo.delete.assert_not_called()
+
+
+# --- preview_state ---
+
+
+def test_preview_state_replays_history_with_drafts_and_stores_nothing(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    operation_repo.list_by_portfolio.return_value = [
+        _stored("deposit", id=1, amount=D("1000"))
+    ]
+
+    state = service.preview_state(1, 7, [_draft(11, "interest", amount=D("5"))])
+
+    assert state.cash_balance == D("1005")
+    portfolio_repo.update.assert_not_called()
+    operation_repo.create.assert_not_called()
+
+
+def test_preview_state_reports_a_history_the_ledger_refuses(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    operation_repo.list_by_portfolio.return_value = []
+
+    with pytest.raises(OperationRejectedError):
+        service.preview_state(1, 7, [_draft(11, "fee", amount=D("5"))])
+
+
+def test_record_many_core_with_no_drafts_stores_nothing(
+    service: OperationService, portfolio_repo: MagicMock, operation_repo: MagicMock
+) -> None:
+    assert service.record_many_core([], 1, 7, import_batch_id=9) == []
+
+    operation_repo.create_many.assert_not_called()
+    portfolio_repo.update.assert_not_called()
+
+
+# --- dividends_without_position ---
+
+
+def test_a_dividend_after_the_position_was_closed_is_refused_the_others_not(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    operation_repo.list_by_portfolio.return_value = [
+        _stored(
+            "deposit",
+            id=1,
+            amount=D("1000"),
+            operation_date=datetime(2026, 1, 1, tzinfo=UTC),
+        ),
+    ]
+    day = lambda n: datetime(2026, 1, n, tzinfo=UTC)  # noqa: E731
+    drafts = [
+        OperationDraft(
+            10, "buy", day(2), asset_id=ASSET_ID, quantity=D("2"), price=D("10")
+        ),
+        OperationDraft(11, "dividend", day(3), asset_id=ASSET_ID, amount=D("1")),
+        OperationDraft(
+            12, "sell", day(4), asset_id=ASSET_ID, quantity=D("2"), price=D("10")
+        ),
+        OperationDraft(13, "dividend", day(5), asset_id=ASSET_ID, amount=D("1")),
+    ]
+
+    assert service.dividends_without_position(1, 7, drafts) == {13}
+
+
+def test_replay_for_dividends_stops_quietly_at_another_refusal(
+    service: OperationService, portfolio_repo: MagicMock, operation_repo: MagicMock
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    operation_repo.list_by_portfolio.return_value = []
+    drafts = [
+        _draft(1, "fee", amount=D("5")),
+        _draft(2, "dividend", asset_id=ASSET_ID, amount=D("1")),
+    ]
+
+    assert service.dividends_without_position(1, 7, drafts) == set()
+
+
+def test_preview_names_the_draft_row_the_ledger_refused(
+    service: OperationService, portfolio_repo: MagicMock, operation_repo: MagicMock
+) -> None:
+    portfolio_repo.get_owned.return_value = _portfolio()
+    operation_repo.list_by_portfolio.return_value = []
+    drafts = [_draft(4, "deposit", amount=D("5")), _draft(9, "fee", amount=D("50"))]
+
+    with pytest.raises(OperationRejectedError) as exc_info:
+        service.preview_state(1, 7, drafts)
+
+    assert exc_info.value.row_number == 9
+
+
+def test_the_dividend_replay_books_a_refused_dividend_as_income(
+    service: OperationService, portfolio_repo: MagicMock, operation_repo: MagicMock
+) -> None:
+    """Its cash pays for the buy after it; without it the replay would stop at
+    the buy and never see the dividends further on."""
+    portfolio_repo.get_owned.return_value = _portfolio()
+    operation_repo.list_by_portfolio.return_value = []
+    day = lambda n: datetime(2026, 1, n, tzinfo=UTC)  # noqa: E731
+    drafts = [
+        OperationDraft(1, "deposit", day(1), amount=D("100")),
+        OperationDraft(2, "dividend", day(2), asset_id=ASSET_ID, amount=D("50")),
+        OperationDraft(
+            3, "buy", day(3), asset_id=ASSET_ID, quantity=D("1"), price=D("120")
+        ),
+        OperationDraft(
+            4, "sell", day(4), asset_id=ASSET_ID, quantity=D("1"), price=D("120")
+        ),
+        OperationDraft(5, "dividend", day(5), asset_id=ASSET_ID, amount=D("1")),
+    ]
+
+    assert service.dividends_without_position(1, 7, drafts) == {2, 5}

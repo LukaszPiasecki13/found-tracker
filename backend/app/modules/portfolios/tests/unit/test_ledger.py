@@ -481,3 +481,76 @@ def test_unknown_stored_operation_type_is_an_invalid_operation() -> None:
         OperationInput.from_operation(stored)
 
     assert exc_info.value.field == "operation_type"
+
+
+# --- Interest and fee (cash without deposits or an asset) ---
+
+
+def interest(amount: str, fee: str = "0") -> OperationInput:
+    return OperationInput(OperationType.INTEREST, amount=D(amount), fee=D(fee))
+
+
+def charge(amount: str, fee: str = "0") -> OperationInput:
+    return OperationInput(OperationType.FEE, amount=D(amount), fee=D(fee))
+
+
+def test_interest_adds_cash_and_leaves_the_deposits_alone(
+    ledger: PortfolioLedger,
+) -> None:
+    state = ledger.apply(ledger.apply(LedgerState(), deposit("100")), interest("0.18"))
+
+    assert state.cash_balance == D("100.18")
+    assert state.total_deposited == D("100")
+    assert state.positions == ()
+
+
+def test_fee_takes_cash_and_leaves_the_deposits_alone(ledger: PortfolioLedger) -> None:
+    state = ledger.apply(ledger.apply(LedgerState(), deposit("100")), charge("0.04"))
+
+    assert state.cash_balance == D("99.96")
+    assert state.total_deposited == D("100")
+
+
+def test_fee_beyond_the_cash_is_rejected(ledger: PortfolioLedger) -> None:
+    with pytest.raises(InsufficientCashError):
+        ledger.apply(cash("1"), charge("1.5"))
+
+
+@pytest.mark.parametrize("amount", ["0", "-1"])
+def test_interest_and_fee_need_a_positive_amount(
+    ledger: PortfolioLedger, amount: str
+) -> None:
+    with pytest.raises(InvalidOperationError):
+        ledger.apply(cash("10"), interest(amount))
+    with pytest.raises(InvalidOperationError):
+        ledger.apply(cash("10"), charge(amount))
+
+
+@pytest.mark.parametrize("operation_type", [OperationType.INTEREST, OperationType.FEE])
+def test_interest_and_fee_take_no_asset(
+    ledger: PortfolioLedger, operation_type: OperationType
+) -> None:
+    operation = OperationInput(operation_type, asset_id=ASSET, amount=D("1"))
+
+    with pytest.raises(AssetNotAllowedError):
+        ledger.apply(cash("10"), operation)
+
+
+def test_rebuild_with_interest_and_fee_equals_applying_one_by_one(
+    ledger: PortfolioLedger,
+) -> None:
+    history = [
+        deposit("1000"),
+        buy("10", "20"),
+        interest("0.5"),
+        charge("0.1"),
+        sell("4", "25"),
+        withdrawal("100"),
+    ]
+    state = LedgerState()
+    for operation in history:
+        state = ledger.apply(state, operation)
+
+    assert ledger.rebuild(history) == state
+    assert state.cash_balance == D("1000") - D("200") + D("0.4") + D("100") - D("100")
+    assert state.total_deposited == D("900")

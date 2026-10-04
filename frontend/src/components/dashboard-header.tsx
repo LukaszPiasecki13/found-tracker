@@ -74,7 +74,7 @@ export default function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
           <Tabs value={getTabValue()} sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' } }}>
             <Tab label="Dashboard" component={RouterLink} to="/" />
-            <Tab label="Portfele" />
+            <Tab label="Portfele" component={RouterLink} to="/" />
             <Tab label="Operacje" component={RouterLink} to="/operations" />
             <Tab label="Analizy" />
           </Tabs>

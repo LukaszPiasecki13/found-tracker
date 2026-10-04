@@ -52,6 +52,8 @@ const OperationsTable: React.FC<OperationsTableProps> = ({ operations, isLoading
       deposit: 'Wpłata',
       withdrawal: 'Wypłata',
       dividend: 'Dywidenda',
+      interest: 'Odsetki',
+      fee: 'Opłata',
     };
     return labels[type] || type;
   };
@@ -63,6 +65,8 @@ const OperationsTable: React.FC<OperationsTableProps> = ({ operations, isLoading
       deposit: 'info',
       withdrawal: 'error',
       dividend: 'primary',
+      interest: 'info',
+      fee: 'warning',
     };
     return colors[type] || 'default';
   };

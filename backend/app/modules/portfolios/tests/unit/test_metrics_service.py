@@ -400,3 +400,26 @@ def test_market_data_service_satisfies_the_price_port(
     )
 
     assert body.root["assets"] == {"AAA": [48.0, 50.0]}
+
+
+def test_interest_and_fee_move_cash_and_profit_but_not_the_net_deposits(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    operations = [
+        _op("deposit", _at(1), amount="1000"),
+        _op("interest", _at(2), amount="5"),
+        _op("fee", _at(3), amount="2"),
+    ]
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(
+        1,
+        _query(
+            '["net_deposits_vector", "free_cash_vector", "profit_vector"]',
+            end="2025-01-03",
+        ),
+    )
+
+    assert body.root["net_deposits_vector"] == [1000.0, 1000.0, 1000.0]
+    # The ledger's cash: 1000, + 5 interest, - 2 charge.
+    assert body.root["free_cash_vector"] == [1000.0, 1005.0, 1003.0]
+    assert body.root["profit_vector"] == [0.0, 5.0, 3.0]

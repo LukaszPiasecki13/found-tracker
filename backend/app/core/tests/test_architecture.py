@@ -20,6 +20,7 @@ Lives in `core/tests/` (cross-cutting, not owned by one business module - see
 
 import ast
 import re
+import sys
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[2]
@@ -643,3 +644,89 @@ def test_modules_do_not_depend_on_each_other_in_a_cycle() -> None:
     cycle = _find_cycle(_module_dependency_graph())
 
     assert cycle is None, "module dependency cycle: " + " -> ".join(cycle or [])
+
+
+# --- Import parsers (ADR-0018): port in core/, adapters in infrastructure/ ---
+
+_IMPORT_PARSERS_DIR = APP_ROOT / "infrastructure" / "import_parsers"
+_IMPORT_PORT = APP_ROOT / "core" / "import_parser.py"
+# What an import adapter may use: the standard library, `openpyxl`, `app.core`.
+_ADAPTER_THIRD_PARTY = frozenset({"openpyxl"})
+
+
+def _top_level_imports(names: set[str]) -> set[str]:
+    return {name.split(".")[0] for name in names}
+
+
+def _disallowed_adapter_imports(names: set[str]) -> list[str]:
+    """Imports an import adapter must not have: anything that is neither the
+    standard library, `openpyxl`, `app.core` nor its own package."""
+    return sorted(
+        name
+        for name in names
+        if name.split(".")[0] not in sys.stdlib_module_names | _ADAPTER_THIRD_PARTY
+        and name != "app"
+        and not name.startswith(("app.core", "app.infrastructure.import_parsers"))
+    )
+
+
+def _imports_openpyxl(names: set[str]) -> bool:
+    return "openpyxl" in _top_level_imports(names)
+
+
+def test_the_import_adapter_detectors_catch_every_form() -> None:
+    def names(source: str) -> set[str]:
+        return _imported_names(ast.parse(source))
+
+    assert _disallowed_adapter_imports(
+        names("from app.modules.assets.services import AssetService")
+    )
+    assert _disallowed_adapter_imports(names("import requests"))
+    assert _disallowed_adapter_imports(names("from sqlalchemy import select"))
+    assert not _disallowed_adapter_imports(
+        names(
+            "from app.core.import_parser import ParsedRow\nfrom zipfile import ZipFile"
+        )
+    )
+    assert not _disallowed_adapter_imports(names("from openpyxl import load_workbook"))
+    assert _imports_openpyxl(names("from openpyxl.utils import get_column_letter"))
+    assert not _imports_openpyxl(names("import openpyxl_stubs_not_it"))
+
+
+def test_import_adapters_use_only_stdlib_openpyxl_and_core() -> None:
+    """An adapter knows no module, repository or ORM: parsing bytes into rows is
+    all it does (ADR-0018); mapping to assets is `ImportService`'s job."""
+    files = _iter_py_files(_IMPORT_PARSERS_DIR)
+
+    violations = [
+        f"{_relative(py_file)}: imports {name}"
+        for py_file in files
+        for name in _disallowed_adapter_imports(_imported_names(_parse(py_file)))
+    ]
+
+    assert files, f"No adapters found under {_IMPORT_PARSERS_DIR}"
+    assert not violations, "\n".join(violations)
+
+
+def test_the_import_port_is_free_of_modules_and_infrastructure() -> None:
+    names = _imported_names(_parse(_IMPORT_PORT))
+
+    forbidden = sorted(
+        name for name in names if name.startswith(("app.modules", "app.infrastructure"))
+    )
+
+    assert not forbidden, f"core/import_parser.py imports {forbidden}"
+
+
+def test_openpyxl_is_imported_only_by_the_import_adapters() -> None:
+    """Production code only: a test may build a workbook to feed a parser."""
+    violations = [
+        _relative(py_file)
+        for py_file in _iter_py_files(APP_ROOT)
+        if not py_file.is_relative_to(_IMPORT_PARSERS_DIR)
+        and _imports_openpyxl(_imported_names(_parse(py_file)))
+    ]
+
+    assert not violations, "openpyxl imported outside import_parsers/:\n" + "\n".join(
+        violations
+    )

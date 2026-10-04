@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,7 +26,7 @@ class Operation(Base):
     """A recorded event - the source of truth a portfolio's state derives from.
 
     `operation_type` holds an `OperationType` value (buy, sell, deposit,
-    withdrawal, dividend).
+    withdrawal, dividend, interest, fee).
     """
 
     __tablename__ = "portfolios_operation"
@@ -54,6 +55,22 @@ class Operation(Base):
     )
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Import provenance (ADR-0020): the source's own id, the batch the operation
+    # came from, and when the user last changed it by hand.
+    external_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    import_batch_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "portfolios_import_batch.id",
+            ondelete="SET NULL",
+            name="fk_operation_import_batch_id",
+        ),
+        nullable=True,
+        index=True,
+    )
+    edited_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     operation_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
@@ -66,4 +83,11 @@ class Operation(Base):
 
     __table_args__ = (
         Index("ix_operation_portfolio_date", "portfolio_id", "operation_date"),
+        Index(
+            "uq_operation_portfolio_external_ref",
+            "portfolio_id",
+            "external_ref",
+            unique=True,
+            postgresql_where=text("external_ref IS NOT NULL"),
+        ),
     )

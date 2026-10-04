@@ -39,3 +39,6 @@ __pycache__/
 !.env.example
 *.pem
 *.key
+
+# Pipeline artifacts
+/.tmp/

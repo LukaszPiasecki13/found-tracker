@@ -9,12 +9,16 @@ harmless.
 
 from sqlalchemy.orm import Session
 
+from app.core.import_parser import ImportParser
+from app.infrastructure.import_parsers import XtbParser
 from app.modules.assets import wiring as assets_wiring
 from app.modules.portfolios.domain import PortfolioLedger, PortfolioValuator
+from app.modules.portfolios.repositories.imports import ImportRepository
 from app.modules.portfolios.repositories.operations import OperationRepository
 from app.modules.portfolios.repositories.portfolios import PortfolioRepository
 from app.modules.portfolios.repositories.positions import PositionRepository
 from app.modules.portfolios.services.fx import FxMapBuilder, FxRateService
+from app.modules.portfolios.services.imports import ImportService
 from app.modules.portfolios.services.metrics import MetricsService
 from app.modules.portfolios.services.operations import OperationService
 from app.modules.portfolios.services.portfolios import PortfolioService
@@ -65,6 +69,22 @@ def build_operation_service(session: Session) -> OperationService:
         OperationRepository(session),
         assets_wiring.build_asset_service(session),
         build_portfolio_ledger(),
+    )
+
+
+def build_import_parsers() -> tuple[ImportParser, ...]:
+    """The registry of import sources: a new bank is a new adapter listed here
+    (`ImportService` picks the first parser whose `sniff` accepts the file)."""
+    return (XtbParser(),)
+
+
+def build_import_service(session: Session) -> ImportService:
+    return ImportService(
+        ImportRepository(session),
+        build_operation_service(session),
+        assets_wiring.build_asset_service(session),
+        build_portfolio_service(session),
+        build_import_parsers(),
     )
 
 

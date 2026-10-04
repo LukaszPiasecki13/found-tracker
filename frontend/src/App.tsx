@@ -13,6 +13,8 @@ import PocketHistoryPage from "./pages/PocketHistoryPage"
 import PocketChartsPage from "./pages/PocketChartsPage"
 import PocketComparisonPage from "./pages/PocketComparisonPage"
 import OperationsPage from "./pages/OperationsPage"
+import ImportPage from "./pages/ImportPage"
+import ImportBatchPage from "./pages/ImportBatchPage"
 
 
 function App() {
@@ -92,7 +94,29 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
+            <Route
+              path="/import"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <ImportPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/portfolios/:portfolioId/imports/:batchId"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <ImportBatchPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

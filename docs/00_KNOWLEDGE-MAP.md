@@ -82,6 +82,7 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`assets`](./technical/backend/04_assets_module.md) | `backend/app/modules/assets/**` — waluty, klasy, walory, dane rynkowe |
 | [`portfolios`](./technical/backend/05_portfolios_module.md) | `backend/app/modules/portfolios/**` — portfele, pozycje, operacje, metryki |
 | [wiring i entrypointy](./technical/backend/06_wiring_i_entrypointy.md) | `backend/app/modules/*/{wiring,entrypoints,dependencies}.py`, `main.py` |
+| [import danych](./technical/backend/07_import.md) | port `core/import_parser.py`, adaptery `infrastructure/import_parsers/**`, `portfolios/services/imports.py`, `portfolios/api/imports.py` |
 
 ### Frontend
 

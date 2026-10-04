@@ -1,7 +1,7 @@
 ---
 id: be-portfolios-module
 status: current
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-03
 type: mixed
 scope: backend/portfolios
 applies_to:
@@ -10,7 +10,7 @@ applies_to:
 
 # Moduł `portfolios`
 
-Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłata, dywidenda) oraz metryki i wektory portfela do wykresów. Słownik: [`CONTEXT.md`](../../business/CONTEXT.md). Logika biznesowa pochodzi z dawnej aplikacji Django, usuniętej w R-13 (ADR-0009, usunięty); jej zachowanie chronią testy parytetu. Jedyny moduł z warstwą `domain/` ([ADR-0005](../adr/0005-warstwa-domeny.md)).
+Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłata, dywidenda, odsetki, opłata) oraz metryki i wektory portfela do wykresów. Słownik: [`CONTEXT.md`](../../business/CONTEXT.md). Logika biznesowa pochodzi z dawnej aplikacji Django, usuniętej w R-13 (ADR-0009, usunięty); jej zachowanie chronią testy parytetu. Jedyny moduł z warstwą `domain/` ([ADR-0005](../adr/0005-warstwa-domeny.md)).
 
 ## 1. Model danych
 
@@ -18,7 +18,9 @@ Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłat
 |---|---|---|
 | `portfolios_portfolio` | `Portfolio` | `owner_id`, `name` (unikalna per właściciel), `base_currency_id`, `cash_balance` `(18,3)`, `total_deposited` `(18,3)`, `is_active` |
 | `portfolios_position` | `Position` | `portfolio_id`, `asset_id` (unikalna para), `quantity` `(18,9)`, `average_buy_price` `(18,9)`, `average_fx_rate` `(18,9)`, `total_fees` `(18,2)`, `total_dividends` `(18,2)`, `opened_at` |
-| `portfolios_operation` | `Operation` | `portfolio_id`, `asset_id?`, `operation_type` (wartość `OperationType`), `quantity`, `price`, `amount?` `(18,2)`, `fee` `(18,2)`, `fx_rate`, `notes?`, `operation_date` |
+| `portfolios_operation` | `Operation` | `portfolio_id`, `asset_id?`, `operation_type` (wartość `OperationType`), `quantity`, `price`, `amount?` `(18,2)`, `fee` `(18,2)`, `fx_rate`, `notes?`, `operation_date`, `external_ref?` (id w źródle importu; częściowo unikalny z `portfolio_id`), `import_batch_id?`, `edited_at?` (ustawiane przy ręcznej zmianie pola) |
+| `portfolios_import_batch` | `ImportBatch` | paczka importu: `owner_id`, `portfolio_id`, `parser_id`, `filename`, `sha256` (unikalny per właściciel), `file`, `status`, `payload` — [`07_import.md`](./07_import.md) |
+| `portfolios_import_row` | `ImportRow` | wiersz paczki: `row_number`, `row_status`, `payload`, `dedup_key`, `asset_id?`, `operation_id?` |
 
 Modele w stylu `Mapped[...]`/`mapped_column`; kwoty i ilości to `Numeric` ↔ `Decimal` ([ADR-0010](../adr/0010-decimal-i-precyzja-pieniedzy.md)). **Pozycja i saldo są pochodnymi Operacji** — edycja lub usunięcie operacji odtwarza je z historii. Kolumny `Numeric` zaokrąglają przy zapisie: to jedyna granica zaokrąglenia stanu (domena liczy bez zaokrągleń).
 
@@ -51,6 +53,7 @@ Wszystkie reguły liczbowe są w `PortfolioLedger` (§4); router i schematy ich 
 - **Kupno:** walor, `quantity > 0`, `price > 0`, `fee ≥ 0`, `fx_rate > 0`; koszt `(ilość × cena + opłata) × fx_rate` musi się mieścić w saldzie (równość dozwolona). Średnia cena (w walucie waloru, z opłatą) `(q₀·śr₀ + q·cena + opłata) / (q₀ + q)`; średni kurs ważony ilością `(q₀·fx₀ + q·fx) / (q₀ + q)`; `total_fees += opłata`.
 - **Sprzedaż:** walor, te same znaki co kupno; pozycja musi istnieć i mieć dość ilości; wpływ `(ilość × cena − opłata) × fx_rate`; średnie bez zmian (średnia ważona, nie FIFO); `total_fees += opłata`; pozycja o ilości 0 jest usuwana.
 - **Wpłata / wypłata:** bez waloru, `amount > 0`, `fee ≥ 0`. Wpłata: saldo `+= amount − fee`, `total_deposited += amount`. Wypłata: `amount + fee` musi się mieścić w saldzie; saldo `-= amount + fee`, `total_deposited -= amount`.
+- **Odsetki / opłata** (`interest`, `fee`): bez waloru, `amount > 0`, `fee ≥ 0`; **nie ruszają `total_deposited`**. Odsetki: saldo `+= amount − fee`. Opłata (np. podatek od odsetek): `amount + fee` musi się mieścić w saldzie; saldo `-= amount + fee`. W metrykach odsetki są ujemnym kosztem, opłata kosztem — `free_cash` zgadza się z saldem księgi. Pochodzą z importu ([`07_import.md`](./07_import.md)); frontend jeszcze ich nie zna.
 - **Dywidenda:** walor z otwartą pozycją, `amount > 0`, `fee ≥ 0`, `fx_rate > 0`; `total_dividends += amount`, saldo `+= (amount − fee) × fx_rate`.
 - **`amount` przy kupnie i sprzedaży** jest informacyjny (frontend wysyła `ilość × cena ± opłata`) — zapisywany, nieczytany przez księgę.
 - **Rejestracja operacji** (`POST`): księga stosuje operację do **bieżącego** stanu (salda i pozycji z bazy), niezależnie od `operation_date`.
@@ -82,7 +85,7 @@ Reguły z §3 i wycena to czysta arytmetyka na `Decimal` — `portfolios/domain/
 
 | Poziom | Plik | Zawartość |
 |---|---|---|
-| 0 — słownik | `enums.py` | `OperationType` (`StrEnum`: buy, sell, deposit, withdrawal, dividend); `ASSET_OPERATIONS`, `CASH_OPERATIONS`, `TRADE_OPERATIONS` |
+| 0 — słownik | `enums.py` | `OperationType` (`StrEnum`: buy, sell, deposit, withdrawal, dividend, interest, fee), `ImportStatus`, `ImportRowStatus`; `ASSET_OPERATIONS`, `CASH_OPERATIONS`, `INCOME_COST_OPERATIONS`, `TRADE_OPERATIONS` |
 | 0 — słownik | `errors.py` | `PortfolioDomainError(ValueError)` z klasowym `code`; podklasy `InvalidOperationError` (z `field`), `AssetRequiredError`, `AssetNotAllowedError`, `InsufficientCashError`, `InsufficientQuantityError`, `PositionNotFoundError` |
 | 1 — granica ORM | `protocols.py` | `Protocol`y (DOM-8): `OperationLike`, `PositionLike`, `PortfolioBalanceLike`, `HoldingLike`, `QuotedAssetLike`, `ValuedPortfolioLike` — wiersze ORM spełniają je strukturalnie |
 | 2 — komponent | `ledger.py` | `PortfolioLedger`: `validate(op)`, `apply(state, op) -> LedgerState`, `rebuild(ops) -> LedgerState`; wartości `OperationInput`, `PositionState`, `LedgerState` (`LedgerState.of(portfolio, positions)`, `OperationInput.from_operation(row)`) |
@@ -116,7 +119,8 @@ Odpowiedź `PortfolioVectorsResponse` to `RootModel[dict[str, list[datetime] | l
 |---|---|
 | `PortfolioService(portfolio_repo, currency_service, valuator, fx_map_builder)` | `list_summaries(owner_id, name=None)`, `get_detail(portfolio_id, owner_id)`, `get_owned(portfolio_id, owner_id)`, `get_owned_by_name(owner_id, name)`, `create(data, owner_id)`, `update(portfolio_id, data, owner_id)`, `delete(portfolio_id, owner_id)` |
 | `PositionService(portfolio_service, position_repo, market_data, valuator, fx_map_builder)` | `list_valued(owner_id, portfolio_name)` |
-| `OperationService(portfolio_repo, position_repo, operation_repo, asset_service, ledger)` | `list_operations(owner_id, portfolio_name=None)`, `record(data, owner_id)`, `update(operation_id, data, owner_id)`, `delete(operation_id, owner_id)` — orkiestrator operacji wielomodułowej |
+| `OperationService(portfolio_repo, position_repo, operation_repo, asset_service, ledger)` | `list_operations(owner_id, portfolio_name=None)`, `record(data, owner_id)`, `update(operation_id, data, owner_id)`, `delete(operation_id, owner_id)` — orkiestrator operacji wielomodułowej; dla importu rdzenie bez commitu `record_many_core`, `revert_import_batch_core` oraz `preview_state`, `existing_external_refs` |
+| `ImportService(import_repo, operation_service, asset_service, portfolio_service, parsers)` | `list_batches`, `get_detail`, `upload`, `confirm`, `revert` — [`07_import.md`](./07_import.md) |
 | `MetricsService(operation_repo, prices)` | `portfolio_vectors(owner_id, query)` |
 
 Zależności zewnętrzne: `assets` (`CurrencyService`, `AssetService`, `MarketDataService`) wyłącznie przez serwisy składane `assets_wiring.build_*` ([ADR-0006](../adr/0006-cross-module-wylacznie-przez-serwisy.md)); `core_data` tylko przez `get_current_user`.

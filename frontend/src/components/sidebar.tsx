@@ -23,6 +23,7 @@ import {
   AccountBalance as PocketIcon,
   SwapHoriz as OperationsIcon,
   CompareArrows as CompareIcon,
+  CloudUpload as ImportIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -35,6 +36,7 @@ interface SidebarProps {
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { text: 'Operacje', icon: <OperationsIcon />, path: '/operations' },
+  { text: 'Import', icon: <ImportIcon />, path: '/import' },
   { text: 'Porównaj portfele', icon: <CompareIcon />, path: '/compare' },
 ];
 

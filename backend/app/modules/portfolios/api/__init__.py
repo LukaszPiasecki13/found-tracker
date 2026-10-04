@@ -7,6 +7,7 @@ first, although `{portfolio_id:int}` would not capture them anyway.
 from fastapi import APIRouter
 
 from app.modules.portfolios.api.fx_rates import router as fx_rates_router
+from app.modules.portfolios.api.imports import router as imports_router
 from app.modules.portfolios.api.metrics import router as metrics_router
 from app.modules.portfolios.api.operations import router as operations_router
 from app.modules.portfolios.api.portfolios import router as portfolios_router
@@ -16,11 +17,13 @@ router = APIRouter()
 router.include_router(fx_rates_router)
 router.include_router(positions_router)
 router.include_router(operations_router)
+router.include_router(imports_router)
 router.include_router(metrics_router)
 router.include_router(portfolios_router)
 
 __all__ = [
     "fx_rates_router",
+    "imports_router",
     "metrics_router",
     "operations_router",
     "portfolios_router",

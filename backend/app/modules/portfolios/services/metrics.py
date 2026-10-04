@@ -113,7 +113,8 @@ def _net_deposit_change(operation: Operation) -> Decimal:
 def _transaction_cost_change(operation: Operation) -> Decimal:
     """What the operation cost, in the portfolio's currency like the ledger's
     cash: a buy its price and fee, a sell gives back its proceeds net of the fee,
-    a dividend costs its fee, a cash operation its fee."""
+    a dividend costs its fee, a cash operation its fee; interest is a negative
+    cost (its amount less the fee) and a charge costs its amount and fee."""
     fx_rate = operation.fx_rate
     match operation.operation_type:
         case OperationType.BUY:
@@ -122,6 +123,10 @@ def _transaction_cost_change(operation: Operation) -> Decimal:
             return -(operation.quantity * operation.price - operation.fee) * fx_rate
         case OperationType.DIVIDEND:
             return operation.fee * fx_rate
+        case OperationType.INTEREST:
+            return -(operation.amount or _ZERO) + operation.fee
+        case OperationType.FEE:
+            return (operation.amount or _ZERO) + operation.fee
     return operation.fee
 
 

@@ -7,9 +7,17 @@ its message and `code` (ADR-0007). Violations of the ledger's rules come from
 `OperationRejectedError` with the domain's own `code`.
 """
 
+from collections.abc import Sequence
+
 from fastapi import status
 
-from app.core.errors import APIError, BadRequestError, ConflictError, NotFoundError
+from app.core.errors import (
+    APIError,
+    BadRequestError,
+    ConflictError,
+    NotFoundError,
+    ValidationException,
+)
 
 # --- Not found (404): the resource does not exist or is not the caller's ---
 
@@ -88,6 +96,10 @@ class OperationRejectedError(BadRequestError):
 
     def __init__(self, message: str, code: str) -> None:
         super().__init__(message, code=code)
+        # Set by `OperationService._rebuild`: the operation the ledger refused.
+        self.operation_id: int | None = None
+        # Set by `OperationService.preview_state`: the draft row refused.
+        self.row_number: int | None = None
 
 
 # --- Bad request (400): portfolio vector parameters ---
@@ -144,4 +156,87 @@ class PriceDataMissingError(APIError):
             f"No price data for {ticker}",
             status.HTTP_502_BAD_GATEWAY,
             code="PRICE_DATA_MISSING",
+        )
+
+
+# --- Import (ADR-0018) ---
+
+
+class ImportBatchNotFoundError(NotFoundError):
+    """Also raised for another user's import batch."""
+
+    def __init__(self) -> None:
+        super().__init__("Import batch not found", code="IMPORT_BATCH_NOT_FOUND")
+
+
+class ImportParserUnknownError(ValidationException):
+    """No registered parser reads the uploaded file."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "The file format is not supported by any import parser",
+            code="IMPORT_PARSER_UNKNOWN",
+        )
+
+
+class ImportFileTooLargeError(APIError):
+    def __init__(self, limit_bytes: int) -> None:
+        super().__init__(
+            f"The file exceeds the {limit_bytes // (1024 * 1024)} MB import limit",
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            code="IMPORT_FILE_TOO_LARGE",
+        )
+
+
+class ImportUnresolvedRowsError(ConflictError):
+    """Rows the importer could not turn into operations block the commit."""
+
+    def __init__(self, row_numbers: Sequence[int]) -> None:
+        self.row_numbers = list(row_numbers)
+        super().__init__(
+            "Resolve or remove unrecognized rows before committing: "
+            + ", ".join(str(n) for n in self.row_numbers),
+            code="IMPORT_UNRESOLVED_ROWS",
+        )
+
+
+class ImportBatchStateInvalidError(ConflictError):
+    def __init__(self, status_value: str) -> None:
+        super().__init__(
+            f"The import batch is {status_value}; this action needs another state",
+            code="IMPORT_BATCH_STATE_INVALID",
+        )
+
+
+class ImportBatchHasEditsError(ConflictError):
+    """Reverting would discard operations the user edited by hand."""
+
+    def __init__(self, operation_ids: Sequence[int]) -> None:
+        self.operation_ids = list(operation_ids)
+        super().__init__(
+            "Operations of this import were edited: "
+            + ", ".join(str(i) for i in self.operation_ids),
+            code="IMPORT_BATCH_HAS_EDITS",
+        )
+
+
+class ImportCommitRejectedError(BadRequestError):
+    """The ledger rejected the imported history; nothing was stored."""
+
+    def __init__(self, row_number: int | None, message: str, code: str) -> None:
+        """`row_number` is `None` when the ledger refused an operation that is
+        not part of the import (the history around it is what breaks)."""
+        self.row_number = row_number
+        prefix = "" if row_number is None else f"Row {row_number}: "
+        super().__init__(prefix + message, code="IMPORT_COMMIT_REJECTED")
+        self.reason_code = code
+
+
+class ImportAlreadyUploadedError(ConflictError):
+    """The same file is already an import batch of another portfolio."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This file was already uploaded to another portfolio",
+            code="IMPORT_ALREADY_UPLOADED",
         )

@@ -35,3 +35,8 @@ def position_repo(session: MagicMock) -> MagicMock:
 @pytest.fixture
 def operation_repo(session: MagicMock) -> MagicMock:
     return _transactional_repo(session)
+
+
+@pytest.fixture
+def import_repo(session: MagicMock) -> MagicMock:
+    return _transactional_repo(session)

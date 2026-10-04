@@ -15,6 +15,7 @@ from decimal import Decimal
 from app.modules.portfolios.domain.enums import (
     ASSET_OPERATIONS,
     CASH_OPERATIONS,
+    INCOME_COST_OPERATIONS,
     OperationType,
 )
 from app.modules.portfolios.domain.errors import (
@@ -246,6 +247,21 @@ def _withdraw(state: LedgerState, operation: OperationInput) -> LedgerState:
     )
 
 
+def _interest(state: LedgerState, operation: OperationInput) -> LedgerState:
+    """Interest on free funds: cash grows, deposits stay (it is profit)."""
+    amount = _amount(operation)
+    return replace(state, cash_balance=state.cash_balance + (amount - operation.fee))
+
+
+def _charge(state: LedgerState, operation: OperationInput) -> LedgerState:
+    """A charge (e.g. tax on interest): cash shrinks, deposits stay."""
+    amount = _amount(operation)
+    total = amount + operation.fee
+    if state.cash_balance < total:
+        raise InsufficientCashError(state.cash_balance, total)
+    return replace(state, cash_balance=state.cash_balance - total)
+
+
 def _dividend(state: LedgerState, operation: OperationInput) -> LedgerState:
     asset_id = _asset_id(operation)
     amount = _amount(operation)
@@ -266,7 +282,8 @@ class PortfolioLedger:
     The single domain surface `OperationService` talks to (DOM-10), built in
     `wiring.py`. Rules: buy/sell need an asset, quantity > 0, price > 0,
     fee >= 0, fx_rate > 0; deposit/withdrawal need amount > 0, fee >= 0 and no
-    asset; dividend needs an asset, amount > 0, fee >= 0, fx_rate > 0.
+    asset; interest/fee need amount > 0, fee >= 0 and no asset (cash moves,
+    deposits do not); dividend needs an asset, amount > 0, fee >= 0, fx_rate > 0.
     """
 
     def validate(self, operation: OperationInput) -> None:
@@ -274,7 +291,10 @@ class PortfolioLedger:
         operation_type = operation.operation_type
         if operation_type in ASSET_OPERATIONS and operation.asset_id is None:
             raise AssetRequiredError(operation_type)
-        if operation_type in CASH_OPERATIONS and operation.asset_id is not None:
+        if (
+            operation_type in CASH_OPERATIONS | INCOME_COST_OPERATIONS
+            and operation.asset_id is not None
+        ):
             raise AssetNotAllowedError(operation_type)
 
         match operation_type:
@@ -283,7 +303,12 @@ class PortfolioLedger:
                 _require_positive("price", operation.price)
                 _require_non_negative("fee", operation.fee)
                 _require_positive("fx_rate", operation.fx_rate)
-            case OperationType.DEPOSIT | OperationType.WITHDRAWAL:
+            case (
+                OperationType.DEPOSIT
+                | OperationType.WITHDRAWAL
+                | OperationType.INTEREST
+                | OperationType.FEE
+            ):
                 _require_positive("amount", operation.amount)
                 _require_non_negative("fee", operation.fee)
             case OperationType.DIVIDEND:
@@ -307,6 +332,10 @@ class PortfolioLedger:
                 return _withdraw(state, operation)
             case OperationType.DIVIDEND:
                 return _dividend(state, operation)
+            case OperationType.INTEREST:
+                return _interest(state, operation)
+            case OperationType.FEE:
+                return _charge(state, operation)
 
     def rebuild(self, operations: Iterable[OperationInput]) -> LedgerState:
         """Fold a whole history, already in chronological order

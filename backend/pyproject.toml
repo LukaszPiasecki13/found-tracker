@@ -66,7 +66,16 @@ module = [
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["jose", "jose.*", "yfinance", "yfinance.*", "pandas", "pandas.*"]
+module = [
+    "jose",
+    "jose.*",
+    "yfinance",
+    "yfinance.*",
+    "pandas",
+    "pandas.*",
+    "openpyxl",
+    "openpyxl.*",
+]
 ignore_missing_imports = true
 
 # FastAPI route handlers: response contract is `response_model=` on the decorator,

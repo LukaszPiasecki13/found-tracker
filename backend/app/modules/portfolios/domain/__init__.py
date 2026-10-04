@@ -21,7 +21,10 @@ variant (a) keeps them in `services/metrics.py`.
 from app.modules.portfolios.domain.enums import (
     ASSET_OPERATIONS,
     CASH_OPERATIONS,
+    INCOME_COST_OPERATIONS,
     TRADE_OPERATIONS,
+    ImportRowStatus,
+    ImportStatus,
     OperationType,
 )
 from app.modules.portfolios.domain.errors import (
@@ -49,10 +52,13 @@ from app.modules.portfolios.domain.valuation import (
 __all__ = [
     "ASSET_OPERATIONS",
     "CASH_OPERATIONS",
+    "INCOME_COST_OPERATIONS",
     "TRADE_OPERATIONS",
     "AssetNotAllowedError",
     "AssetRequiredError",
     "FxMap",
+    "ImportRowStatus",
+    "ImportStatus",
     "InsufficientCashError",
     "InsufficientQuantityError",
     "InvalidOperationError",

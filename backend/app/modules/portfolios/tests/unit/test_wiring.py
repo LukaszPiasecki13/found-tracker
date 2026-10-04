@@ -10,6 +10,7 @@ from app.modules.portfolios.services import (
     PortfolioService,
     PositionService,
 )
+from app.modules.portfolios.services.imports import ImportService
 
 
 def test_builders_assemble_every_service_on_one_session() -> None:
@@ -49,3 +50,17 @@ def test_domain_components_are_built_and_injected() -> None:
     assert isinstance(
         wiring.build_portfolio_service(session)._valuator, PortfolioValuator
     )
+
+
+def test_import_service_is_assembled_with_the_parser_registry() -> None:
+    session = MagicMock()
+
+    imports = wiring.build_import_service(session)
+
+    assert isinstance(imports, ImportService)
+    assert imports._imports.session is session
+    assert isinstance(imports._operations, OperationService)
+    assert isinstance(imports._assets, AssetService)
+    assert isinstance(imports._portfolios, PortfolioService)
+    assert [parser.parser_id for parser in imports._parsers] == ["xtb"]
+    assert [p.parser_id for p in wiring.build_import_parsers()] == ["xtb"]
