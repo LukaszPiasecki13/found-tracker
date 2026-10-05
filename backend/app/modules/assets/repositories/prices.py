@@ -4,6 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.infrastructure.sql.repository import SQLRepository
 from app.modules.assets.constants import SOURCE_MANUAL
@@ -51,6 +52,47 @@ class PriceRepository(SQLRepository):
             row.fetched_at = datetime.now().astimezone()
         self.flush()
         return row
+
+    def upsert_many(
+        self,
+        *,
+        asset_id: int,
+        currency_id: int,
+        source: str,
+        is_synthetic: bool,
+        closes: dict[date, Decimal],
+    ) -> int:
+        """Insert or overwrite many days of one asset and source in one statement
+        (the same rule as `upsert`, one round trip instead of one per day - a long
+        history written row by row outlasts the database's statement timeout).
+        Returns how many days were written."""
+        if not closes:
+            return 0
+        statement = insert(AssetPrice).values(
+            [
+                {
+                    "asset_id": asset_id,
+                    "price_date": day,
+                    "close": close,
+                    "currency_id": currency_id,
+                    "source": source,
+                    "is_synthetic": is_synthetic,
+                }
+                for day, close in closes.items()
+            ]
+        )
+        statement = statement.on_conflict_do_update(
+            constraint="uq_assets_price_asset_date_source",
+            set_={
+                "close": statement.excluded.close,
+                "currency_id": statement.excluded.currency_id,
+                "is_synthetic": statement.excluded.is_synthetic,
+                "fetched_at": func.now(),
+            },
+        )
+        self.session.execute(statement)
+        self.flush()
+        return len(closes)
 
     def delete(self, row: AssetPrice) -> None:
         self.session.delete(row)

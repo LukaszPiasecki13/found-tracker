@@ -11,6 +11,12 @@ interface PortfolioOverviewProps {
   totalProfit: number;
   investedCapital: number;
   positionsCount: number;
+  /**
+   * TEMPORARY: a value-weighted average of the portfolios' TWR, shown as an
+   * approximation. Replace with a true TWR of the combined portfolio (needs a
+   * historical FX series, see ADR-0015). `null` when no portfolio has a return.
+   */
+  returnPct?: number | null;
   isLoading?: boolean;
 }
 
@@ -19,6 +25,7 @@ export function PortfolioOverview({
   totalProfit,
   investedCapital,
   positionsCount,
+  returnPct = null,
   isLoading = false,
 }: PortfolioOverviewProps) {
   const formatCurrency = (value: number) => {
@@ -30,7 +37,9 @@ export function PortfolioOverview({
     }).format(value);
   };
 
-  const profitPercent = investedCapital > 0 ? ((totalProfit / investedCapital) * 100) : 0;
+  // TEMPORARY (see `returnPct`): until the combined TWR exists, the dashboard shows
+  // the weighted average of the portfolios' TWR, not profit over net deposits.
+  const profitPercent = returnPct ?? 0;
 
   return (
     <Box sx={{ width: '100%', py: 3 }}>
@@ -88,7 +97,13 @@ export function PortfolioOverview({
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", color: totalProfit >= 0 ? "success.main" : "error.main" }}>
                     <TrendingUpIcon sx={{ fontSize: 16, mr: 0.5 }} />
-                    <Typography variant="body2">{profitPercent >= 0 ? '+' : ''}{profitPercent.toFixed(2)}%</Typography>
+                    <Typography variant="body2">
+                      {returnPct === null ? '—' : `${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2)}%`}
+                      {' '}
+                      <Typography component="span" variant="caption" color="text.secondary">
+                        (przybliżenie TWR)
+                      </Typography>
+                    </Typography>
                   </Box>
                 </>
               )}

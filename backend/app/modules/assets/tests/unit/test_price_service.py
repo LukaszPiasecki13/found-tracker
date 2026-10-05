@@ -395,6 +395,7 @@ def test_record_closes_stores_positive_closes_and_syncs_once(
     service: PriceService, price_repo: MagicMock
 ) -> None:
     asset = _asset()
+    price_repo.upsert_many.return_value = 2
     price_repo.latest_day_rows.return_value = [_row(date(2026, 10, 2), close="12")]
 
     stored = service.record_closes(
@@ -410,7 +411,14 @@ def test_record_closes_stores_positive_closes_and_syncs_once(
     )
 
     assert stored == 2
-    assert price_repo.upsert.call_count == 2
+    # One statement for the asset's days, the zero and negative closes dropped.
+    price_repo.upsert_many.assert_called_once_with(
+        asset_id=asset.id,
+        currency_id=asset.currency_id,
+        source="yahoo",
+        is_synthetic=False,
+        closes={date(2026, 10, 1): Decimal("11"), date(2026, 10, 2): Decimal("12")},
+    )
     assert asset.current_price == Decimal("12")
     price_repo.latest_day_rows.assert_called_once()
 
@@ -419,6 +427,7 @@ def test_record_closes_of_nothing_leaves_the_cache_alone(
     service: PriceService, price_repo: MagicMock
 ) -> None:
     asset = _asset(current_price=Decimal("7"))
+    price_repo.upsert_many.return_value = 0
 
     assert service.record_closes(asset, {}, source="yahoo", is_synthetic=False) == 0
 

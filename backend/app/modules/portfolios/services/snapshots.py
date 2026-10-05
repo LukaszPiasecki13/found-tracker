@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.core.market_data import MarketDataUnavailableError
 from app.modules.assets.models import Asset
 from app.modules.assets.services.market_data import MarketDataService
@@ -149,7 +151,9 @@ class SnapshotService:
                     Decimal(0),
                 )
                 index = self._builder.index_after(previous, flow, current_value)
-        except MarketDataUnavailableError, PortfolioDomainError:
+        except MarketDataUnavailableError, PortfolioDomainError, SQLAlchemyError:
+            # A failed write of the history (the database's statement timeout, a lock)
+            # must not fail the whole list: the return is simply not known now.
             logger.info(
                 "Return of portfolio %s not computed", portfolio.id, exc_info=True
             )

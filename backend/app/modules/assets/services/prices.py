@@ -230,20 +230,18 @@ class PriceService:
 
         No-commit core - transaction belongs to caller.
         """
-        stored = 0
+        storable_closes: dict[date, Decimal] = {}
         for day, raw in closes.items():
             close = storable(raw)
-            if close is None:
-                continue
-            self._prices.upsert(
-                asset_id=asset.id,
-                price_date=day,
-                close=close,
-                currency_id=asset.currency_id,
-                source=source,
-                is_synthetic=is_synthetic,
-            )
-            stored += 1
+            if close is not None:
+                storable_closes[day] = close
+        stored = self._prices.upsert_many(
+            asset_id=asset.id,
+            currency_id=asset.currency_id,
+            source=source,
+            is_synthetic=is_synthetic,
+            closes=storable_closes,
+        )
         if stored:
             self.sync_current_price(asset)
         return stored

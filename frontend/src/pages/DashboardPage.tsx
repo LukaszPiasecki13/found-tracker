@@ -20,7 +20,7 @@ export default function DashboardPage() {
   const unvaluedCount = pockets?.filter((pocket) => pocket.rate_missing === true).length ?? 0;
 
   const totalMetrics = useMemo(() => {
-    const empty = { totalValue: 0, totalDeposited: 0, totalProfit: 0, pocketCount: 0 };
+    const empty = { totalValue: 0, totalDeposited: 0, totalProfit: 0, returnPct: null, pocketCount: 0 };
     if (!pockets) return empty;
     const pocketCount = pockets.length;
     if (plnRate <= 0) return { ...empty, pocketCount };
@@ -32,10 +32,24 @@ export default function DashboardPage() {
         return total + (Number(pick(pocket)) || 0) * (baseRate / plnRate);
       }, 0);
 
+    // TEMPORARY approximation (see PortfolioOverview `returnPct`): each portfolio's
+    // TWR weighted by its current value in PLN. Portfolios without a return are left out.
+    const withReturn = valued.filter((pocket) => pocket.total_return_pct != null);
+    const weight = (pocket: Pocket) =>
+      (Number(pocket.total_value ?? pocket.cash_balance) || 0) *
+      ((Number(pocket.base_currency.exchange_rate) || 0) / plnRate);
+    const weightSum = withReturn.reduce((total, pocket) => total + weight(pocket), 0);
+    const returnPct =
+      weightSum > 0
+        ? withReturn.reduce((total, pocket) => total + weight(pocket) * Number(pocket.total_return_pct), 0) /
+          weightSum
+        : null;
+
     return {
       totalValue: sum((pocket) => pocket.total_value ?? pocket.cash_balance),
       totalDeposited: sum((pocket) => pocket.total_deposited),
       totalProfit: sum((pocket) => pocket.total_profit_loss),
+      returnPct,
       pocketCount,
     };
   }, [pockets, plnRate]);
@@ -62,6 +76,7 @@ export default function DashboardPage() {
         totalProfit={totalMetrics.totalProfit}
         investedCapital={totalMetrics.totalDeposited}
         positionsCount={totalMetrics.pocketCount}
+        returnPct={totalMetrics.returnPct}
         isLoading={isLoading}
       />
 
