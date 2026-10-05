@@ -3,7 +3,7 @@ id: adr-0015-price-and-fx-history
 status: Accepted
 type: decision
 scope: assets/price-fx-history
-last_reviewed: 2026-10-03
+last_reviewed: 2026-10-05
 ---
 
 # Ceny i kursy walut są historią w bazie (`assets_price`, `assets_fx_rate`), nieskorygowaną i z jawnym źródłem; „bieżąca cena” jest pochodną
@@ -64,4 +64,5 @@ Brakujące kursy dzienne uzupełnia `refresh-fx` ([ADR-0017](0017-zadania-w-tle-
 ## Otwarte
 
 - Walor do testu splitu; `auto_adjust` w `yfinance` 1.3.0 (E1.2).
+  - *Rozstrzygnięte 2026-10-05 (weryfikacja na DNP.WA, split 10:1 z 2025-07-31, i NVDA):* `Close` z `auto_adjust=False` jest **skorygowany o splity** (koryguje tylko dywidendy `Adj Close`), więc sam `auto_adjust=False` nie daje cen nieskorygowanych. Adapter mnoży zamknięcia przez splity późniejsze niż ich dzień (`Ticker.splits`), co przywraca ceny z dnia; test kontraktowy na walorze po splicie: `test_yahoo_provider.py`.
 - Czy lista wyceny pokazuje pozycje częściowo przy `RATE_MISSING` (E0.1).

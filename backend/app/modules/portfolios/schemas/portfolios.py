@@ -60,15 +60,21 @@ class PortfolioResponse(BaseModel):
 class PortfolioSummaryResponse(PortfolioResponse):
     """A portfolio valued at current prices (read model, ADR-0003).
 
-    Positions value, total value, profit and return are `null` with
-    `rate_missing` set when any position lacks a currency rate: a partial sum
-    would silently understate the portfolio. `total_fees` never needs a rate.
+    Positions value, total value and profit are `null` with `rate_missing` set
+    when any position lacks a currency rate: a partial sum would silently
+    understate the portfolio. `total_fees` never needs a rate.
+
+    `total_return_pct` is the cumulative time-weighted return since the first
+    operation (ADR-0004), `return_method` names how it was computed; both are
+    `null` when it cannot be told (no history of closes, an asset in another
+    currency than the portfolio's, no current valuation).
     """
 
     positions_value: RoundedValue | None
     total_value: RoundedValue | None
     total_profit_loss: RoundedValue | None
     total_return_pct: RoundedPercent | None
+    return_method: str | None = None
     total_fees: RoundedFees
     rate_missing: bool = False
 

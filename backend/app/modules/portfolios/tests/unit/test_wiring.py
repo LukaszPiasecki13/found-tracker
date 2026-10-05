@@ -1,8 +1,17 @@
 from unittest.mock import MagicMock
 
-from app.modules.assets.services import AssetService, CurrencyService, MarketDataService
+from app.modules.assets.services import (
+    AssetService,
+    CurrencyService,
+    MarketDataService,
+    PriceService,
+)
 from app.modules.portfolios import wiring
-from app.modules.portfolios.domain import PortfolioLedger, PortfolioValuator
+from app.modules.portfolios.domain import (
+    DailySnapshotBuilder,
+    PortfolioLedger,
+    PortfolioValuator,
+)
 from app.modules.portfolios.services import (
     FxMapBuilder,
     MetricsService,
@@ -11,6 +20,7 @@ from app.modules.portfolios.services import (
     PositionService,
 )
 from app.modules.portfolios.services.imports import ImportService
+from app.modules.portfolios.services.snapshots import SnapshotService
 
 
 def test_builders_assemble_every_service_on_one_session() -> None:
@@ -64,3 +74,18 @@ def test_import_service_is_assembled_with_the_parser_registry() -> None:
     assert isinstance(imports._portfolios, PortfolioService)
     assert [parser.parser_id for parser in imports._parsers] == ["xtb"]
     assert [p.parser_id for p in wiring.build_import_parsers()] == ["xtb"]
+
+
+def test_the_return_is_computed_by_a_snapshot_service_on_the_request_session() -> None:
+    session = MagicMock()
+
+    snapshots = wiring.build_portfolio_service(session)._snapshots
+
+    assert isinstance(snapshots, SnapshotService)
+    assert snapshots._portfolios.session is session
+    assert snapshots._daily.session is session
+    assert snapshots._operations.session is session
+    assert isinstance(snapshots._prices, PriceService)
+    assert isinstance(snapshots._market_data, MarketDataService)
+    assert isinstance(snapshots._builder, DailySnapshotBuilder)
+    assert isinstance(snapshots._builder._ledger, PortfolioLedger)

@@ -11,6 +11,7 @@ import {
   Chip,
   CircularProgress,
   Skeleton,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -89,8 +90,9 @@ const PocketDetailsPage: React.FC = () => {
       : (pocket.positions_value ?? null);
   const totalValue = totalPositionsValue === null ? null : cashBalance + totalPositionsValue;
   const totalProfitLoss = totalValue === null ? null : totalValue - totalDeposited;
-  const totalReturnPct =
-    totalProfitLoss === null ? null : totalDeposited === 0 ? 0 : (totalProfitLoss / totalDeposited) * 100;
+  // Time-weighted return since the first operation, computed by the backend; null when it
+  // cannot be told (no price history, an asset in another currency, no valuation).
+  const totalReturnPct = pocket.total_return_pct == null ? null : Number(pocket.total_return_pct);
 
   return (
     <Box>
@@ -194,11 +196,11 @@ const PocketDetailsPage: React.FC = () => {
                 >
                   {formatCurrency(totalProfitLoss)}
                 </Typography>
-                {totalReturnPct !== null && (
-                  <Typography variant="caption" color="text.secondary">
-                    ({totalReturnPct.toFixed(2)}%)
+                <Tooltip title="Zwrot ważony czasem: nie zależy od momentu wpłat i wypłat">
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Zwrot (TWR): {totalReturnPct === null ? '—' : `${totalReturnPct.toFixed(2)}%`}
                   </Typography>
-                )}
+                </Tooltip>
               </>
             )}
           </Paper>

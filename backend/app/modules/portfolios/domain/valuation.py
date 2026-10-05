@@ -55,7 +55,6 @@ class PortfolioValuation:
     positions_value: Decimal | None
     total_value: Decimal | None
     total_profit_loss: Decimal | None
-    total_return_pct: Decimal | None
     total_fees: Decimal
     positions: tuple[PositionValuation, ...]
     rate_missing: bool = False
@@ -105,8 +104,9 @@ class PortfolioValuator:
     """Values a portfolio and its positions - the domain surface of the
     portfolio and position read models (DOM-10), built in `wiring.py`.
 
-    Weights are relative to the total value, cash included; the profit and
-    return compare the total value with the net deposits.
+    Weights are relative to the total value, cash included; the profit compares
+    the total value with the net deposits. The portfolio's return is not here: it
+    is time-weighted and needs the daily history (`snapshots`, ADR-0004).
     """
 
     def value(
@@ -127,7 +127,6 @@ class PortfolioValuator:
                 positions_value=None,
                 total_value=None,
                 total_profit_loss=None,
-                total_return_pct=None,
                 total_fees=total_fees,
                 positions=tuple(replace(v, portfolio_weight_pct=None) for v in valued),
                 rate_missing=True,
@@ -139,7 +138,6 @@ class PortfolioValuator:
             positions_value=positions_value,
             total_value=total_value,
             total_profit_loss=profit_loss,
-            total_return_pct=_percent(profit_loss, portfolio.total_deposited),
             total_fees=total_fees,
             positions=tuple(
                 replace(v, portfolio_weight_pct=_percent(market_value, total_value))

@@ -44,7 +44,9 @@ export interface Pocket {
   total_value?: number | null;
   total_fees?: number;
   total_profit_loss?: number | null;
+  // Cumulative time-weighted return (%) since the first operation; null when it cannot be told.
   total_return_pct?: number | null;
+  return_method?: string | null;
   rate_missing?: boolean;
 }
 

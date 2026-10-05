@@ -1,7 +1,7 @@
 ---
 id: be-assets-module
 status: current
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-05
 type: mixed
 scope: backend/assets
 applies_to:
@@ -89,7 +89,7 @@ Wzorem waterworks (`core/audit.py` jako port, `infrastructure/storage/` jako ada
 | Adapter | `infrastructure/market_data/yahoo.py` | `YahooFinanceProvider` — jedyne miejsce importu `yfinance`; każdy wyjątek biblioteki/sieci → `MarketDataUnavailableError`; liczby przez `Decimal(str(x))` |
 | Wybór adaptera | `assets/wiring.py` → `build_market_data_provider()` | Testy podmieniają tę funkcję (lub wstrzykują fałszywy provider), więc żaden test nie dotyka sieci |
 
-`MarketDataService` zależy wyłącznie od portu. Dla `portfolios` wystawia `close_history(ticker, start, end)` i `current_price(ticker)` (komunikacja między modułami przez serwisy — [ADR-0006](../adr/0006-cross-module-wylacznie-przez-serwisy.md)). Adapter Yahoo nie wywołuje `history(..., auto_adjust=...)` jawnie — czy zamknięcia są nieskorygowane, nie jest zweryfikowane; do czasu weryfikacji nie importuj z niego długiej historii do `assets_price`.
+`MarketDataService` zależy wyłącznie od portu. Dla `portfolios` wystawia `close_history(ticker, start, end)` i `current_price(ticker)` (komunikacja między modułami przez serwisy — [ADR-0006](../adr/0006-cross-module-wylacznie-przez-serwisy.md)). Adapter Yahoo wywołuje `history(..., auto_adjust=False)` i **cofa korektę splitów**: `Close` w Yahoo jest dopasowany do splitów nawet przy `auto_adjust=False` (po splicie 10:1 wszystkie wcześniejsze zamknięcia są dziesięć razy niższe niż notowania z tamtego dnia; zweryfikowane na DNP.WA i NVDA, `yfinance` 1.3.0). `fetch_close_history` mnoży każde zamknięcie przez splity późniejsze niż jego dzień (z `Ticker.splits`, a gdy ich brak — z kolumny `Stock Splits` okna), więc zwraca ceny **w jednostkach danego dnia**, zgodnie z ADR-0015 („nieskorygowane”). Takie ceny nie zmieniają się, gdy później dojdzie kolejny split. Dywidendy nie korygują ceny (korekta liczyłaby wypłatę drugi raz obok operacji dywidendy). `backfill_closes(assets, start, end)` zapisuje tę historię w `assets_price` (źródło `yahoo`, `is_synthetic=false`, idempotentnie — ponowny zapis dnia nadpisuje cenę) — używa jej `portfolios` przy budowie dni TWR ([`05_portfolios_module.md` §6.1](./05_portfolios_module.md#61-zwrot-portfela-twr-i-snapshoty-dzienne)). Wiersze zapisane przed tą zmianą mają ceny skorygowane o splity; nadpisuje je kolejna budowa dni portfela, dla zakresu tej budowy. Dokładność danych dostawcy względem giełdy nie jest weryfikowana.
 
 ## 5. Serwisy (API publiczne)
 
@@ -100,7 +100,7 @@ Wzorem waterworks (`core/audit.py` jako port, `infrastructure/storage/` jako ada
 | `AssetService` | `list_assets`, `list_responses`, `get_by_id`, `get_detail`, `find_by_id`, `find_by_ticker`, `list_by_ids`, `accept_for_refresh`, `search_local_and_provider` (read model), `to_response`, `to_detail`, `create`, `update`, `delete`, `archive`, `unarchive`, `create_from_provider`; rdzeń bez commitu: `get_or_create_by_ticker(ticker, *, asset_class_name, fallback_currency_id)` |
 | `PriceService` | `find_close(asset_id, as_of)`, `latest_quotes`, `series`, `set_manual_price`, `delete_manual_price`; rdzenie bez commitu: `record_closes`, `record_manual_price_today`, `sync_current_price` |
 | `FxRateService` | `get_rate`, `history`, `set_manual_rate`; rdzenie bez commitu: `record_rate`, `record_manual_rate_to_base`, `sync_cached_rate` |
-| `MarketDataService` | `search`, `get_quote`, `current_price`, `close_history`, `refresh_asset_prices`, `refresh_currency_rates`, `data_status` |
+| `MarketDataService` | `search`, `get_quote`, `current_price`, `close_history`, `refresh_asset_prices`, `backfill_closes`, `refresh_currency_rates`, `data_status` |
 
 Rdzenie bez commitu ([ADR-0008](../adr/0008-rdzenie-bez-commitu-w-operacjach-wielomodulowych.md)) służą `portfolios` przy rejestrowaniu operacji na nowym tickerze oraz serwisom `assets` między sobą — transakcję trzyma orkiestrator.
 

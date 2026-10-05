@@ -1,7 +1,7 @@
 ---
 id: business-context
 status: current
-last_reviewed: 2026-10-03
+last_reviewed: 2026-10-04
 
 type: reference
 scope: business/vocabulary
@@ -92,6 +92,10 @@ _Unikać_: feed, notowania (zbyt ogólnie)
 **Metryki portfela**
 Wartości liczone z historii Operacji i cen w czasie: wartość portfela, koszty transakcji, wpłaty netto, wolna gotówka, zysk zrealizowany i niezrealizowany, TWR, XIRR — w postaci **wektorów** dziennych (interwał `1d`; [ADR 0004](adr/0004-metodologia-stop-zwrotu.md)). Są obliczeniami, nie danymi źródłowymi: nigdy nie zapisujemy ich jako prawdy.
 _Unikać_: statystyki, analityka (jako nazwa modułu — patrz ADR o warstwie `domain/`)
+
+**Zwrot portfela (TWR)**
+Skumulowany zwrot ważony czasem od pierwszej Operacji portfela, w procentach (`total_return_pct`, metoda `daily_pp_v1`; [ADR 0004](adr/0004-metodologia-stop-zwrotu.md)). Mnoży dzienne zwroty, więc **nie zależy od momentu wpłat i wypłat** — w odróżnieniu od dawnego „zysk / wpłaty netto”. Dni zapisuje pochodna tabela `portfolios_daily` (indeks `twr_index`); nie annualizujemy. Pusty (`null`), gdy nie da się go podać (brak cen historycznych, walor w innej walucie niż bazowa).
+_Unikać_: zwrot od wpłat netto, ROI portfela, stopa zwrotu (bez „TWR”)
 
 **Wektor portfela**
 Seria wartości metryki dla kolejnych dni w zadanym przedziale; dane do wykresów na froncie.

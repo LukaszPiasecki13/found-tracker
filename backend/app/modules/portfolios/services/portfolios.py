@@ -27,17 +27,19 @@ from app.modules.portfolios.schemas.portfolios import (
 )
 from app.modules.portfolios.services.fx import FxMapBuilder
 from app.modules.portfolios.services.mappers import position_response
+from app.modules.portfolios.services.snapshots import SnapshotService, TwrResult
 
 
 def _summary_fields(
-    portfolio: Portfolio, valuation: PortfolioValuation
+    portfolio: Portfolio, valuation: PortfolioValuation, twr: TwrResult | None
 ) -> dict[str, Any]:
     return {
         **dict(PortfolioResponse.model_validate(portfolio)),
         "positions_value": valuation.positions_value,
         "total_value": valuation.total_value,
         "total_profit_loss": valuation.total_profit_loss,
-        "total_return_pct": valuation.total_return_pct,
+        "total_return_pct": twr.pct if twr is not None else None,
+        "return_method": twr.method if twr is not None else None,
         "total_fees": valuation.total_fees,
         "rate_missing": valuation.rate_missing,
     }
@@ -49,7 +51,9 @@ class PortfolioService:
 
     The read models value positions at the asset prices and currency rates
     stored in `assets` (refreshing them is `PositionService`'s job); a position
-    whose currency has no rate is reported as `rate_missing`, not valued.
+    whose currency has no rate is reported as `rate_missing`, not valued. Their
+    return is the time-weighted one (ADR-0004) from `SnapshotService`; `null`
+    when it cannot be computed.
     """
 
     def __init__(
@@ -58,11 +62,13 @@ class PortfolioService:
         currency_service: CurrencyService,
         valuator: PortfolioValuator,
         fx_map_builder: FxMapBuilder,
+        snapshot_service: SnapshotService,
     ) -> None:
         self._repo = portfolio_repo
         self._currencies = currency_service
         self._valuator = valuator
         self._fx = fx_map_builder
+        self._snapshots = snapshot_service
 
     # --- Reads ---
 
@@ -87,8 +93,9 @@ class PortfolioService:
         summaries = []
         for portfolio in portfolios:
             valuation = self._valuator.value(portfolio, portfolio.positions, fx_rates)
+            twr = self._snapshots.twr(portfolio, valuation.total_value)
             summaries.append(
-                PortfolioSummaryResponse(**_summary_fields(portfolio, valuation))
+                PortfolioSummaryResponse(**_summary_fields(portfolio, valuation, twr))
             )
         return summaries
 
@@ -99,8 +106,9 @@ class PortfolioService:
         positions = list(portfolio.positions)
         fx_rates = self._fx.build([portfolio.base_currency_id])
         valuation = self._valuator.value(portfolio, positions, fx_rates)
+        twr = self._snapshots.twr(portfolio, valuation.total_value)
         return PortfolioDetailResponse(
-            **_summary_fields(portfolio, valuation),
+            **_summary_fields(portfolio, valuation, twr),
             positions=[
                 position_response(position, position_valuation)
                 for position, position_valuation in zip(

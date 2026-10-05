@@ -33,6 +33,7 @@ DOMAIN_LAYERS = {
     "errors": 0,
     "protocols": 1,
     "ledger": 2,
+    "snapshots": 2,
     "valuation": 2,
 }
 

@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Numeric,
@@ -41,6 +42,10 @@ class Portfolio(Base):
     total_deposited: Mapped[Decimal] = mapped_column(
         Numeric(18, 3), nullable=False, default=Decimal("0")
     )
+
+    # Days from this one on are out of date in `portfolios_daily` (ADR-0016);
+    # `None`: the stored days are current.
+    dirty_from: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(

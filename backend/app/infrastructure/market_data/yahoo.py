@@ -60,14 +60,27 @@ class YahooFinanceProvider:
     def fetch_close_history(
         self, ticker: str, start: date, end: date
     ) -> dict[date, Decimal]:
+        """Daily closes for `start <= day < end` in the units of each day.
+
+        Yahoo's `Close` is adjusted for splits even with `auto_adjust=False` (only
+        dividends are left alone): after a 10:1 split every earlier close is a tenth
+        of what the stock traded at. A ledger holds the quantities of the day, so
+        each close is multiplied back by the splits that came after it - the raw
+        price, which also never changes when a later split happens (ADR-0015)."""
         try:
-            frame = yf.Ticker(ticker).history(start=start, end=end, interval="1d")
+            handle = yf.Ticker(ticker)
+            # `auto_adjust=False`: a dividend-adjusted close would count a payout
+            # twice next to the dividend operation.
+            frame = handle.history(
+                start=start, end=end, interval="1d", auto_adjust=False
+            )
+            if frame is None or frame.empty or "Close" not in frame.columns:
+                return {}
+            splits = self._splits(handle, frame)
         except Exception as exc:
             raise MarketDataUnavailableError(
                 f"Could not fetch price history for {ticker}"
             ) from exc
-        if frame is None or frame.empty or "Close" not in frame.columns:
-            return {}
 
         closes: dict[date, Decimal] = {}
         for stamp, value in frame["Close"].items():
@@ -77,8 +90,33 @@ class YahooFinanceProvider:
             # `end` is exclusive by contract, whatever the library returns.
             if close is None or not isinstance(day, date) or not start <= day < end:
                 continue
+            for split_day, ratio in splits:
+                if split_day > day:
+                    close *= ratio
             closes[day] = close
         return closes
+
+    @staticmethod
+    def _splits(handle: Any, frame: Any) -> list[tuple[date, Decimal]]:
+        """Every split the provider knows as (day, ratio new:old). From the whole
+        splits series - the requested window may end before a later one; the
+        window's own `Stock Splits` column is the fallback when that fails."""
+        try:
+            series = handle.splits
+        except Exception:
+            series = None
+        if series is None or len(series) == 0:
+            if frame is None or "Stock Splits" not in getattr(frame, "columns", ()):
+                return []
+            column = frame["Stock Splits"]
+            series = column[column > 0]
+        splits: list[tuple[date, Decimal]] = []
+        for stamp, value in series.items():
+            ratio = _to_decimal(value)
+            day = stamp.date() if isinstance(stamp, datetime) else stamp
+            if ratio is not None and ratio > 0 and isinstance(day, date):
+                splits.append((day, ratio))
+        return splits
 
     @staticmethod
     def _info(symbol: str) -> dict[str, Any]:

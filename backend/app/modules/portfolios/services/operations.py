@@ -41,6 +41,7 @@ from app.modules.portfolios.schemas.operations import (
     OperationCreateRequest,
     OperationUpdateRequest,
 )
+from app.modules.portfolios.services.snapshots import operation_day
 
 # `OperationUpdateRequest` fields that are NOT NULL columns: `null` = unchanged.
 _NULLABLE_UPDATE_FIELDS = frozenset({"notes"})
@@ -230,7 +231,7 @@ class OperationService:
                 notes=data.notes,
                 operation_date=data.operation_date,
             )
-            self._rebuild(portfolio.id, owner_id)
+            self._rebuild(portfolio.id, owner_id, data.operation_date)
             return operation
 
     def record_many_core(
@@ -268,7 +269,9 @@ class OperationService:
         ]
         created = self._operation_repo.create_many(operations)
         try:
-            self._rebuild(portfolio_id, owner_id)
+            self._rebuild(
+                portfolio_id, owner_id, *(draft.operation_date for draft in drafts)
+            )
         except OperationRejectedError as err:
             rows = {
                 op.id: draft.row_number
@@ -293,9 +296,10 @@ class OperationService:
         edited = [op.id for op in operations if op.edited_at is not None]
         if edited:
             raise ImportBatchHasEditsError(edited)
+        dates = [operation.operation_date for operation in operations]
         for operation in operations:
             self._operation_repo.delete(operation)
-        self._rebuild(portfolio_id, owner_id)
+        self._rebuild(portfolio_id, owner_id, *dates)
 
     def update(
         self, operation_id: int, data: OperationUpdateRequest, owner_id: int
@@ -311,12 +315,15 @@ class OperationService:
         with self._operation_repo.transaction():
             operation = self._operation_repo.get_owned(operation_id, owner_id)
             self._portfolio_repo.lock_owned(operation.portfolio_id, owner_id)
+            old_date = operation.operation_date
             if any(getattr(operation, f) != v for f, v in values.items()):
                 # A hand edit protects the operation from an import revert.
                 operation.edited_at = datetime.now(UTC)
             apply_changes(operation, values)
             operation = self._operation_repo.update(operation)
-            self._rebuild(operation.portfolio_id, owner_id)
+            self._rebuild(
+                operation.portfolio_id, owner_id, old_date, operation.operation_date
+            )
             return operation
 
     def delete(self, operation_id: int, owner_id: int) -> None:
@@ -326,9 +333,10 @@ class OperationService:
         with self._operation_repo.transaction():
             operation = self._operation_repo.get_owned(operation_id, owner_id)
             portfolio_id = operation.portfolio_id
+            deleted_date = operation.operation_date
             self._portfolio_repo.lock_owned(portfolio_id, owner_id)
             self._operation_repo.delete(operation)
-            self._rebuild(portfolio_id, owner_id)
+            self._rebuild(portfolio_id, owner_id, deleted_date)
 
     # --- Helpers ---
 
@@ -362,10 +370,17 @@ class OperationService:
             raise AssetArchivedError
         return asset.id
 
-    def _rebuild(self, portfolio_id: int, owner_id: int) -> None:
+    def _rebuild(self, portfolio_id: int, owner_id: int, *changed: datetime) -> None:
         """Replay the portfolio's history (`operation_date`, `created_at`, `id`)
-        and store the resulting state."""
+        and store the resulting state. `changed` are the dates of the operations
+        this write added, edited or removed: the portfolio's stored daily rows
+        from the earliest of them on are stale (ADR-0016) - marked here, in the
+        same transaction, and rebuilt on the next read of the return."""
         portfolio = self._portfolio_repo.get_owned(portfolio_id, owner_id)
+        if changed:
+            earliest = min(operation_day(moment) for moment in changed)
+            if portfolio.dirty_from is None or earliest < portfolio.dirty_from:
+                portfolio.dirty_from = earliest
         history = self._operation_repo.list_by_portfolio(portfolio_id)
         replaying: list[int] = []
 

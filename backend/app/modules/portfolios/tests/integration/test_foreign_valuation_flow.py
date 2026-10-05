@@ -176,7 +176,11 @@ def test_foreign_positions_are_valued_at_cross_rates(
     assert detail["positions_value"] == 8620
     assert detail["total_value"] == 11570
     assert detail["total_profit_loss"] == 1570
-    assert detail["total_return_pct"] == 15.7
+    # Quoted in other currencies than the portfolio's and never priced: valued at
+    # the last trade (price and rate), so nothing moved since the buys: 0%, named
+    # as the approximation it is.
+    assert detail["total_return_pct"] == 0
+    assert detail["return_method"] == "daily_pp_v1+last_trade+trade_fx"
     assert by_asset[eur_asset.id]["portfolio_weight_pct"] == round(
         4320 / 11570 * 100, 4
     )

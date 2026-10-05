@@ -199,6 +199,7 @@ def test_list_returns_valued_summaries_as_numbers(services: Services) -> None:
             total_value=D("2033.5"),
             total_profit_loss=D("1033.5"),
             total_return_pct=D("103.35"),
+            return_method="daily_pp_v1",
             total_fees=D("1.5"),
         )
     ]
@@ -226,6 +227,7 @@ def test_list_returns_valued_summaries_as_numbers(services: Services) -> None:
         "total_value": 2033.5,
         "total_profit_loss": 1033.5,
         "total_return_pct": 103.35,
+        "return_method": "daily_pp_v1",
         "total_fees": 1.5,
         "rate_missing": False,
     }

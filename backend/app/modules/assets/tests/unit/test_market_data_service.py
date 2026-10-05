@@ -212,6 +212,63 @@ def test_refresh_asset_prices_of_nothing_updates_nothing(
     assert service.refresh_asset_prices([]) == 0
 
 
+# --- backfill_closes ---
+
+
+def test_backfill_closes_stores_each_assets_provider_history_once(
+    service: MarketDataService,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+    session: MagicMock,
+) -> None:
+    apple = SimpleNamespace(id=1, ticker="AAPL")
+    provider.history["AAPL"] = {
+        date(2026, 1, 1): Decimal("10"),
+        date(2026, 1, 2): Decimal("11"),
+        date(2026, 1, 3): Decimal("12"),
+    }
+
+    stored = service.backfill_closes([apple, apple], date(2026, 1, 1), date(2026, 1, 3))
+
+    assert stored == 1  # `record_closes` is mocked: one call, one stored
+    prices.record_closes.assert_called_once_with(
+        apple,
+        {date(2026, 1, 1): Decimal("10"), date(2026, 1, 2): Decimal("11")},
+        source="yahoo",
+        is_synthetic=False,
+    )
+    assert provider.calls.count(("history", "AAPL")) == 1
+    session.commit.assert_called_once()
+
+
+def test_backfill_closes_stores_nothing_when_the_provider_fails_for_any_asset(
+    service: MarketDataService,
+    provider: FakeMarketDataProvider,
+    prices: MagicMock,
+    session: MagicMock,
+) -> None:
+    apple = SimpleNamespace(id=1, ticker="AAPL")
+    broken = SimpleNamespace(id=2, ticker="BRKN")
+    provider.history["AAPL"] = {date(2026, 1, 1): Decimal("10")}
+    provider.failing.add("BRKN")
+
+    with pytest.raises(MarketDataUnavailableError):
+        service.backfill_closes([apple, broken], date(2026, 1, 1), date(2026, 1, 3))
+
+    prices.record_closes.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_backfill_closes_skips_an_asset_the_provider_has_no_history_for(
+    service: MarketDataService, prices: MagicMock
+) -> None:
+    unknown = SimpleNamespace(id=3, ticker="GONE")
+
+    assert service.backfill_closes([unknown], date(2026, 1, 1), date(2026, 1, 3)) == 0
+
+    prices.record_closes.assert_not_called()
+
+
 # --- refresh_currency_rates ---
 
 

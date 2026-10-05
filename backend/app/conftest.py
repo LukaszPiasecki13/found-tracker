@@ -2,12 +2,18 @@
 
 Safety: integration tests write to the database, so they must never run against a
 shared or production one. The target is `TEST_DATABASE_URL`; without it,
-`DATABASE_URL` is accepted only when it points at a local host - otherwise the
-integration tests are skipped. Each integration
-test runs inside a transaction that is rolled back, so nothing is left behind.
+`DATABASE_URL` is accepted when it points at a local host, or when it is a shared
+database and `TEST_SCHEMA` names a schema of its own: the tests then run with
+`search_path` pinned to that schema (no fallback to `public`), which is refused if
+it is `public` or `PRODUCTION_SCHEMA`. Otherwise the integration tests are skipped.
+Each integration test runs inside a transaction that is rolled back, so nothing is
+left behind. Prepare a test schema once:
+`alembic -x db_schema=<TEST_SCHEMA> upgrade head`, then
+`DATABASE_SCHEMA=<TEST_SCHEMA> python -m seed.seed` (reference data the tests need).
 """
 
 import os
+import re
 import secrets
 import string
 from collections.abc import Generator
@@ -31,26 +37,48 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "postgres"}
 _UNIT_ONLY_DATABASE_URL = "postgresql+psycopg2://unit:unit@localhost:5432/unit_only"
 
 
-def _resolve_test_database_url() -> tuple[str, bool]:
-    """Pick the test database and say whether it is safe for integration tests.
+def _test_schema() -> str | None:
+    """The schema the integration tests are confined to, when `TEST_SCHEMA` is set
+    and is not the production one (`PRODUCTION_SCHEMA`, default `public`)."""
+    schema = (os.environ.get("TEST_SCHEMA") or "").strip()
+    if not schema:
+        return None
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
+        raise RuntimeError(f"TEST_SCHEMA is not a valid schema name: {schema!r}")
+    production = (os.environ.get("PRODUCTION_SCHEMA") or "public").strip()
+    if schema.lower() in {"public", production.lower()}:
+        raise RuntimeError(
+            f"TEST_SCHEMA={schema!r} is the production schema; tests need their own"
+        )
+    return schema
+
+
+def _resolve_test_database() -> tuple[str, str | None, bool]:
+    """Pick the test database and schema and say whether they are safe for
+    integration tests.
 
     Without a disposable database (no `TEST_DATABASE_URL`, and `DATABASE_URL`
-    missing or not local) the run is unit-only: a placeholder URL is used and
-    integration tests are skipped, so `pytest -m "not integration"` needs no
-    database at all.
+    missing or not local, with no `TEST_SCHEMA` to confine the tests to) the run is
+    unit-only: a placeholder URL is used and integration tests are skipped, so
+    `pytest -m "not integration"` needs no database at all.
     """
+    schema = _test_schema()
     explicit = os.environ.get("TEST_DATABASE_URL")
     if explicit:
-        return explicit, True
+        return explicit, schema, True
     url = os.environ.get("DATABASE_URL")
     if url and make_url(url).host in _LOCAL_HOSTS:
-        return url, True
-    return _UNIT_ONLY_DATABASE_URL, False
+        return url, schema, True
+    if url and schema:
+        return url, schema, True
+    return _UNIT_ONLY_DATABASE_URL, None, False
 
 
 # Settings read the environment at import time, so this must precede `app.*`.
-_DATABASE_URL, _DATABASE_IS_SAFE = _resolve_test_database_url()
+_DATABASE_URL, _TEST_SCHEMA, _DATABASE_IS_SAFE = _resolve_test_database()
 os.environ["DATABASE_URL"] = _DATABASE_URL
+if _TEST_SCHEMA:
+    os.environ["DATABASE_SCHEMA"] = _TEST_SCHEMA
 os.environ.setdefault("ENVIRONMENT", "test")
 
 import app.infrastructure.sql.models_registry
@@ -99,6 +127,13 @@ def integration_session() -> Generator[Session]:
     engine = create_engine(get_settings().database_url, pool_pre_ping=True)
     connection = engine.connect()
     outer = connection.begin()
+    if engine.dialect.name == "postgresql":
+        # Only the test schema, no fallback to `public`; local to the outer
+        # transaction, so it also holds through a transaction-mode pooler.
+        schema_sql = engine.dialect.identifier_preparer.quote(
+            get_settings().database_schema
+        )
+        connection.exec_driver_sql(f"SET LOCAL search_path TO {schema_sql}")
     session = Session(
         bind=connection,
         expire_on_commit=False,
@@ -182,7 +217,10 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Mark tests by directory so `-m "not integration"` skips database tests;
     without a safe database, integration tests are skipped."""
     no_database = pytest.mark.skip(
-        reason="No disposable database: set TEST_DATABASE_URL (or a local DATABASE_URL)"
+        reason=(
+            "No disposable database: set TEST_DATABASE_URL, a local DATABASE_URL "
+            "or TEST_SCHEMA"
+        )
     )
     for item in items:
         parts = item.path.parts

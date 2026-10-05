@@ -1,7 +1,7 @@
 ---
 id: be-portfolios-module
 status: current
-last_reviewed: 2026-10-04
+last_reviewed: 2026-10-05
 type: mixed
 scope: backend/portfolios
 applies_to:
@@ -16,7 +16,8 @@ Serce aplikacji: portfele, pozycje, operacje (kupno, sprzedaż, wpłata, wypłat
 
 | Tabela | Encja | Kluczowe pola |
 |---|---|---|
-| `portfolios_portfolio` | `Portfolio` | `owner_id`, `name` (unikalna per właściciel), `base_currency_id`, `cash_balance` `(18,3)`, `total_deposited` `(18,3)`, `is_active` |
+| `portfolios_portfolio` | `Portfolio` | `owner_id`, `name` (unikalna per właściciel), `base_currency_id`, `cash_balance` `(18,3)`, `total_deposited` `(18,3)`, `dirty_from?` (data, od której wiersze `portfolios_daily` są nieaktualne), `is_active` |
+| `portfolios_daily` | `PortfolioDaily` | pochodna Operacji i cen ([ADR-0016](../adr/0016-snapshoty-dzienne-i-przebudowa.md)): PK `(portfolio_id, day)`, `value`, `cash`, `inflow`, `outflow` `(18,3)`, `r_day`, `twr_index` `(24,12)` — [§6.1](#61-zwrot-portfela-twr-i-snapshoty-dzienne) |
 | `portfolios_position` | `Position` | `portfolio_id`, `asset_id` (unikalna para), `quantity` `(18,9)`, `average_buy_price` `(18,9)`, `average_fx_rate` `(18,9)`, `total_fees` `(18,2)`, `total_dividends` `(18,2)`, `opened_at` |
 | `portfolios_operation` | `Operation` | `portfolio_id`, `asset_id?`, `operation_type` (wartość `OperationType`), `quantity`, `price`, `amount?` `(18,2)`, `fee` `(18,2)`, `fx_rate`, `notes?`, `operation_date`, `external_ref?` (id w źródle importu; częściowo unikalny z `portfolio_id`), `import_batch_id?`, `edited_at?` (ustawiane przy ręcznej zmianie pola) |
 | `portfolios_import_batch` | `ImportBatch` | paczka importu: `owner_id`, `portfolio_id`, `parser_id`, `filename`, `sha256` (unikalny per właściciel), `file`, `status`, `payload` — [`07_import.md`](./07_import.md) |
@@ -30,7 +31,7 @@ Wszystkie wymagają zalogowanego użytkownika (`get_current_user`) i działają 
 
 | Metoda i ścieżka | Odpowiedź |
 |---|---|
-| `GET /portfolios/?name=` | `PortfolioSummaryResponse[]` — portfel z polami wyliczonymi (`positions_value`, `total_value`, `total_profit_loss`, `total_return_pct`, `total_fees`) |
+| `GET /portfolios/?name=` | `PortfolioSummaryResponse[]` — portfel z polami wyliczonymi (`positions_value`, `total_value`, `total_profit_loss`, `total_return_pct` (TWR), `return_method`, `total_fees`) |
 | `POST /portfolios/` | 201, `PortfolioResponse` (encja, bez pól wyliczonych) |
 | `GET /portfolios/{id}` | `PortfolioDetailResponse` — podsumowanie + `positions` (wycenione, z `portfolio_weight_pct`) + `updated_at` |
 | `PUT`/`PATCH /portfolios/{id}` | `PortfolioResponse`; jawny `null` = „bez zmian” |
@@ -55,7 +56,7 @@ Wszystkie reguły liczbowe są w `PortfolioLedger` (§4); router i schematy ich 
 - **Wpłata / wypłata:** bez waloru, `amount > 0`, `fee ≥ 0`. Wpłata: saldo `+= amount − fee`, `total_deposited += amount`. Wypłata: `amount + fee` musi się mieścić w saldzie; saldo `-= amount + fee`, `total_deposited -= amount`.
 - **Odsetki / opłata** (`interest`, `fee`): bez waloru, `amount > 0`, `fee ≥ 0`; **nie ruszają `total_deposited`**. Odsetki: saldo `+= amount − fee`. Opłata (np. podatek od odsetek): `amount + fee` musi się mieścić w saldzie; saldo `-= amount + fee`. W metrykach odsetki są ujemnym kosztem, opłata kosztem — `free_cash` zgadza się z saldem księgi. Pochodzą z importu ([`07_import.md`](./07_import.md)); frontend jeszcze ich nie zna.
 - **Dywidenda:** walor z otwartą pozycją, `amount > 0`, `fee ≥ 0`, `fx_rate > 0`; `total_dividends += amount`, saldo `+= (amount − fee) × fx_rate`.
-- **Split:** walor z otwartą pozycją, `ratio > 0` (kolumna `portfolios_operation.ratio`, [ADR-0020](../adr/0020-plaski-model-operacji.md)); ilość `×= ratio`, średnia cena `÷= ratio`, więc koszt łączny, opłaty i dywidendy zostają, a gotówka się nie zmienia. Wykresy w czasie (`MetricsService`) skalują ilości sprzed splitu przez kolejne splity, bo ceny z dostawcy są już dopasowane do splitów.
+- **Split:** walor z otwartą pozycją, `ratio > 0` (kolumna `portfolios_operation.ratio`, [ADR-0020](../adr/0020-plaski-model-operacji.md)); ilość `×= ratio`, średnia cena `÷= ratio`, więc koszt łączny, opłaty i dywidendy zostają, a gotówka się nie zmienia. Wykresy w czasie (`MetricsService`) liczą ilość w jednostkach danego dnia (split mnoży ją od swojego dnia), a ceny z dostawcy też są w jednostkach dnia ([`04_assets_module.md` §3](./04_assets_module.md#3-reguły-biznesowe)).
 - **`amount` przy kupnie i sprzedaży** jest informacyjny (frontend wysyła `ilość × cena ± opłata`) — zapisywany, nieczytany przez księgę.
 - **Rejestracja operacji** (`POST`): księga stosuje operację do **bieżącego** stanu (salda i pozycji z bazy), niezależnie od `operation_date`.
 - **Edycja / usunięcie operacji:** przebudowa salda i pozycji z całej historii w kolejności `(operation_date, created_at, id)`. Wiersze pozycji walorów, które nadal są w portfelu, są aktualizowane w miejscu (zachowują `id` i `opened_at`); zamknięte — usuwane; nowe — tworzone. Historia, która łamie regułę (np. usunięcie wpłaty, z której opłacono kupno) → 400 z `code`, nic się nie zmienia.
@@ -98,7 +99,7 @@ Publiczne API wyłącznie przez `domain/__init__.py` (`__all__`, DOM-11). Kompon
 
 ## 5. Wycena (modele odczytowe)
 
-`PortfolioValuator` liczy dokładnie (na `Decimal`): koszt nabycia `ilość × średnia cena` (waluta waloru) i `× średni kurs` (waluta portfela); wartość rynkowa `ilość × cena bieżąca`, a gdy waluta waloru ≠ waluta bazowa portfela — `× kurs krzyżowy` z mapy `FxMap` (`(id waluty waloru, id waluty bazowej) -> rate[waloru]/rate[bazowej]`, kursy `assets` są „USD za jednostkę”; buduje ją `services/fx.py::FxMapBuilder`, domena dostaje gotową mapę); niezrealizowany wynik, zwrot %; dla portfela: wartość pozycji, wartość całkowita (z gotówką), wynik względem `total_deposited`, zwrot %, suma `total_fees` pozycji; udział pozycji względem wartości całkowitej. Dzielenie przez zero daje 0. **Brak kursu** (waluta bez notowania; `exchange_rate` równy 1 na walucie innej niż USD to wartość domyślna kolumny, nie kurs) → pola wyceny pozycji `null` + `rate_missing=true`; sumy portfela (`positions_value`, `total_value`, `total_profit_loss`, `total_return_pct`) są `null`, gdy brakuje kursu którejkolwiek pozycji (bez sum częściowych); koszty i `total_fees` nie wymagają kursu. Zaokrąglenie dopiero w schemacie odpowiedzi (typy `RoundedValue`/`RoundedPercent`/`RoundedFees` w `schemas/positions.py`): wartości 3 miejsca, procenty 4, opłaty 2, `ROUND_HALF_EVEN` (jak `round` Pythona).
+`PortfolioValuator` liczy dokładnie (na `Decimal`): koszt nabycia `ilość × średnia cena` (waluta waloru) i `× średni kurs` (waluta portfela); wartość rynkowa `ilość × cena bieżąca`, a gdy waluta waloru ≠ waluta bazowa portfela — `× kurs krzyżowy` z mapy `FxMap` (`(id waluty waloru, id waluty bazowej) -> rate[waloru]/rate[bazowej]`, kursy `assets` są „USD za jednostkę”; buduje ją `services/fx.py::FxMapBuilder`, domena dostaje gotową mapę); niezrealizowany wynik, zwrot % pozycji; dla portfela: wartość pozycji, wartość całkowita (z gotówką), wynik względem `total_deposited`, suma `total_fees` pozycji (zwrot portfela to TWR z [§6.1](#61-zwrot-portfela-twr-i-snapshoty-dzienne), nie ze stosunku do wpłat); udział pozycji względem wartości całkowitej. Dzielenie przez zero daje 0. **Brak kursu** (waluta bez notowania; `exchange_rate` równy 1 na walucie innej niż USD to wartość domyślna kolumny, nie kurs) → pola wyceny pozycji `null` + `rate_missing=true`; sumy portfela (`positions_value`, `total_value`, `total_profit_loss`) są `null`, gdy brakuje kursu którejkolwiek pozycji (bez sum częściowych); koszty i `total_fees` nie wymagają kursu. Zaokrąglenie dopiero w schemacie odpowiedzi (typy `RoundedValue`/`RoundedPercent`/`RoundedFees` w `schemas/positions.py`): wartości 3 miejsca, procenty 4, opłaty 2, `ROUND_HALF_EVEN` (jak `round` Pythona).
 
 Serwisy odczytowe zwracają DTO (`PortfolioSummaryResponse`, `PortfolioDetailResponse`, `PositionResponse` — [ADR-0003](../adr/0003-serwisy-zwracaja-encje-orm.md)); repozytoria ładują pozycje → walor → waluta/klasa zapytaniami `selectinload`/`joinedload` (bez N+1) z `populate_existing`, więc odczyt w tej samej sesji po zapisie widzi świeży stan.
 
@@ -114,15 +115,30 @@ Serwisy odczytowe zwracają DTO (`PortfolioSummaryResponse`, `PortfolioDetailRes
 
 Odpowiedź `PortfolioVectorsResponse` to `RootModel[dict[str, list[datetime] | list[float] | dict[str, list[float]]]]` — ten sam JSON co przed migracją (`PocketVectorsResponse` we frontendzie).
 
+### 6.1. Zwrot portfela (TWR) i snapshoty dzienne
+
+`total_return_pct` portfela to **skumulowany zwrot ważony czasem** od pierwszej operacji ([ADR-0004](../../business/adr/0004-metodologia-stop-zwrotu.md), konwencja Portfolio Performance), `return_method` = `daily_pp_v1`. Dla dnia: `1 + r = (wartość końcowa + wypłata) / (wartość początkowa + wpłata)`; wpłata liczy się od początku dnia, wypłata od końca, przepływy jednego dnia są netowane, mianownik 0 daje `r = 0` (restart); dywidendy, odsetki i opłaty są wartością, nie przepływem. `twr_index` to iloczyn `(1 + r)`, wynik = `(twr_index − 1) × 100`. Rachunek jest w `domain/snapshots.py` (`DailySnapshotBuilder`, `Decimal`, odtwarza stan przez `PortfolioLedger`); zamknięcia i ilości z księgi są w jednostkach danego dnia (adapter cofa korektę splitów Yahoo, zarejestrowany `split` mnoży ilość), więc wycena nie zależy od tego, czy split trafił do historii portfela, gdy waloru w dniu splitu nie było.
+
+Dane dzienne trzyma `portfolios_daily` — pochodna Operacji i cen, nie źródło prawdy ([ADR-0016](../adr/0016-snapshoty-dzienne-i-przebudowa.md)). `SnapshotService` (`services/snapshots.py`) utrzymuje je **leniwie przy odczycie** (`get_detail`, `list_summaries`):
+
+- zapis operacji (`OperationService._rebuild`) tylko ustawia `portfolios_portfolio.dirty_from = min(dirty_from, data operacji)` w tej samej transakcji (dodanie, edycja — mniejsza z dat starej i nowej, usunięcie, import, cofnięcie importu);
+- odczyt, gdy `dirty_from` jest ustawione albo brakuje dni do wczoraj: dociąga zamknięcia dostawcy dla budowanych dni (`MarketDataService.backfill_closes` → `assets_price`, bez korekty o dywidendy, [ADR-0015](../adr/0015-historia-cen-i-kursow.md)), potem w transakcji z blokadą wiersza portfela kasuje wiersze od pierwszego nieaktualnego dnia i dopisuje nowe do wczoraj; **dzisiaj nie jest zapisywany** — dolicza go bieżąca wycena i dzisiejsze przepływy;
+- kolejny odczyt nie pyta dostawcy o zapisane dni.
+
+Walor, którego dostawca w ogóle nie zna (ticker z importu bez notowań w Yahoo), jest wyceniany po **cenie ostatniej transakcji** (w jednostkach danego dnia, splity ją dzielą) — to przybliżenie, więc `return_method` = `daily_pp_v1+last_trade`. Gdy taki walor jest nadal w portfelu, zwrotu nie podajemy (dzisiejsza wartość nie zgadzałaby się z wyceną po ostatniej transakcji).
+
+Gdy zwrotu nie da się podać, pole jest `null` (UI: „—”), a nic się nie zapisuje: brak operacji lub bieżącej wyceny, walor w innej walucie niż bazowa portfela (brak historycznych kursów FX), luka w zamknięciach waloru, który ma notowania, awaria dostawcy. Poza zakresem (ADR-0016): `portfolios_position_daily`, przebudowa asynchroniczna i `stale`, unieważnianie po korekcie cen wstecz (`assets_price_change`), XIRR.
+
 ## 7. Serwisy (API publiczne)
 
 | Serwis | Metody |
 |---|---|
-| `PortfolioService(portfolio_repo, currency_service, valuator, fx_map_builder)` | `list_summaries(owner_id, name=None)`, `get_detail(portfolio_id, owner_id)`, `get_owned(portfolio_id, owner_id)`, `get_owned_by_name(owner_id, name)`, `create(data, owner_id)`, `update(portfolio_id, data, owner_id)`, `delete(portfolio_id, owner_id)` |
+| `PortfolioService(portfolio_repo, currency_service, valuator, fx_map_builder, snapshot_service)` | `list_summaries(owner_id, name=None)`, `get_detail(portfolio_id, owner_id)`, `get_owned(portfolio_id, owner_id)`, `get_owned_by_name(owner_id, name)`, `create(data, owner_id)`, `update(portfolio_id, data, owner_id)`, `delete(portfolio_id, owner_id)` |
 | `PositionService(portfolio_service, position_repo, market_data, valuator, fx_map_builder)` | `list_valued(owner_id, portfolio_name)` |
 | `OperationService(portfolio_repo, position_repo, operation_repo, asset_service, ledger)` | `list_operations(owner_id, portfolio_name=None)`, `record(data, owner_id)`, `update(operation_id, data, owner_id)`, `delete(operation_id, owner_id)` — orkiestrator operacji wielomodułowej; dla importu rdzenie bez commitu `record_many_core`, `revert_import_batch_core` oraz `preview_state`, `existing_external_refs` |
 | `ImportService(import_repo, operation_service, asset_service, portfolio_service, parsers)` | `list_batches`, `get_detail`, `upload`, `confirm`, `revert` — [`07_import.md`](./07_import.md) |
 | `MetricsService(operation_repo, prices)` | `portfolio_vectors(owner_id, query)` |
+| `SnapshotService(portfolio_repo, daily_repo, operation_repo, price_service, market_data, builder)` | `twr(portfolio, current_value)` — zwrot TWR i leniwa przebudowa `portfolios_daily` ([§6.1](#61-zwrot-portfela-twr-i-snapshoty-dzienne)) |
 
 Zależności zewnętrzne: `assets` (`CurrencyService`, `AssetService`, `MarketDataService`) wyłącznie przez serwisy składane `assets_wiring.build_*` ([ADR-0006](../adr/0006-cross-module-wylacznie-przez-serwisy.md)); `core_data` tylko przez `get_current_user`.
 
@@ -131,11 +147,11 @@ Zależności zewnętrzne: `assets` (`CurrencyService`, `AssetService`, `MarketDa
 ```text
 portfolios/
 ├─ api/{portfolios,positions,operations,metrics,fx_rates}.py   # __init__.py: wspólny `router` dla main.py
-├─ services/{portfolios,positions,operations,metrics,fx}.py
-├─ domain/{enums,errors,protocols,ledger,valuation}.py # + __init__.py z __all__
-├─ repositories/{portfolios,positions,operations}.py
+├─ services/{portfolios,positions,operations,metrics,fx,snapshots}.py
+├─ domain/{enums,errors,protocols,ledger,valuation,snapshots}.py # + __init__.py z __all__
+├─ repositories/{portfolios,positions,operations,daily}.py
 ├─ schemas/{portfolios,positions,operations,metrics,fx_rates}.py
-├─ models/{portfolio,position,operation}.py
+├─ models/{portfolio,position,operation,portfolio_daily}.py
 ├─ exceptions.py  dependencies.py  wiring.py
 └─ tests/unit/        # domena (w tym parytet z Django), serwisy, API, wiring, czystość domain/
    tests/integration/ # pełny przepływ HTTP + baza, repozytoria na PostgreSQL

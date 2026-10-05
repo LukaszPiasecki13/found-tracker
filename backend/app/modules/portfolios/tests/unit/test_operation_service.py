@@ -2,7 +2,7 @@
 the real `PortfolioLedger`: one transaction per write, the ledger's verdict as
 400 + code, nothing committed on failure."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
@@ -44,6 +44,7 @@ def _portfolio(cash: str = "1000", deposited: str = "1000") -> SimpleNamespace:
         base_currency_id=3,
         cash_balance=D(cash),
         total_deposited=D(deposited),
+        dirty_from=None,
     )
 
 
@@ -966,3 +967,134 @@ def test_the_dividend_replay_books_a_refused_dividend_as_income(
     ]
 
     assert service.dividends_without_position(1, 7, drafts) == {2, 5}
+
+
+# --- dirty_from: the stored daily rows go stale (ADR-0016) ---
+
+
+def test_record_marks_the_portfolio_dirty_from_the_operation_day(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    history: list[SimpleNamespace],
+) -> None:
+    portfolio = _portfolio()
+    portfolio_repo.get_owned.return_value = portfolio
+    position_repo.list_by_portfolio.return_value = []
+
+    service.record(_request(operation_date="2026-03-05"), 7)
+
+    assert portfolio.dirty_from == date(2026, 3, 5)
+
+
+def test_a_back_dated_record_moves_dirty_from_earlier_but_a_later_one_does_not(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+) -> None:
+    portfolio = _portfolio()
+    portfolio.dirty_from = date(2026, 2, 1)
+    portfolio_repo.get_owned.return_value = portfolio
+    position_repo.list_by_portfolio.return_value = []
+
+    service.record(_request(operation_date="2026-03-05"), 7)
+    assert portfolio.dirty_from == date(2026, 2, 1)
+
+    service.record(_request(operation_date="2026-01-10"), 7)
+    assert portfolio.dirty_from == date(2026, 1, 10)
+
+
+def test_update_marks_dirty_from_the_earlier_of_the_old_and_the_new_date(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    history = _history()
+    deposit = history[0]
+    deposit.operation_date = datetime(2026, 1, 20, tzinfo=UTC)
+    history[1].operation_date = datetime(2026, 1, 25, tzinfo=UTC)
+    operation_repo.get_owned.return_value = deposit
+    operation_repo.list_by_portfolio.return_value = history
+    portfolio = _portfolio(cash="798")
+    portfolio_repo.get_owned.return_value = portfolio
+    position_repo.list_by_portfolio.return_value = [_row()]
+
+    service.update(
+        1,
+        OperationUpdateRequest(operation_date=datetime(2026, 1, 15, tzinfo=UTC)),
+        owner_id=7,
+    )
+
+    assert portfolio.dirty_from == date(2026, 1, 15)
+
+
+def test_delete_marks_dirty_from_the_deleted_operations_day(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    history = _history()
+    history[1].operation_date = datetime(2026, 4, 2, tzinfo=UTC)
+    operation_repo.get_owned.return_value = history[1]
+    operation_repo.list_by_portfolio.return_value = history[:1]
+    portfolio = _portfolio(cash="798")
+    portfolio_repo.get_owned.return_value = portfolio
+    position_repo.list_by_portfolio.return_value = [_row()]
+
+    service.delete(2, owner_id=7)
+
+    assert portfolio.dirty_from == date(2026, 4, 2)
+
+
+def test_record_many_core_marks_dirty_from_the_earliest_draft(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+) -> None:
+    portfolio = _portfolio(cash="0", deposited="0")
+    portfolio_repo.get_owned.return_value = portfolio
+    position_repo.list_by_portfolio.return_value = []
+    drafts = [
+        OperationDraft(1, "interest", datetime(2026, 2, 9, tzinfo=UTC), amount=D("5")),
+        OperationDraft(2, "interest", datetime(2026, 1, 3, tzinfo=UTC), amount=D("5")),
+    ]
+
+    service.record_many_core(drafts, 1, 7, import_batch_id=9)
+
+    assert portfolio.dirty_from == date(2026, 1, 3)
+
+
+def test_revert_marks_dirty_from_the_earliest_removed_operation(
+    service: OperationService,
+    portfolio_repo: MagicMock,
+    position_repo: MagicMock,
+    operation_repo: MagicMock,
+) -> None:
+    history = _history()
+    imported = [
+        _stored(
+            "interest",
+            id=3,
+            amount=D("5"),
+            edited_at=None,
+            operation_date=datetime(2026, 5, 6, tzinfo=UTC),
+        ),
+        _stored(
+            "interest",
+            id=4,
+            amount=D("5"),
+            edited_at=None,
+            operation_date=datetime(2026, 3, 1, tzinfo=UTC),
+        ),
+    ]
+    operation_repo.list_by_import_batch.return_value = imported
+    operation_repo.list_by_portfolio.return_value = history[:1]
+    portfolio = _portfolio()
+    portfolio_repo.get_owned.return_value = portfolio
+    position_repo.list_by_portfolio.return_value = []
+
+    service.revert_import_batch_core(9, 1, 7)
+
+    assert portfolio.dirty_from == date(2026, 3, 1)

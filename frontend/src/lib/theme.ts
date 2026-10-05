@@ -1,12 +1,18 @@
 import { createTheme } from "@mui/material/styles"
 
 export const theme = createTheme({
+  // Same breakpoints as Tailwind in waterworks-monitoring-platform: from `lg` (1024px) the
+  // sidebar is a static column, below it a drawer.
+  breakpoints: {
+    values: { xs: 0, sm: 640, md: 768, lg: 1024, xl: 1280 },
+  },
   palette: {
     mode: "light",
+    // Teal accent (brand-500/600/700 from waterworks `styles/tokens.css`).
     primary: {
-      main: "#1976d2",
-      light: "#42a5f5",
-      dark: "#1565c0",
+      main: "#0a7a6f",
+      light: "#0d9b91",
+      dark: "#085d57",
     },
     secondary: {
       main: "#9c27b0",
@@ -24,13 +30,14 @@ export const theme = createTheme({
       dark: "#c62828",
     },
     background: {
-      default: "#f5f5f5",
+      default: "#f9fafb",
       paper: "#ffffff",
     },
     text: {
-      primary: "#1a1a1a",
-      secondary: "#666666",
+      primary: "#111827",
+      secondary: "#4b5563",
     },
+    divider: "#e5e7eb",
   },
   typography: {
     fontFamily: "var(--font-geist-sans), system-ui, sans-serif",

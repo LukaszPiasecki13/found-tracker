@@ -140,7 +140,6 @@ def test_one_position_without_a_rate_nulls_the_portfolio_totals() -> None:
     assert valuation.positions_value is None
     assert valuation.total_value is None
     assert valuation.total_profit_loss is None
-    assert valuation.total_return_pct is None
     assert valuation.total_fees == D("3.5")
     priced, unpriced = valuation.positions
     assert priced.market_value == D("250")
@@ -163,7 +162,6 @@ def test_portfolio_totals_include_cash_and_compare_with_net_deposits() -> None:
     assert valuation.positions_value == D("250") + D("720")
     assert valuation.total_value == D("1220")
     assert valuation.total_profit_loss == D("220")
-    assert valuation.total_return_pct == D("22")
     assert valuation.total_fees == D("3.5")
     assert [p.portfolio_weight_pct for p in valuation.positions] == [
         D("250") / D("1220") * 100,
@@ -193,7 +191,6 @@ def test_golden_portfolio_in_pln_with_eur_usd_and_pln_positions() -> None:
     assert valuation.positions_value == D("8620")
     assert valuation.total_value == D("9620")
     assert valuation.total_profit_loss == D("-380")
-    assert valuation.total_return_pct == D("-3.8")
     assert [p.portfolio_weight_pct for p in valuation.positions] == [
         D("4320") / D("9620") * 100,
         D("4000") / D("9620") * 100,
@@ -208,7 +205,6 @@ def test_zero_denominators_give_zero_percentages() -> None:
 
     assert valuation.positions[0].return_pct == 0
     assert valuation.positions[0].portfolio_weight_pct == 0
-    assert valuation.total_return_pct == 0
     assert valuation.total_value == 0
 
 
@@ -219,7 +215,6 @@ def test_empty_portfolio_is_its_cash() -> None:
     assert valuation.positions_value == 0
     assert valuation.total_value == D("100")
     assert valuation.total_profit_loss == D("20")
-    assert valuation.total_return_pct == D("25")
     assert valuation.total_fees == 0
     assert valuation.rate_missing is False
 

@@ -18,6 +18,7 @@ from app.modules.portfolios.schemas.portfolios import (
     PortfolioUpdateRequest,
 )
 from app.modules.portfolios.services.portfolios import PortfolioService
+from app.modules.portfolios.services.snapshots import TwrResult
 
 D = Decimal
 NOW = datetime(2026, 1, 2, tzinfo=UTC)
@@ -98,10 +99,23 @@ def fx_builder() -> MagicMock:
 
 
 @pytest.fixture
+def snapshots() -> MagicMock:
+    """`SnapshotService`: the time-weighted return is its business, not this one's."""
+    snapshots = MagicMock()
+    snapshots.twr.return_value = TwrResult(D("12.3456"))
+    return snapshots
+
+
+@pytest.fixture
 def service(
-    portfolio_repo: MagicMock, currencies: MagicMock, fx_builder: MagicMock
+    portfolio_repo: MagicMock,
+    currencies: MagicMock,
+    fx_builder: MagicMock,
+    snapshots: MagicMock,
 ) -> PortfolioService:
-    return PortfolioService(portfolio_repo, currencies, PortfolioValuator(), fx_builder)
+    return PortfolioService(
+        portfolio_repo, currencies, PortfolioValuator(), fx_builder, snapshots
+    )
 
 
 def _integrity_error() -> IntegrityError:
@@ -281,7 +295,10 @@ def test_delete_removes_and_commits(
 
 
 def test_list_summaries_values_each_portfolio_and_rounds_at_the_boundary(
-    service: PortfolioService, portfolio_repo: MagicMock, fx_builder: MagicMock
+    service: PortfolioService,
+    portfolio_repo: MagicMock,
+    fx_builder: MagicMock,
+    snapshots: MagicMock,
 ) -> None:
     fx_builder.build.return_value = {(2, 1): D("3.9")}
     usd = _currency(2, rate="999")
@@ -298,7 +315,11 @@ def test_list_summaries_values_each_portfolio_and_rounds_at_the_boundary(
     assert summary.positions_value == D("493.900")  # 493.8999 -> 3 places
     assert summary.total_value == D("593.900")
     assert summary.total_profit_loss == D("193.900")
-    assert summary.total_return_pct == D("48.4750")
+    # The return is the snapshots' time-weighted one, valued at the total value.
+    assert summary.total_return_pct == D("12.3456")
+    assert summary.return_method == "daily_pp_v1"
+    [call] = snapshots.twr.call_args_list
+    assert call.args[1] == D("593.8999")
     assert summary.total_fees == D("1.75")
     assert summary.rate_missing is False
     assert summary.base_currency.id == 1
@@ -371,9 +392,13 @@ def test_get_detail_builds_the_rate_map_for_the_portfolio_currency(
 
 
 def test_get_detail_flags_a_position_whose_currency_has_no_rate(
-    service: PortfolioService, portfolio_repo: MagicMock, fx_builder: MagicMock
+    service: PortfolioService,
+    portfolio_repo: MagicMock,
+    fx_builder: MagicMock,
+    snapshots: MagicMock,
 ) -> None:
     fx_builder.build.return_value = {}
+    snapshots.twr.return_value = None
     gbp = _currency(4)
     positions = [
         _position(1, "2", "40", "50", _currency()),
@@ -388,6 +413,9 @@ def test_get_detail_flags_a_position_whose_currency_has_no_rate(
     assert detail.total_value is None
     assert detail.total_profit_loss is None
     assert detail.total_return_pct is None
+    assert detail.return_method is None
+    # No total value to value the return at.
+    assert snapshots.twr.call_args.args[1] is None
     priced, unpriced = detail.positions
     assert priced.rate_missing is False
     assert priced.market_value == D("100.000")

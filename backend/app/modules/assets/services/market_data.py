@@ -160,6 +160,30 @@ class MarketDataService:
             self._asset_repo.flush()
         return stored
 
+    def backfill_closes(self, assets: Iterable[Asset], start: date, end: date) -> int:
+        """Store the provider's daily closes of each asset for `start <= day < end`
+        in the history (idempotent: the same day and source overwrites); returns
+        how many were stored. Closes are fetched before the transaction opens, so
+        call it outside one - it commits. Raises MarketDataUnavailableError (nothing
+        is stored then)."""
+        fetched: list[tuple[Asset, dict[date, Decimal]]] = []
+        seen: set[int] = set()
+        for asset in assets:
+            if asset.id in seen:
+                continue
+            seen.add(asset.id)
+            closes = self._provider.fetch_close_history(asset.ticker, start, end)
+            if closes:
+                fetched.append((asset, closes))
+        stored = 0
+        with self._asset_repo.transaction():
+            for asset, closes in fetched:
+                stored += self._prices.record_closes(
+                    asset, closes, source=SOURCE_YAHOO, is_synthetic=False
+                )
+            self._asset_repo.flush()
+        return stored
+
     def list_currency_codes(self) -> list[str]:
         """Codes of every stored currency, by code."""
         return [currency.code for currency in self._currency_repo.list_all()]

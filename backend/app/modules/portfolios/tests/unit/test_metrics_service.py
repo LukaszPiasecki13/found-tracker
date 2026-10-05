@@ -427,14 +427,14 @@ def test_interest_and_fee_move_cash_and_profit_but_not_the_net_deposits(
     assert body.root["profit_vector"] == [0.0, 5.0, 3.0]
 
 
-def test_a_split_scales_the_quantity_held_before_it(
+def test_a_split_multiplies_the_quantity_from_its_day_on(
     operation_repo: MagicMock, prices: FakePrices
 ) -> None:
-    """The provider's closes are already adjusted for the split, so the 2 shares
-    bought before the 10:1 split are valued as the 20 they became."""
+    """Closes are in the units of their day: 100-ish before the 10:1 split, 10-ish
+    from its day; the 2 shares bought before it become 20."""
     prices.history["AAA"] = {
-        date(2025, 1, 2): D("10"),
-        date(2025, 1, 3): D("10.5"),
+        date(2025, 1, 2): D("100"),
+        date(2025, 1, 3): D("105"),
         date(2025, 1, 4): D("11"),
     }
     operations = [

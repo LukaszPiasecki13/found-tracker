@@ -207,24 +207,24 @@ class _VectorCalculator:
 
     def _value_vector(self, ticker: str, operations: Iterable[Operation]) -> Vector:
         ordered = sorted(operations, key=lambda op: _naive_utc(op.operation_date))
-        splits = [
-            (_naive_utc(op.operation_date), op.ratio or _ONE)
-            for op in ordered
-            if op.operation_type == OperationType.SPLIT
-        ]
+        return self._quantity_vector(ordered) * self._close_vector(ticker)
 
-        def adjusted_change(operation: Operation) -> Decimal:
-            # The provider's closes are adjusted for splits to today's units, so a
-            # trade's quantity is scaled by every split that came after it.
-            when = _naive_utc(operation.operation_date)
-            factor = _ONE
-            for split_date, ratio in splits:
-                if split_date > when:
-                    factor *= ratio
-            return _quantity_change(operation) * factor
-
-        quantity = self._running_total(ordered, adjusted_change)
-        return quantity * self._close_vector(ticker)
+    def _quantity_vector(self, ordered: Sequence[Operation]) -> Vector:
+        """The quantity held each day, in the units of that day: a buy or sell
+        moves it, a split multiplies it from its day on. The closes are in the
+        units of their day too (the provider adapter undoes Yahoo's split
+        adjustment), so quantity x close is the value."""
+        vector = self.zeros()
+        total = _ZERO
+        for operation in ordered:
+            if operation.operation_type == OperationType.SPLIT:
+                total *= operation.ratio or _ONE
+            else:
+                total += _quantity_change(operation)
+            index = self._day_index(operation)
+            if index < self.length:
+                vector[index:] = float(total)
+        return vector
 
     def _trades(self) -> list[Operation]:
         return [

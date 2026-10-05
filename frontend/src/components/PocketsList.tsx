@@ -182,7 +182,7 @@ const PocketsList: React.FC = () => {
                           >
                             {formatCurrency(Number(pocket.total_profit_loss) || 0, pocket.base_currency?.code)}
                             {pocket.total_return_pct != null && (
-                              <> ({Number(pocket.total_return_pct).toFixed(2)}%)</>
+                              <> (TWR {Number(pocket.total_return_pct).toFixed(2)}%)</>
                             )}
                           </Typography>
                         </Box>

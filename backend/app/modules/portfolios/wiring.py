@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 from app.core.import_parser import ImportParser
 from app.infrastructure.import_parsers import XtbParser
 from app.modules.assets import wiring as assets_wiring
-from app.modules.portfolios.domain import PortfolioLedger, PortfolioValuator
+from app.modules.portfolios.domain import (
+    DailySnapshotBuilder,
+    PortfolioLedger,
+    PortfolioValuator,
+)
+from app.modules.portfolios.repositories.daily import DailyRepository
 from app.modules.portfolios.repositories.imports import ImportRepository
 from app.modules.portfolios.repositories.operations import OperationRepository
 from app.modules.portfolios.repositories.portfolios import PortfolioRepository
@@ -23,6 +28,7 @@ from app.modules.portfolios.services.metrics import MetricsService
 from app.modules.portfolios.services.operations import OperationService
 from app.modules.portfolios.services.portfolios import PortfolioService
 from app.modules.portfolios.services.positions import PositionService
+from app.modules.portfolios.services.snapshots import SnapshotService
 
 
 def build_portfolio_valuator() -> PortfolioValuator:
@@ -31,6 +37,10 @@ def build_portfolio_valuator() -> PortfolioValuator:
 
 def build_portfolio_ledger() -> PortfolioLedger:
     return PortfolioLedger()
+
+
+def build_daily_snapshot_builder() -> DailySnapshotBuilder:
+    return DailySnapshotBuilder(build_portfolio_ledger())
 
 
 def build_fx_map_builder(session: Session) -> FxMapBuilder:
@@ -43,12 +53,24 @@ def build_fx_rate_service(session: Session) -> FxRateService:
     )
 
 
+def build_snapshot_service(session: Session) -> SnapshotService:
+    return SnapshotService(
+        PortfolioRepository(session),
+        DailyRepository(session),
+        OperationRepository(session),
+        assets_wiring.build_price_service(session),
+        assets_wiring.build_market_data_service(session),
+        build_daily_snapshot_builder(),
+    )
+
+
 def build_portfolio_service(session: Session) -> PortfolioService:
     return PortfolioService(
         PortfolioRepository(session),
         assets_wiring.build_currency_service(session),
         build_portfolio_valuator(),
         build_fx_map_builder(session),
+        build_snapshot_service(session),
     )
 
 

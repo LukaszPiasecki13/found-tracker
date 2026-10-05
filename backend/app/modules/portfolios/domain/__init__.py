@@ -3,7 +3,8 @@
 Pure code: no ORM, no `Session`, no clock, no I/O - only the standard library
 (`decimal` money, frozen dataclasses, `StrEnum`). Files are layered (DOM-9):
 dictionary (`enums`, `errors`) -> ORM-boundary views (`protocols`) ->
-components (`ledger`, `valuation`); imports go only downward, never in a cycle.
+components (`ledger`, `valuation`, `snapshots`); imports go only downward, never in a
+cycle.
 
 Services talk to the domain only through the **components** exported here -
 `PortfolioLedger` (validate and apply operations, rebuild from history) and
@@ -42,6 +43,17 @@ from app.modules.portfolios.domain.ledger import (
     PortfolioLedger,
     PositionState,
 )
+from app.modules.portfolios.domain.snapshots import (
+    TWR_METHOD,
+    Closes,
+    DailyRow,
+    DailySnapshotBuilder,
+    DatedOperation,
+    MissingPriceError,
+    external_flow,
+    return_pct,
+    twr_method,
+)
 from app.modules.portfolios.domain.valuation import (
     FxMap,
     PortfolioValuation,
@@ -54,8 +66,13 @@ __all__ = [
     "CASH_OPERATIONS",
     "INCOME_COST_OPERATIONS",
     "TRADE_OPERATIONS",
+    "TWR_METHOD",
     "AssetNotAllowedError",
     "AssetRequiredError",
+    "Closes",
+    "DailyRow",
+    "DailySnapshotBuilder",
+    "DatedOperation",
     "FxMap",
     "ImportRowStatus",
     "ImportStatus",
@@ -63,6 +80,7 @@ __all__ = [
     "InsufficientQuantityError",
     "InvalidOperationError",
     "LedgerState",
+    "MissingPriceError",
     "OperationInput",
     "OperationType",
     "PortfolioDomainError",
@@ -72,4 +90,7 @@ __all__ = [
     "PositionNotFoundError",
     "PositionState",
     "PositionValuation",
+    "external_flow",
+    "return_pct",
+    "twr_method",
 ]
