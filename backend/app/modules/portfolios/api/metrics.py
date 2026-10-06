@@ -10,7 +10,12 @@ from app.modules.assets.services.job_runs import DailyRefreshService
 from app.modules.core_data.models.user import User
 from app.modules.portfolios.dependencies import (
     get_account_metrics_service,
+    get_currency_split_service,
     get_metrics_service,
+)
+from app.modules.portfolios.schemas.currency_split import (
+    CurrencySplitQuery,
+    CurrencySplitResponse,
 )
 from app.modules.portfolios.schemas.metrics import (
     AccountVectorsQuery,
@@ -18,6 +23,7 @@ from app.modules.portfolios.schemas.metrics import (
     PortfolioVectorsResponse,
 )
 from app.modules.portfolios.services.account_metrics import AccountMetricsService
+from app.modules.portfolios.services.currency_split import CurrencySplitService
 from app.modules.portfolios.services.metrics import MetricsService
 from app.modules.security.dependencies import get_current_user
 
@@ -56,3 +62,14 @@ def account_vectors(
     if daily_refresh.claim(date.today()):
         background_tasks.add_task(assets_entrypoints.daily_refresh)
     return service.account_vectors(user.id, query, user.base_currency_id)
+
+
+@router.get("/currency-split", response_model=CurrencySplitResponse)
+def currency_split(
+    query: CurrencySplitQuery = Depends(),
+    user: User = Depends(get_current_user),
+    service: CurrencySplitService = Depends(get_currency_split_service),
+):
+    """The current holdings by currency: one portfolio's, or all of them in the
+    account currency when no portfolio is named."""
+    return service.split(user.id, query.portfolio_name, user.base_currency_id)

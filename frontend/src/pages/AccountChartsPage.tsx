@@ -3,33 +3,22 @@ import { Box, Typography, Grid, CircularProgress, Alert } from '@mui/material';
 import dayjs from 'dayjs';
 
 import { useAccountVectors } from '../hooks/useAccountVectors';
-import { useOperations } from '../hooks/useOperations';
+import { useCurrencySplit } from '../hooks/useCurrencySplit';
 import { getErrorMessage } from '../lib/api';
 import DateRangePicker from '../components/DateRangePicker';
 import LineChartCard from '../components/charts/LineChartCard';
 import AreaChartCard from '../components/charts/AreaChartCard';
+import PieChartCard from '../components/charts/PieChartCard';
 import { dropZeroSeries, returnPercent } from '../utils/portfolioSeries';
 
 // The account's charts: every portfolio summed in the user's base currency (DEC-01).
 // There is no allocation pie here: positions are per portfolio, and the per-ticker
 // vector is left out because tickers can differ between portfolios (DEC-05).
-const AccountChartsPage: React.FC = () => {
-  // Operations of all portfolios: the default start is the earliest one among them.
-  const { data: operations } = useOperations();
-  const firstOperationDate = useMemo(() => {
-    if (!operations || operations.length === 0) {
-      return dayjs().subtract(1, 'year').format('YYYY-MM-DD');
-    }
-    const earliest = operations.reduce((min, op) =>
-      new Date(op.operation_date).getTime() < new Date(min.operation_date).getTime() ? op : min
-    );
-    return dayjs(earliest.operation_date).format('YYYY-MM-DD');
-  }, [operations]);
+// Investment Start: the default start of the charts (the same date as the IS button).
+const INVESTMENT_START = '2023-10-01';
 
-  // null until the user picks a start date; the first operation date is the default
-  // until then, so the default follows operations as they load
-  const [userStartDate, setUserStartDate] = useState<string | null>(null);
-  const startDate = userStartDate ?? firstOperationDate;
+const AccountChartsPage: React.FC = () => {
+  const [startDate, setStartDate] = useState(INVESTMENT_START);
   const [endDate, setEndDate] = useState(dayjs().format('YYYY-MM-DD'));
 
   const { data: vectors, isLoading, error } = useAccountVectors(startDate, endDate);
@@ -77,13 +66,29 @@ const AccountChartsPage: React.FC = () => {
     }));
   }, [vectors]);
 
+  // XIRR and drawdown are per day; a null day has no value (drawn as a gap).
+  const riskData = useMemo(() => {
+    if (!vectors?.date) return [];
+    return vectors.date.map((date, i) => ({
+      date,
+      drawdown: vectors.drawdown_vector?.[i] ?? null,
+      xirr: vectors.xirr_vector?.[i] ?? null,
+    }));
+  }, [vectors]);
+
+  const currencySplit = useCurrencySplit();
+  const currencyPie = useMemo(
+    () => (currencySplit.data?.items ?? []).map((item) => ({ name: item.currency, value: item.value })),
+    [currencySplit.data]
+  );
+
   const hasNoOperations = !isLoading && !error && vectors !== undefined && !vectors.date;
   const errorMessage = error
     ? `Błąd podczas ładowania danych analitycznych: ${getErrorMessage(error)}.`
     : null;
 
   const handleDateChange = (start: string, end: string) => {
-    setUserStartDate(start);
+    setStartDate(start);
     setEndDate(end);
   };
 
@@ -182,6 +187,49 @@ const AccountChartsPage: React.FC = () => {
               return `${value.toFixed(1)}%`;
             }}
             showReferenceLine
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <LineChartCard
+            title="XIRR (%)"
+            subtitle="Rzeczywista roczna stopa zwrotu; pokazywana od trzech miesięcy po pierwszej wpłacie"
+            data={riskData}
+            dataKeys={['xirr']}
+            colors={['#6a1b9a']}
+            loading={isLoading}
+            error={errorMessage}
+            yAxisFormatter={(value: number | null) => {
+              if (value === null) return '';
+              return `${value.toFixed(1)}%`;
+            }}
+            showReferenceLine
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <LineChartCard
+            title="Drawdown (%)"
+            subtitle="Spadek od szczytu zwrotu skumulowanego (wpłaty go nie zmieniają)"
+            data={riskData}
+            dataKeys={['drawdown']}
+            colors={['#c62828']}
+            loading={isLoading}
+            error={errorMessage}
+            yAxisFormatter={(value: number | null) => {
+              if (value === null) return '';
+              return `${value.toFixed(1)}%`;
+            }}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <PieChartCard
+            title="Podział na waluty"
+            subtitle={`Bieżąca wartość wg waluty waloru, w ${currencySplit.data?.currency ?? 'walucie konta'}`}
+            data={currencyPie}
+            loading={currencySplit.isLoading}
+            error={currencySplit.error ? getErrorMessage(currencySplit.error) : null}
           />
         </Grid>
 

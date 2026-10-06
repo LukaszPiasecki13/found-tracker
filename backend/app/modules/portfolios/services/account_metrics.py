@@ -38,6 +38,7 @@ from app.modules.portfolios.services.metrics import (
     requested_vectors,
     validated_range,
 )
+from app.modules.portfolios.services.performance import drawdown, twr_index, xirr
 
 ACCOUNT_FALLBACK_CURRENCY = "PLN"
 # The account's vectors: every portfolio vector except the per-ticker `assets`
@@ -51,7 +52,14 @@ ACCOUNT_VECTOR_KEYS = (
     "profit_vector",
     "portfolio_value_vector",
     "pocket_value_vector",
+    "twr_index_vector",
+    "drawdown_vector",
+    "xirr_vector",
 )
+# Derived from the summed value and net deposits, not summed over the portfolios: the
+# return indices of portfolios are not additive (DEC-06).
+_DERIVED_KEYS = ("twr_index_vector", "drawdown_vector", "xirr_vector")
+_SUMMED_KEYS = tuple(key for key in ACCOUNT_VECTOR_KEYS if key not in _DERIVED_KEYS)
 
 
 def _by_portfolio(operations: Sequence[Operation]) -> dict[int, list[Operation]]:
@@ -156,12 +164,20 @@ class AccountMetricsService:
             )
             dates = calculator.dates()
             parts = _in_account_currency(calculator, currency)
-            for name in names:
+            for name in _SUMMED_KEYS:
                 totals[name] = _add(totals.get(name), parts[name])
 
+        value = totals["portfolio_value_vector"]
+        net_deposits = totals["net_deposits_vector"]
+        assert isinstance(value, np.ndarray) and isinstance(net_deposits, np.ndarray)
+        index = twr_index(value, net_deposits)
+        totals["twr_index_vector"] = index
+        totals["drawdown_vector"] = drawdown(index)
+        totals["xirr_vector"] = xirr(value, net_deposits)
+
         result: dict[str, Any] = {"date": dates}
-        for name, series in totals.items():
-            result[name] = as_json_value(series)
+        for name in names:
+            result[name] = as_json_value(totals[name])
         return PortfolioVectorsResponse(result)
 
     def _account_currency(self, base_currency_id: int | None) -> str:

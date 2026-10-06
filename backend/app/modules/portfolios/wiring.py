@@ -23,6 +23,7 @@ from app.modules.portfolios.repositories.operations import OperationRepository
 from app.modules.portfolios.repositories.portfolios import PortfolioRepository
 from app.modules.portfolios.repositories.positions import PositionRepository
 from app.modules.portfolios.services.account_metrics import AccountMetricsService
+from app.modules.portfolios.services.currency_split import CurrencySplitService
 from app.modules.portfolios.services.fx import FxMapBuilder, FxRateService
 from app.modules.portfolios.services.imports import ImportService
 from app.modules.portfolios.services.metrics import MetricsService
@@ -130,5 +131,16 @@ def build_account_metrics_service(session: Session) -> AccountMetricsService:
         assets_wiring.build_currency_service(session),
         assets_wiring.build_market_data_service(session),
         assets_wiring.build_price_service(session),
+        assets_wiring.build_fx_rate_service(session),
+    )
+
+
+def build_currency_split_service(session: Session) -> CurrencySplitService:
+    """The currency split of the holdings, valued by `PositionService` (current
+    prices and rates) and converted to the account currency at the current rate."""
+    return CurrencySplitService(
+        PortfolioRepository(session),
+        build_position_service(session),
+        assets_wiring.build_currency_service(session),
         assets_wiring.build_fx_rate_service(session),
     )

@@ -37,6 +37,7 @@ previous implementation:
 
 import json
 import logging
+import math
 from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -68,6 +69,7 @@ from app.modules.portfolios.schemas.metrics import (
     PortfolioVectorsQuery,
     PortfolioVectorsResponse,
 )
+from app.modules.portfolios.services.performance import drawdown, twr_index, xirr
 
 logger = logging.getLogger(__name__)
 
@@ -464,6 +466,15 @@ class VectorCalculator:
     def portfolio_value(self) -> Vector:
         return self.free_cash() + self.sum_value()
 
+    def twr_index(self) -> Vector:
+        return twr_index(self.portfolio_value(), self.net_deposits())
+
+    def drawdown(self) -> Vector:
+        return drawdown(self.twr_index())
+
+    def xirr(self) -> Vector:
+        return xirr(self.portfolio_value(), self.net_deposits())
+
 
 def _filled(closes: list[float | None], ticker: str) -> list[float]:
     """Gaps filled forward, then the leading ones backward."""
@@ -490,6 +501,9 @@ VECTORS: dict[str, Callable[[VectorCalculator], Vector | dict[str, Vector]]] = {
     "free_cash_vector": VectorCalculator.free_cash,
     "pocket_value_vector": VectorCalculator.portfolio_value,
     "portfolio_value_vector": VectorCalculator.portfolio_value,
+    "twr_index_vector": VectorCalculator.twr_index,
+    "drawdown_vector": VectorCalculator.drawdown,
+    "xirr_vector": VectorCalculator.xirr,
 }
 
 
@@ -526,11 +540,17 @@ def validated_range(
     return start, end
 
 
-def as_json_value(value: Vector | dict[str, Vector]) -> list[float] | dict[str, Any]:
+def _json_series(series: Vector) -> list[float | None]:
+    """A vector as JSON numbers; `NaN` (a value that is not defined) becomes `null`."""
+    return [None if math.isnan(point) else point for point in series.tolist()]
+
+
+def as_json_value(
+    value: Vector | dict[str, Vector],
+) -> list[float | None] | dict[str, Any]:
     if isinstance(value, dict):
-        return {name: series.tolist() for name, series in value.items()}
-    series_list: list[float] = value.tolist()
-    return series_list
+        return {name: _json_series(series) for name, series in value.items()}
+    return _json_series(value)
 
 
 class MetricsService:

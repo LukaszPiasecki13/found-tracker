@@ -24,8 +24,8 @@ const presets: Preset[] = [
   { label: '1R', months: 12 },
   { label: '2R', months: 24 },
   {
-    label: 'PI',
-    title: 'Profesjonalne inwestowanie (od 01.10.2023)',
+    label: 'IS',
+    title: 'Investment Start (od 01.10.2023)',
     fixedStart: '2023-10-01',
   },
   { label: 'YTD', months: 0 },

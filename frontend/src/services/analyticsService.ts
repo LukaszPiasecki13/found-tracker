@@ -1,5 +1,5 @@
 import api from '../lib/api';
-import type { PocketVectorsResponse } from '../types/api';
+import type { CurrencySplitResponse, PocketVectorsResponse } from '../types/api';
 
 interface PocketVectorsParams {
   pocketName: string;
@@ -38,6 +38,13 @@ export const analyticsService = {
         interval: params.interval,
         vectors: params.vectors,
       },
+    });
+    return response.data;
+  },
+
+  async getCurrencySplit(portfolioName?: string): Promise<CurrencySplitResponse> {
+    const response = await api.get<CurrencySplitResponse>('/portfolios/currency-split', {
+      params: { portfolioName },
     });
     return response.data;
   },

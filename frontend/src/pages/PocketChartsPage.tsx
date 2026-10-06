@@ -14,6 +14,7 @@ import dayjs from 'dayjs';
 import { usePocketByName } from '../hooks/usePockets';
 import { usePositions } from '../hooks/usePositions';
 import { usePocketVectors } from '../hooks/usePocketVectors';
+import { useCurrencySplit } from '../hooks/useCurrencySplit';
 import { getErrorMessage } from '../lib/api';
 import { useOperations } from '../hooks/useOperations';
 import DateRangePicker from '../components/DateRangePicker';
@@ -137,6 +138,22 @@ const PocketChartsPage: React.FC = () => {
       'Wpłaty netto': vectors.net_deposits_vector?.[i] ?? 0,
     }));
   }, [vectors]);
+
+  // XIRR and drawdown are per day; a null day has no value (drawn as a gap).
+  const riskData = useMemo(() => {
+    if (!vectors?.date) return [];
+    return vectors.date.map((date, i) => ({
+      date,
+      drawdown: vectors.drawdown_vector?.[i] ?? null,
+      xirr: vectors.xirr_vector?.[i] ?? null,
+    }));
+  }, [vectors]);
+
+  const currencySplit = useCurrencySplit(pocketName);
+  const currencyPie = useMemo(
+    () => (currencySplit.data?.items ?? []).map((item) => ({ name: item.currency, value: item.value })),
+    [currencySplit.data]
+  );
 
   const handleDateChange = (start: string, end: string) => {
     setUserStartDate(start);
@@ -359,6 +376,50 @@ const PocketChartsPage: React.FC = () => {
               return `${value.toFixed(1)}%`;
             }}
             showReferenceLine
+          />
+        </Grid>
+
+        {/* Row 5b — XIRR, drawdown and the currency split */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <LineChartCard
+            title="XIRR (%)"
+            subtitle="Rzeczywista roczna stopa zwrotu; pokazywana od trzech miesięcy po pierwszej wpłacie"
+            data={riskData}
+            dataKeys={['xirr']}
+            colors={['#6a1b9a']}
+            loading={vectorsLoading}
+            error={errorMessage}
+            yAxisFormatter={(value: number | null) => {
+              if (value === null) return '';
+              return `${value.toFixed(1)}%`;
+            }}
+            showReferenceLine
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <LineChartCard
+            title="Drawdown (%)"
+            subtitle="Spadek od szczytu zwrotu skumulowanego (wpłaty go nie zmieniają)"
+            data={riskData}
+            dataKeys={['drawdown']}
+            colors={['#c62828']}
+            loading={vectorsLoading}
+            error={errorMessage}
+            yAxisFormatter={(value: number | null) => {
+              if (value === null) return '';
+              return `${value.toFixed(1)}%`;
+            }}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <PieChartCard
+            title="Podział na waluty"
+            subtitle={`Bieżąca wartość wg waluty waloru, w ${currencySplit.data?.currency ?? pocket?.base_currency.code ?? ''}`}
+            data={currencyPie}
+            loading={currencySplit.isLoading}
+            error={currencySplit.error ? getErrorMessage(currencySplit.error) : null}
           />
         </Grid>
 

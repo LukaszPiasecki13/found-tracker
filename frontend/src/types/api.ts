@@ -118,6 +118,21 @@ export interface PocketVectorsResponse {
   free_cash_vector: number[];
   pocket_value_vector: number[];
   portfolio_value_vector?: number[];
+  // Null where a value is not defined (XIRR before the first flow, or no solution).
+  twr_index_vector?: number[];
+  drawdown_vector?: number[];
+  xirr_vector?: (number | null)[];
+}
+
+export interface CurrencySplitItem {
+  currency: string;
+  value: number;
+}
+
+export interface CurrencySplitResponse {
+  currency: string;
+  items: CurrencySplitItem[];
+  unpriced: number;
 }
 
 // Auth Types

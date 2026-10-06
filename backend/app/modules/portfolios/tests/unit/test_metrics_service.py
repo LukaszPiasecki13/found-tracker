@@ -315,6 +315,9 @@ def test_all_vectors_by_default(
         "free_cash_vector",
         "pocket_value_vector",
         "portfolio_value_vector",
+        "twr_index_vector",
+        "drawdown_vector",
+        "xirr_vector",
     ]
 
 

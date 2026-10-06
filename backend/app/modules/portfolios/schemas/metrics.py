@@ -22,7 +22,7 @@ class PortfolioVectorsQuery(BaseModel):
 
 # One entry: the `date` list, a single vector, or a vector per ticker/class name
 # (`assets`, `asset_classes`). Floats only here (ADR-0010: chart data).
-type VectorValue = list[datetime] | list[float] | dict[str, list[float]]
+type VectorValue = list[datetime] | list[float | None] | dict[str, list[float | None]]
 
 
 class PortfolioVectorsResponse(RootModel[dict[str, VectorValue]]):
