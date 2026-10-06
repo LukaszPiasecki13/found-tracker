@@ -72,8 +72,8 @@ def test_import_service_is_assembled_with_the_parser_registry() -> None:
     assert isinstance(imports._operations, OperationService)
     assert isinstance(imports._assets, AssetService)
     assert isinstance(imports._portfolios, PortfolioService)
-    assert [parser.parser_id for parser in imports._parsers] == ["xtb"]
-    assert [p.parser_id for p in wiring.build_import_parsers()] == ["xtb"]
+    assert [parser.parser_id for parser in imports._parsers] == ["xtb", "bos"]
+    assert [p.parser_id for p in wiring.build_import_parsers()] == ["xtb", "bos"]
 
 
 def test_the_return_is_computed_by_a_snapshot_service_on_the_request_session() -> None:

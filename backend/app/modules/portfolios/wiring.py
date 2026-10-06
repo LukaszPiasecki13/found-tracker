@@ -10,7 +10,7 @@ harmless.
 from sqlalchemy.orm import Session
 
 from app.core.import_parser import ImportParser
-from app.infrastructure.import_parsers import XtbParser
+from app.infrastructure.import_parsers import BosParser, XtbParser
 from app.modules.assets import wiring as assets_wiring
 from app.modules.portfolios.domain import (
     DailySnapshotBuilder,
@@ -97,7 +97,7 @@ def build_operation_service(session: Session) -> OperationService:
 def build_import_parsers() -> tuple[ImportParser, ...]:
     """The registry of import sources: a new bank is a new adapter listed here
     (`ImportService` picks the first parser whose `sniff` accepts the file)."""
-    return (XtbParser(),)
+    return (XtbParser(), BosParser())
 
 
 def build_import_service(session: Session) -> ImportService:

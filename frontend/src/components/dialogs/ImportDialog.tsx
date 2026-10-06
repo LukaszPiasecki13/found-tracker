@@ -32,6 +32,8 @@ import { ImportRowsTable } from '../import/ImportRowsTable';
 import { ReconciliationReportCard } from '../import/ReconciliationReportCard';
 import type { ImportBatchSummary, ImportPreview } from '../../types/api';
 
+const ALLOWED_EXTENSIONS = ['.xlsx', '.csv'];
+
 interface ImportDialogProps {
   open: boolean;
   onClose: () => void;
@@ -67,8 +69,9 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, pocketId }) 
 
   const handleFile = (selected: File) => {
     resetPreview();
-    if (!selected.name.toLowerCase().endsWith('.xlsx')) {
-      setFileError('Wybierz plik Excel (.xlsx).');
+    const name = selected.name.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.some((extension) => name.endsWith(extension))) {
+      setFileError('Wybierz plik Excel (.xlsx) lub CSV (.csv).');
       return;
     }
     setFile(selected);
@@ -150,7 +153,7 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, pocketId }) 
           >
             <input
               type="file"
-              accept=".xlsx"
+              accept={ALLOWED_EXTENSIONS.join(',')}
               onChange={handleFileInput}
               style={{ display: 'none' }}
               id="import-file-input"
@@ -163,10 +166,10 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, pocketId }) 
                   ? 'Generowanie podglądu...'
                   : file
                     ? file.name
-                    : 'Przeciągnij plik Excel tutaj'}
+                    : 'Przeciągnij plik tutaj'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                lub kliknij, aby wybrać plik (.xlsx, maksymalnie 10 MB)
+                lub kliknij, aby wybrać plik (.xlsx lub .csv, maksymalnie 10 MB)
               </Typography>
             </label>
           </Paper>
