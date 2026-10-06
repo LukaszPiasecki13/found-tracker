@@ -96,6 +96,33 @@ class YahooFinanceProvider:
             closes[day] = close
         return closes
 
+    def fetch_fx_close_history(
+        self, from_code: str, to_code: str, start: date, end: date
+    ) -> dict[date, Decimal]:
+        """Daily rates for `start <= day < end` (`end` exclusive). Yahoo quotes a
+        pair as `<from><to>=X`, e.g. `USDPLN=X`, in units of `to` per one `from`;
+        a currency pair has no splits, so the close is the rate as it stood."""
+        symbol = f"{from_code}{to_code}=X"
+        try:
+            frame = yf.Ticker(symbol).history(
+                start=start, end=end, interval="1d", auto_adjust=False
+            )
+        except Exception as exc:
+            raise MarketDataUnavailableError(
+                f"Could not fetch FX history for {symbol}"
+            ) from exc
+        if frame is None or frame.empty or "Close" not in frame.columns:
+            return {}
+
+        rates: dict[date, Decimal] = {}
+        for stamp, value in frame["Close"].items():
+            day = stamp.date() if isinstance(stamp, datetime) else stamp
+            rate = _to_decimal(value)
+            if rate is None or not isinstance(day, date) or not start <= day < end:
+                continue
+            rates[day] = rate
+        return rates
+
     @staticmethod
     def _splits(handle: Any, frame: Any) -> list[tuple[date, Decimal]]:
         """Every split the provider knows as (day, ratio new:old). From the whole

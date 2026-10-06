@@ -122,6 +122,18 @@ class MarketDataService:
         """Daily closes for `start <= day < end`. Raises MarketDataUnavailableError."""
         return self._provider.fetch_close_history(ticker, start, end)
 
+    def fx_history(
+        self, from_code: str, to_code: str, start: date, end: date
+    ) -> dict[date, Decimal]:
+        """Daily rates of `to_code` per `from_code` for `start <= day < end`.
+        Raises MarketDataUnavailableError."""
+        return self._provider.fetch_fx_close_history(from_code, to_code, start, end)
+
+    def current_fx_rate(self, from_code: str, to_code: str) -> Decimal | None:
+        """The provider's current rate of `to_code` per `from_code`, `None` when it
+        has none. Raises MarketDataUnavailableError."""
+        return self._provider.fetch_fx_rate(from_code, to_code)
+
     def refresh_asset_prices(self, assets: Iterable[Asset]) -> int:
         """Store today's provider price of each asset in the history (which also
         refreshes `current_price`); returns how many were stored.

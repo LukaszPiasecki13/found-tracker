@@ -21,6 +21,7 @@ from app.modules.portfolios.exceptions import (
     InvalidDateError,
     InvalidDateRangeError,
     InvalidVectorsError,
+    MixedBaseCurrenciesError,
     PriceDataMissingError,
     UnsupportedIntervalError,
 )
@@ -37,6 +38,8 @@ class FakePrices:
 
     history: dict[str, dict[date, Decimal]] = field(default_factory=dict)
     current: dict[str, Decimal] = field(default_factory=dict)
+    fx_rates: dict[str, dict[date, Decimal]] = field(default_factory=dict)
+    fx_current: dict[str, Decimal] = field(default_factory=dict)
     failing: set[str] = field(default_factory=set)
     calls: list[tuple[str, str]] = field(default_factory=list)
 
@@ -54,6 +57,22 @@ class FakePrices:
         self.calls.append(("current", ticker))
         return self.current.get(ticker)
 
+    def fx_history(
+        self, from_code: str, to_code: str, start: date, end: date
+    ) -> dict[date, Decimal]:
+        pair = f"{from_code}{to_code}"
+        self.calls.append(("fx_history", pair))
+        return {
+            day: rate
+            for day, rate in self.fx_rates.get(pair, {}).items()
+            if start <= day < end
+        }
+
+    def current_fx_rate(self, from_code: str, to_code: str) -> Decimal | None:
+        pair = f"{from_code}{to_code}"
+        self.calls.append(("current_fx", pair))
+        return self.fx_current.get(pair)
+
 
 def _op(
     operation_type: str,
@@ -61,6 +80,8 @@ def _op(
     *,
     ticker: str | None = None,
     asset_class: str = "Stock",
+    currency: str = "PLN",
+    base: str = "PLN",
     quantity: str = "0",
     price: str = "0",
     amount: str | None = None,
@@ -69,7 +90,11 @@ def _op(
     ratio: str | None = None,
 ) -> SimpleNamespace:
     asset = (
-        SimpleNamespace(ticker=ticker, asset_class=SimpleNamespace(name=asset_class))
+        SimpleNamespace(
+            ticker=ticker,
+            asset_class=SimpleNamespace(name=asset_class),
+            currency=SimpleNamespace(code=currency),
+        )
         if ticker
         else None
     )
@@ -78,6 +103,7 @@ def _op(
         operation_type=operation_type,
         operation_date=when,
         asset=asset,
+        portfolio=SimpleNamespace(base_currency=SimpleNamespace(code=base)),
         quantity=D(quantity),
         price=D(price),
         amount=D(amount) if amount is not None else None,
@@ -413,6 +439,110 @@ def test_invalid_parameters_are_400_with_a_code(
 
     assert exc_info.value.status_code == 400  # type: ignore[attr-defined]
     assert exc_info.value.code == code  # type: ignore[attr-defined]
+
+
+def test_a_buy_in_a_foreign_currency_moves_the_profit_by_its_fee_only(
+    operation_repo: MagicMock,
+) -> None:
+    """Bought 10 @ 20 USD at fx 4 with a fee of 2 PLN, the price and the rate
+    unchanged: the value is 800 PLN, the cost 808 PLN, the profit -8 (the fee)."""
+    days = [date(2025, 1, d) for d in range(1, 6)]
+    prices = FakePrices(
+        history={"AAA": {day: D("20") for day in days}},
+        fx_rates={"USDPLN": {day: D("4") for day in days}},
+    )
+    operations = [
+        _op("deposit", _at(1), amount="1000"),
+        _op(
+            "buy",
+            _at(2),
+            ticker="AAA",
+            currency="USD",
+            quantity="10",
+            price="20",
+            fee="2",
+            fx_rate="4",
+        ),
+    ]
+    query = _query('["assets", "profit_vector"]', start="2025-01-01", end="2025-01-05")
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(1, query)
+
+    assert body.root["assets"] == {"AAA": [0.0, 800.0, 800.0, 800.0, 800.0]}
+    assert body.root["profit_vector"] == [0.0, -8.0, -8.0, -8.0, -8.0]
+
+
+def test_the_last_day_takes_the_current_rate_when_history_has_none(
+    operation_repo: MagicMock,
+) -> None:
+    days = [date(2025, 1, d) for d in range(1, 7)]
+    prices = FakePrices(
+        history={"AAA": {day: D("20") for day in [*days, date(2025, 1, 7)]}},
+        fx_rates={"USDPLN": {day: D("4") for day in days}},
+        fx_current={"USDPLN": D("5")},
+    )
+    operations = [
+        _op(
+            "buy",
+            _at(2),
+            ticker="AAA",
+            currency="USD",
+            quantity="10",
+            price="20",
+            fx_rate="4",
+        ),
+    ]
+    query = _query('["assets"]', start="2025-01-01", end="2025-01-07")
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(1, query)
+
+    assert body.root["assets"] == {
+        "AAA": [0.0, 800.0, 800.0, 800.0, 800.0, 800.0, 1000.0]
+    }
+    assert ("current_fx", "USDPLN") in prices.calls
+
+
+def test_a_currency_pair_without_any_rate_fails_the_vector(
+    operation_repo: MagicMock,
+) -> None:
+    prices = FakePrices(history={"AAA": {date(2025, 1, 2): D("20")}})
+    operations = [
+        _op(
+            "buy",
+            _at(2),
+            ticker="AAA",
+            currency="USD",
+            quantity="1",
+            price="20",
+            fx_rate="4",
+        ),
+    ]
+
+    with pytest.raises(PriceDataMissingError) as exc_info:
+        _service(operation_repo, operations, prices).portfolio_vectors(
+            1, _query('["assets"]', start="2025-01-01", end="2025-01-03")
+        )
+
+    assert exc_info.value.code == "PRICE_DATA_MISSING"
+
+
+def test_portfolios_in_different_base_currencies_cannot_be_charted_together(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    operations = [
+        _op("deposit", _at(1), amount="1000"),
+        _op("deposit", _at(1), amount="100", base="USD"),
+    ]
+
+    with pytest.raises(MixedBaseCurrenciesError) as exc_info:
+        _service(operation_repo, operations, prices).portfolio_vectors(
+            1, _query('["net_deposits_vector"]')
+        )
+
+    assert (exc_info.value.status_code, exc_info.value.code) == (
+        409,
+        "MIXED_BASE_CURRENCIES",
+    )
 
 
 def test_market_data_service_satisfies_the_price_port(

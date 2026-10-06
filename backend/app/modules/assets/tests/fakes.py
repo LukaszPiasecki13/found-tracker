@@ -32,6 +32,7 @@ class FakeMarketDataProvider:
     quotes: dict[str, Quote] = field(default_factory=dict)
     rates: dict[tuple[str, str], Decimal] = field(default_factory=dict)
     history: dict[str, dict[date, Decimal]] = field(default_factory=dict)
+    fx_history: dict[tuple[str, str], dict[date, Decimal]] = field(default_factory=dict)
     failing: set[str] = field(default_factory=set)
     calls: list[tuple[str, ...]] = field(default_factory=list)
 
@@ -57,5 +58,16 @@ class FakeMarketDataProvider:
         return {
             day: close
             for day, close in self.history.get(ticker, {}).items()
+            if start <= day < end
+        }
+
+    def fetch_fx_close_history(
+        self, from_code: str, to_code: str, start: date, end: date
+    ) -> dict[date, Decimal]:
+        self.calls.append(("fx_history", from_code, to_code))
+        self._fail_if_listed(from_code)
+        return {
+            day: rate
+            for day, rate in self.fx_history.get((from_code, to_code), {}).items()
             if start <= day < end
         }

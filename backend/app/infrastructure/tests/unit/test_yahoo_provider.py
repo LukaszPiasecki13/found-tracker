@@ -231,6 +231,45 @@ def test_fetch_close_history_wraps_library_errors(
     assert isinstance(exc_info.value.__cause__, TimeoutError)
 
 
+def test_fetch_fx_close_history_uses_the_pair_symbol_and_is_end_exclusive(
+    provider: YahooFinanceProvider,
+) -> None:
+    index = pd.DatetimeIndex(
+        [
+            "2026-01-05 00:00:00+01:00",
+            "2026-01-06 00:00:00+01:00",
+            "2026-01-07 00:00:00+01:00",
+        ]
+    )
+    FakeTicker.frame = pd.DataFrame({"Close": [3.61, float("nan"), 3.7]}, index=index)
+
+    rates = provider.fetch_fx_close_history(
+        "USD", "PLN", date(2026, 1, 5), date(2026, 1, 7)
+    )
+
+    assert rates == {date(2026, 1, 5): Decimal("3.61")}
+    assert FakeTicker.requested == ["USDPLN=X"]
+    assert FakeTicker.history_kwargs == {
+        "start": date(2026, 1, 5),
+        "end": date(2026, 1, 7),
+        "interval": "1d",
+        "auto_adjust": False,
+    }
+
+
+def test_fetch_fx_close_history_wraps_library_errors(
+    provider: YahooFinanceProvider,
+) -> None:
+    FakeTicker.error = TimeoutError("slow")
+
+    with pytest.raises(MarketDataUnavailableError) as exc_info:
+        provider.fetch_fx_close_history(
+            "EUR", "PLN", date(2026, 1, 1), date(2026, 2, 1)
+        )
+
+    assert isinstance(exc_info.value.__cause__, TimeoutError)
+
+
 def _closes_frame(prices: list[float], days: list[str]) -> pd.DataFrame:
     index = pd.DatetimeIndex(
         [f"{day} 00:00:00+02:00" for day in days], tz="Europe/Warsaw"

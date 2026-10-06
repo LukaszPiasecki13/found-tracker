@@ -45,6 +45,32 @@ def service(
     )
 
 
+# --- fx history and current rate (read by portfolios' metrics) ---
+
+
+def test_fx_history_is_the_providers_daily_rates_in_the_requested_window(
+    service: MarketDataService, provider: FakeMarketDataProvider
+) -> None:
+    provider.fx_history[("USD", "PLN")] = {
+        date(2026, 10, 1): Decimal("3.6"),
+        date(2026, 10, 2): Decimal("3.7"),
+    }
+
+    rates = service.fx_history("USD", "PLN", date(2026, 10, 2), date(2026, 10, 3))
+
+    assert rates == {date(2026, 10, 2): Decimal("3.7")}
+    assert provider.calls == [("fx_history", "USD", "PLN")]
+
+
+def test_current_fx_rate_asks_the_provider_for_the_pair(
+    service: MarketDataService, provider: FakeMarketDataProvider
+) -> None:
+    provider.rates[("USD", "PLN")] = Decimal("3.65")
+
+    assert service.current_fx_rate("USD", "PLN") == Decimal("3.65")
+    assert service.current_fx_rate("EUR", "PLN") is None
+
+
 # --- search ---
 
 

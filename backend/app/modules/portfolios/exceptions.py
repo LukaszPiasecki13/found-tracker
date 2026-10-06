@@ -159,6 +159,18 @@ class PriceDataMissingError(APIError):
         )
 
 
+class MixedBaseCurrenciesError(ConflictError):
+    """The vectors span portfolios in different base currencies: their values
+    cannot be summed into one series. Narrow the request to one portfolio."""
+
+    def __init__(self, currency_codes: Sequence[str]) -> None:
+        super().__init__(
+            "Portfolios with different base currencies "
+            f"({', '.join(currency_codes)}) cannot be charted together",
+            code="MIXED_BASE_CURRENCIES",
+        )
+
+
 # --- Import (ADR-0018) ---
 
 

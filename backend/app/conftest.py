@@ -128,6 +128,9 @@ def integration_session() -> Generator[Session]:
     connection = engine.connect()
     outer = connection.begin()
     if engine.dialect.name == "postgresql":
+        # The server defaults this connection to read-only; the tests need writes,
+        # which stay confined to the test schema and are rolled back below.
+        connection.exec_driver_sql("SET TRANSACTION READ WRITE")
         # Only the test schema, no fallback to `public`; local to the outer
         # transaction, so it also holds through a transaction-mode pooler.
         schema_sql = engine.dialect.identifier_preparer.quote(

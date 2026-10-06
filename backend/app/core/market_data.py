@@ -71,6 +71,13 @@ class MarketDataProvider(Protocol):
         """
         ...
 
+    def fetch_fx_close_history(
+        self, from_code: str, to_code: str, start: date, end: date
+    ) -> dict[date, Decimal]:
+        """Daily rates of `to_code` per one unit of `from_code` for
+        `start <= day < end` (`end` exclusive). Days without a rate are absent."""
+        ...
+
 
 class MarketDataUnavailableError(APIError):
     """The market-data provider failed (network, rate limit, unexpected payload)."""

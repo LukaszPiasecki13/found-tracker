@@ -13,16 +13,22 @@ previous implementation:
 - an operation lands on day `max(0, (operation_date - start) // 1 day)` (UTC)
   and sets its running total from that day on; operations after `end` count
   for nothing visible;
-- an asset's daily value is quantity x close; closes are the provider's
-  (`end` exclusive) laid over the full calendar range, the last day takes the
-  current price when `end` is a weekday, then gaps are filled forward and
-  backward; a ticker with no price at all fails its vector;
-- a vector that cannot be computed (provider down, no price at all for a
-  ticker) fails the request - zeros would draw a worthless portfolio;
+- an asset's daily value in the portfolio's base currency is quantity x close x
+  rate: closes are the provider's (`end` exclusive) laid over the full calendar
+  range, the last day takes the current price when `end` is a weekday, then gaps
+  are filled forward and backward; the rate is the daily FX rate from the asset's
+  currency to the base currency, built the same way; an asset already in the base
+  currency has rate 1 and no FX lookup;
+- a ticker with no price at all, or a currency pair with no rate at all, fails
+  its vector;
+- a vector that cannot be computed (provider down, no price or rate at all)
+  fails the request - zeros would draw a worthless portfolio;
 - the cost and cash vectors follow the ledger: buy/sell/dividend amounts carry
   the operation's `fx_rate`, a dividend adds its income to free cash and profit.
-  Asset values are quantity x close in the asset's own currency: there is no
-  historical FX series, so they are not converted.
+  The operation's `fx_rate` is the rate of the day it was booked; the value uses
+  the daily rate. On the day of a buy with a constant price and rate, the profit
+  moves by exactly the fee, not by the cost;
+- all operations of one request share one base currency; mixed bases fail.
 """
 
 import json
@@ -40,6 +46,7 @@ from app.modules.portfolios.exceptions import (
     InvalidDateError,
     InvalidDateRangeError,
     InvalidVectorsError,
+    MixedBaseCurrenciesError,
     PriceDataMissingError,
     UnsupportedIntervalError,
 )
@@ -73,6 +80,16 @@ class PriceHistoryProvider(Protocol):
         """The current price, `None` when there is none."""
         ...
 
+    def fx_history(
+        self, from_code: str, to_code: str, start: date, end: date
+    ) -> dict[date, Decimal]:
+        """Daily rates of `to_code` per `from_code` for `start <= day < end`."""
+        ...
+
+    def current_fx_rate(self, from_code: str, to_code: str) -> Decimal | None:
+        """The current rate of `to_code` per `from_code`, `None` when there is none."""
+        ...
+
 
 def _naive_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -90,6 +107,20 @@ def _asset_class_name(operation: Operation) -> str:
     if operation.asset is None:
         raise ValueError(f"Operation {operation.id} has no asset")
     return operation.asset.asset_class.name
+
+
+def _asset_currency(operation: Operation) -> str:
+    if operation.asset is None:
+        raise ValueError(f"Operation {operation.id} has no asset")
+    return operation.asset.currency.code
+
+
+def _base_currency(operations: Sequence[Operation]) -> str:
+    """The one base currency every operation of the request is booked in."""
+    codes = {operation.portfolio.base_currency.code for operation in operations}
+    if len(codes) != 1:
+        raise MixedBaseCurrenciesError(sorted(codes))
+    return codes.pop()
 
 
 def _quantity_change(operation: Operation) -> Decimal:
@@ -152,8 +183,10 @@ class _VectorCalculator:
         self._start = start
         self._end = end
         self._prices = prices
+        self._base = _base_currency(operations)
         self.length = int((end - start).total_seconds() // _DAY_SECONDS) + 1
         self._closes: dict[str, Vector] = {}
+        self._rates: dict[str, Vector] = {}
         self._assets: dict[str, Vector] | None = None
         self._transaction_cost: Vector | None = None
         self._dividend_income: Vector | None = None
@@ -187,27 +220,64 @@ class _VectorCalculator:
                 vector[index:] = float(total)
         return vector
 
+    def _daily_series(
+        self,
+        label: str,
+        history: dict[date, Decimal],
+        current: Callable[[], Decimal | None],
+    ) -> Vector:
+        """One value per day of the calendar range from `history`; the last day
+        takes `current` when `end` is a weekday and history has no value for it,
+        then gaps are filled forward and backward. `label` names the series in
+        the error when it has no value at all."""
+        first_day = self._start.date()
+        values: list[float | None] = []
+        for offset in range(self.length):
+            value = history.get(first_day + timedelta(days=offset))
+            values.append(float(value) if value is not None else None)
+        if self._end.weekday() < _SATURDAY and values[-1] is None:
+            latest = current()
+            if latest is not None:
+                values[-1] = float(latest)
+        return np.array(_filled(values, label), dtype=float)
+
     def _close_vector(self, ticker: str) -> Vector:
         cached = self._closes.get(ticker)
         if cached is not None:
             return cached
-        first_day = self._start.date()
-        history = self._prices.close_history(ticker, first_day, self._end.date())
-        closes: list[float | None] = []
-        for offset in range(self.length):
-            close = history.get(first_day + timedelta(days=offset))
-            closes.append(float(close) if close is not None else None)
-        if self._end.weekday() < _SATURDAY and closes[-1] is None:
-            current = self._prices.current_price(ticker)
-            if current is not None:
-                closes[-1] = float(current)
-        vector = np.array(_filled(closes, ticker), dtype=float)
+        history = self._prices.close_history(
+            ticker, self._start.date(), self._end.date()
+        )
+        vector = self._daily_series(
+            ticker, history, lambda: self._prices.current_price(ticker)
+        )
         self._closes[ticker] = vector
         return vector
 
+    def _rate_vector(self, currency: str) -> Vector:
+        """Units of the base currency per one unit of `currency`, day by day. An
+        asset already in the base currency needs no rate and no lookup."""
+        if currency == self._base:
+            return np.ones(self.length, dtype=float)
+        cached = self._rates.get(currency)
+        if cached is not None:
+            return cached
+        history = self._prices.fx_history(
+            currency, self._base, self._start.date(), self._end.date()
+        )
+        vector = self._daily_series(
+            f"{currency}{self._base}",
+            history,
+            lambda: self._prices.current_fx_rate(currency, self._base),
+        )
+        self._rates[currency] = vector
+        return vector
+
     def _value_vector(self, ticker: str, operations: Iterable[Operation]) -> Vector:
+        """Quantity x close x rate: the value of one asset in the base currency."""
         ordered = sorted(operations, key=lambda op: _naive_utc(op.operation_date))
-        return self._quantity_vector(ordered) * self._close_vector(ticker)
+        rate = self._rate_vector(_asset_currency(ordered[0]))
+        return self._quantity_vector(ordered) * self._close_vector(ticker) * rate
 
     def _quantity_vector(self, ordered: Sequence[Operation]) -> Vector:
         """The quantity held each day, in the units of that day: a buy or sell
