@@ -142,10 +142,10 @@ const SellAssetDialog: React.FC<SellAssetDialogProps> = ({ open, onClose, pocket
                   Posiadana ilość: <strong>{selectedPosition.quantity}</strong>
                 </Typography>
                 <Typography variant="body2">
-                  Średnia cena zakupu: <strong>{selectedPosition.average_buy_price.toFixed(2)}</strong>
+                  Średnia cena zakupu: <strong>{selectedPosition.average_buy_price.toFixed(2)} {selectedPosition.asset.currency.code}</strong>
                 </Typography>
                 <Typography variant="body2">
-                  Aktualna cena: <strong>{selectedPosition. asset.current_price.toFixed(2)}</strong>
+                  Aktualna cena: <strong>{selectedPosition.asset.current_price.toFixed(2)} {selectedPosition.asset.currency.code}</strong>
                 </Typography>
               </Box>
             )}

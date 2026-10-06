@@ -322,6 +322,7 @@ _VECTORS: dict[str, Callable[[_VectorCalculator], Vector | dict[str, Vector]]] =
     "net_deposits_vector": _VectorCalculator.net_deposits,
     "transaction_cost_vector": _VectorCalculator.transaction_cost,
     "profit_vector": _VectorCalculator.profit,
+    "dividend_income_vector": _VectorCalculator.dividend_income,
     "free_cash_vector": _VectorCalculator.free_cash,
     "pocket_value_vector": _VectorCalculator.portfolio_value,
     "portfolio_value_vector": _VectorCalculator.portfolio_value,

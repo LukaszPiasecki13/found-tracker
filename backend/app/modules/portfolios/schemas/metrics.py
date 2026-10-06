@@ -29,5 +29,5 @@ class PortfolioVectorsResponse(RootModel[dict[str, VectorValue]]):
     """`{"date": [...], "<vector>": [...] | {"<name>": [...]}}` - only the
     requested vectors (all when none are named); `{}` when the user has no
     operations. Vector names: `assets`, `asset_classes`, `net_deposits_vector`,
-    `transaction_cost_vector`, `profit_vector`, `free_cash_vector`,
-    `portfolio_value_vector` and its alias `pocket_value_vector`."""
+    `transaction_cost_vector`, `profit_vector`, `dividend_income_vector`,
+    `free_cash_vector`, `portfolio_value_vector` and its alias `pocket_value_vector`."""

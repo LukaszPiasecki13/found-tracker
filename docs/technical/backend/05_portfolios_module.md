@@ -1,7 +1,7 @@
 ---
 id: be-portfolios-module
 status: current
-last_reviewed: 2026-10-05
+last_reviewed: 2026-10-06
 type: mixed
 scope: backend/portfolios
 applies_to:
@@ -100,6 +100,8 @@ Publiczne API wyłącznie przez `domain/__init__.py` (`__all__`, DOM-11). Kompon
 ## 5. Wycena (modele odczytowe)
 
 `PortfolioValuator` liczy dokładnie (na `Decimal`): koszt nabycia `ilość × średnia cena` (waluta waloru) i `× średni kurs` (waluta portfela); wartość rynkowa `ilość × cena bieżąca`, a gdy waluta waloru ≠ waluta bazowa portfela — `× kurs krzyżowy` z mapy `FxMap` (`(id waluty waloru, id waluty bazowej) -> rate[waloru]/rate[bazowej]`, kursy `assets` są „USD za jednostkę”; buduje ją `services/fx.py::FxMapBuilder`, domena dostaje gotową mapę); niezrealizowany wynik, zwrot % pozycji; dla portfela: wartość pozycji, wartość całkowita (z gotówką), wynik względem `total_deposited`, suma `total_fees` pozycji (zwrot portfela to TWR z [§6.1](#61-zwrot-portfela-twr-i-snapshoty-dzienne), nie ze stosunku do wpłat); udział pozycji względem wartości całkowitej. Dzielenie przez zero daje 0. **Brak kursu** (waluta bez notowania; `exchange_rate` równy 1 na walucie innej niż USD to wartość domyślna kolumny, nie kurs) → pola wyceny pozycji `null` + `rate_missing=true`; sumy portfela (`positions_value`, `total_value`, `total_profit_loss`) są `null`, gdy brakuje kursu którejkolwiek pozycji (bez sum częściowych); koszty i `total_fees` nie wymagają kursu. Zaokrąglenie dopiero w schemacie odpowiedzi (typy `RoundedValue`/`RoundedPercent`/`RoundedFees` w `schemas/positions.py`): wartości 3 miejsca, procenty 4, opłaty 2, `ROUND_HALF_EVEN` (jak `round` Pythona).
+
+**Widok w walucie waloru** (bez kursu, też przy `rate_missing`): `market_value_asset_currency` = ilość × cena, `unrealized_pnl_asset_currency` = ilość × (cena − średnia cena), `price_change_pct` = zmiana ceny waloru względem średniej (`null` przy cenie lub średniej `0`). Cena `0` oznacza brak notowania, więc pola w walucie waloru są wtedy `null`. **Rozbicie zysku w PLN**: `price_effect` = ilość × (cena − średnia) × kurs; `fx_effect` = ilość × średnia cena × (kurs − średni kurs zakupu); suma = `unrealized_pnl`. W walucie bazowej `fx_effect` = 0. `fx_rate_applied` (kurs zastosowany, 6 miejsc, `RoundedPositionRate`) jest `null` przy braku kursu. Źródło: `domain/valuation.py`; pola są dodatkowe w `PositionResponse`, istniejące bez zmian.
 
 Serwisy odczytowe zwracają DTO (`PortfolioSummaryResponse`, `PortfolioDetailResponse`, `PositionResponse` — [ADR-0003](../adr/0003-serwisy-zwracaja-encje-orm.md)); repozytoria ładują pozycje → walor → waluta/klasa zapytaniami `selectinload`/`joinedload` (bez N+1) z `populate_existing`, więc odczyt w tej samej sesji po zapisie widzi świeży stan.
 

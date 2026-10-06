@@ -29,6 +29,7 @@ interface AreaChartCardProps {
   error?: string | null;
   height?: number;
   stacked?: boolean;
+  currency?: string;
 }
 
 const AreaChartCard: React.FC<AreaChartCardProps> = ({
@@ -41,6 +42,7 @@ const AreaChartCard: React.FC<AreaChartCardProps> = ({
   error = null,
   height = 300,
   stacked = true,
+  currency,
 }) => {
   const formatYAxis = (v: number) => {
     if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
@@ -49,10 +51,11 @@ const AreaChartCard: React.FC<AreaChartCardProps> = ({
   };
 
   const tooltipFormatter = (value: number | undefined) => {
-    return new Intl.NumberFormat('pl-PL', {
+    const formatted = new Intl.NumberFormat('pl-PL', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value ?? 0);
+    return currency ? `${formatted} ${currency}` : formatted;
   };
 
   return (

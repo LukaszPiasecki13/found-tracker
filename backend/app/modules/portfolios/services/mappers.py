@@ -10,7 +10,8 @@ def position_response(
     position: Position, valuation: PositionValuation
 ) -> PositionResponse:
     """A stored position plus its valuation as the response DTO; the schema
-    rounds the computed figures."""
+    rounds the computed figures. The valuation already holds the split and the
+    asset-currency view (DEC-10), so this only copies them."""
     return PositionResponse(
         **dict(PositionFields.model_validate(position)),
         cost_basis=valuation.cost_basis,
@@ -20,4 +21,10 @@ def position_response(
         return_pct=valuation.return_pct,
         portfolio_weight_pct=valuation.portfolio_weight_pct,
         rate_missing=valuation.rate_missing,
+        market_value_asset_currency=valuation.market_value_asset_currency,
+        unrealized_pnl_asset_currency=valuation.unrealized_pnl_asset_currency,
+        price_change_pct=valuation.price_change_pct,
+        fx_rate_applied=valuation.fx_rate_applied,
+        price_effect=valuation.price_effect,
+        fx_effect=valuation.fx_effect,
     )

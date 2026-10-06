@@ -81,6 +81,72 @@ def test_a_eur_position_in_a_pln_portfolio_uses_the_cross_rate() -> None:
     assert position.return_pct == D("20")
 
 
+def test_price_and_fx_effects_sum_to_the_unrealized_profit() -> None:
+    holding = _holding("10", "20", "25", currency_id=USD, average_fx="3.9")
+
+    position = (
+        PortfolioValuator()
+        .value(_portfolio(), [holding], {(USD, PLN): D("4.1")})
+        .positions[0]
+    )
+
+    assert position.price_effect == D("205")  # 10 * (25 - 20) * 4.1
+    assert position.fx_effect == D("40")  # 10 * 20 * (4.1 - 3.9)
+    assert position.price_effect + position.fx_effect == position.unrealized_pnl
+
+
+def test_base_currency_position_has_no_fx_effect() -> None:
+    holding = _holding("10", "20", "25")
+
+    position = PortfolioValuator().value(_portfolio(), [holding], {}).positions[0]
+
+    assert position.price_effect == D("50")  # 10 * (25 - 20) at rate 1
+    assert position.fx_effect == D("0")
+    assert position.fx_rate_applied == D("1")
+
+
+def test_base_currency_fx_effect_stays_zero_for_a_stored_average_rate_near_one() -> (
+    None
+):
+    holding = _holding("10", "20", "25", average_fx="1.0000001")
+
+    position = PortfolioValuator().value(_portfolio(), [holding], {}).positions[0]
+
+    assert position.fx_effect == D("0")
+
+
+def test_missing_rate_keeps_the_asset_currency_view() -> None:
+    holding = _holding("10", "90", "100", currency_id=EUR)
+
+    position = PortfolioValuator().value(_portfolio(), [holding], {}).positions[0]
+
+    assert position.rate_missing is True
+    assert position.market_value is None
+    assert position.market_value_asset_currency == D("1000")
+    assert position.unrealized_pnl_asset_currency == D("100")
+    assert position.price_change_pct == D("10") / D("90") * 100
+    assert position.fx_rate_applied is None
+    assert position.price_effect is None
+    assert position.fx_effect is None
+
+
+def test_zero_price_or_zero_average_gives_no_price_change() -> None:
+    no_quote = _holding("10", "20", "0", currency_id=USD)
+    no_average = _holding("10", "0", "25")
+
+    valuation = PortfolioValuator().value(
+        _portfolio(), [no_quote, no_average], {(USD, PLN): D("4")}
+    )
+
+    no_quote_position = valuation.positions[0]
+    assert no_quote_position.price_change_pct is None
+    assert no_quote_position.market_value_asset_currency is None
+    assert no_quote_position.unrealized_pnl_asset_currency is None
+    assert no_quote_position.price_effect is None
+    assert no_quote_position.fx_effect is None
+    assert valuation.positions[1].price_change_pct is None
+
+
 def test_a_usd_position_in_a_pln_portfolio_uses_the_cross_rate() -> None:
     holding = _holding("10", "80", "100", currency_id=USD, average_fx="4")
 

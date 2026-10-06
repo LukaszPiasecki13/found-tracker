@@ -14,23 +14,43 @@ import dayjs from 'dayjs';
 import { usePocketByName } from '../hooks/usePockets';
 import { usePositions } from '../hooks/usePositions';
 import { usePocketVectors } from '../hooks/usePocketVectors';
+import { useOperations } from '../hooks/useOperations';
 import DateRangePicker from '../components/DateRangePicker';
 import LineChartCard from '../components/charts/LineChartCard';
 import AreaChartCard from '../components/charts/AreaChartCard';
 import PieChartCard from '../components/charts/PieChartCard';
+import { dropZeroSeries, pieSlices, returnPercent } from '../utils/portfolioSeries';
 
 const PocketChartsPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const pocketName = decodeURIComponent(slug || '');
 
-  const [startDate, setStartDate] = useState(
-    dayjs().subtract(1, 'year').format('YYYY-MM-DD')
-  );
+  // Get operations to determine first operation date
+  const { data: operations } = useOperations(pocketName);
+  const firstOperationDate = useMemo(() => {
+    if (!operations || operations.length === 0) {
+      return dayjs().subtract(1, 'year').format('YYYY-MM-DD');
+    }
+    // Sort operations by date and get the earliest
+    const sorted = [...operations].sort(
+      (a, b) => new Date(a.operation_date).getTime() - new Date(b.operation_date).getTime()
+    );
+    return dayjs(sorted[0].operation_date).format('YYYY-MM-DD');
+  }, [operations]);
+
+  // null until the user picks a start date; the first operation date is the default
+  // until then, so the default follows operations as they load
+  const [userStartDate, setUserStartDate] = useState<string | null>(null);
+  const startDate = userStartDate ?? firstOperationDate;
   const [endDate, setEndDate] = useState(dayjs().format('YYYY-MM-DD'));
 
   const { data: pocket, isLoading: pocketLoading, error: pocketError } = usePocketByName(pocketName);
-  const { data: positions } = usePositions(pocketName);
+  const {
+    data: positions,
+    isLoading: positionsLoading,
+    error: positionsError,
+  } = usePositions(pocketName);
   const {
     data: vectors,
     isLoading: vectorsLoading,
@@ -47,13 +67,29 @@ const PocketChartsPage: React.FC = () => {
       net_deposits: vectors.net_deposits_vector?.[i] ?? 0,
       transaction_cost: vectors.transaction_cost_vector?.[i] ?? 0,
       free_cash: vectors.free_cash_vector?.[i] ?? 0,
+      dividend_income: vectors.dividend_income_vector?.[i] ?? 0,
+    }));
+  }, [vectors]);
+
+  // Calculate return percentage
+  const returnPercentData = useMemo(() => {
+    if (!vectors?.date || !vectors?.profit_vector || !vectors?.net_deposits_vector) {
+      return [];
+    }
+    const returnPcts = returnPercent(
+      vectors.profit_vector,
+      vectors.net_deposits_vector
+    );
+    return vectors.date.map((date, i) => ({
+      date,
+      return_percent: returnPcts[i],
     }));
   }, [vectors]);
 
   // Data for assets stacked area chart
   const assetsData = useMemo(() => {
     if (!vectors?.date || !vectors?.assets) return { data: [], keys: [] };
-    const keys = Object.keys(vectors.assets);
+    const keys = dropZeroSeries(vectors.assets);
     const data = vectors.date.map((date, i) => {
       const row: Record<string, unknown> = { date };
       keys.forEach((key) => {
@@ -67,7 +103,7 @@ const PocketChartsPage: React.FC = () => {
   // Data for asset classes stacked area chart
   const assetClassesData = useMemo(() => {
     if (!vectors?.date || !vectors?.asset_classes) return { data: [], keys: [] };
-    const keys = Object.keys(vectors.asset_classes);
+    const keys = dropZeroSeries(vectors.asset_classes);
     const data = vectors.date.map((date, i) => {
       const row: Record<string, unknown> = { date };
       keys.forEach((key) => {
@@ -78,16 +114,18 @@ const PocketChartsPage: React.FC = () => {
     return { data, keys };
   }, [vectors]);
 
-  // Pie chart data from current positions
+  // Pie chart: current position values by ticker plus the cash balance
   const allocationData = useMemo(() => {
     if (!positions) return [];
-    return positions
-      .filter((p) => (p.market_value || 0) > 0)
-      .map((p) => ({
-        name: p.asset.ticker,
-        value: p.market_value || 0,
-      }));
-  }, [positions]);
+    const valueByTicker: Record<string, number> = {};
+    positions.forEach((p) => {
+      const ticker = p.asset.ticker;
+      valueByTicker[ticker] = (valueByTicker[ticker] ?? 0) + (p.market_value || 0);
+    });
+    const freeCash = vectors?.free_cash_vector;
+    const lastFreeCash = freeCash && freeCash.length > 0 ? freeCash[freeCash.length - 1] : 0;
+    return pieSlices(valueByTicker, lastFreeCash);
+  }, [positions, vectors]);
 
   // Combined: portfolio value vs net deposits
   const comparisonData = useMemo(() => {
@@ -100,7 +138,7 @@ const PocketChartsPage: React.FC = () => {
   }, [vectors]);
 
   const handleDateChange = (start: string, end: string) => {
-    setStartDate(start);
+    setUserStartDate(start);
     setEndDate(end);
   };
 
@@ -173,6 +211,7 @@ const PocketChartsPage: React.FC = () => {
             colors={['#1976d2']}
             loading={vectorsLoading}
             error={errorMessage}
+            currency={pocket?.base_currency.code}
           />
         </Grid>
 
@@ -186,6 +225,7 @@ const PocketChartsPage: React.FC = () => {
             loading={vectorsLoading}
             error={errorMessage}
             showReferenceLine
+            currency={pocket?.base_currency.code}
           />
         </Grid>
 
@@ -199,18 +239,20 @@ const PocketChartsPage: React.FC = () => {
             colors={['#ed6c02']}
             loading={vectorsLoading}
             error={errorMessage}
+            currency={pocket?.base_currency.code}
           />
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
           <LineChartCard
-            title="Koszty transakcji"
-            subtitle="Skumulowane koszty nabycia aktywów"
+            title="Saldo kosztów transakcji"
+            subtitle="Koszty nabycia pomniejszone o wpływy ze sprzedaży i opłaty"
             data={timeSeriesData}
             dataKeys={['transaction_cost']}
             colors={['#d32f2f']}
             loading={vectorsLoading}
             error={errorMessage}
+            currency={pocket?.base_currency.code}
           />
         </Grid>
 
@@ -224,6 +266,7 @@ const PocketChartsPage: React.FC = () => {
             colors={['#0288d1']}
             loading={vectorsLoading}
             error={errorMessage}
+            currency={pocket?.base_currency.code}
           />
         </Grid>
 
@@ -232,7 +275,8 @@ const PocketChartsPage: React.FC = () => {
             title="Alokacja aktywów"
             subtitle="Bieżący podział portfela"
             data={allocationData}
-            loading={!positions}
+            loading={positionsLoading}
+            error={positionsError ? 'Błąd podczas ładowania pozycji' : null}
           />
         </Grid>
 
@@ -241,11 +285,12 @@ const PocketChartsPage: React.FC = () => {
           {assetsData.keys.length > 0 ? (
             <AreaChartCard
               title="Aktywa — stos"
-              subtitle="Wartość poszczególnych aktywów w czasie"
+              subtitle="Wartość poszczególnych aktywów w czasie (wartości w walutach natywnych aktywów)"
               data={assetsData.data}
               dataKeys={assetsData.keys}
               loading={vectorsLoading}
               error={errorMessage}
+              currency={pocket?.base_currency.code}
             />
           ) : (
             <LineChartCard
@@ -263,11 +308,12 @@ const PocketChartsPage: React.FC = () => {
           {assetClassesData.keys.length > 0 ? (
             <AreaChartCard
               title="Klasy aktywów — stos"
-              subtitle="Wartość klas aktywów w czasie"
+              subtitle="Wartość klas aktywów w czasie (wartości w walutach natywnych aktywów)"
               data={assetClassesData.data}
               dataKeys={assetClassesData.keys}
               loading={vectorsLoading}
               error={errorMessage}
+              currency={pocket?.base_currency.code}
             />
           ) : (
             <LineChartCard
@@ -281,7 +327,41 @@ const PocketChartsPage: React.FC = () => {
           )}
         </Grid>
 
-        {/* Row 5 — Comparison chart (full width) */}
+        {/* Row 5 — Dividend income chart */}
+        {vectors?.dividend_income_vector && (
+          <Grid size={{ xs: 12, md: 6 }}>
+            <LineChartCard
+              title="Dywidendy skumulowane"
+              subtitle="Skumulowany dochód z dywidend"
+              data={timeSeriesData}
+              dataKeys={['dividend_income']}
+              colors={['#7b1fa2']}
+              loading={vectorsLoading}
+              error={errorMessage}
+              currency={pocket?.base_currency.code}
+            />
+          </Grid>
+        )}
+
+        {/* Return percent chart */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <LineChartCard
+            title="Zwrot (%)"
+            subtitle="Zwrot z inwestycji w stosunku do wpłat"
+            data={returnPercentData}
+            dataKeys={['return_percent']}
+            colors={['#00838f']}
+            loading={vectorsLoading}
+            error={errorMessage}
+            yAxisFormatter={(value: number | null) => {
+              if (value === null) return '';
+              return `${value.toFixed(1)}%`;
+            }}
+            showReferenceLine
+          />
+        </Grid>
+
+        {/* Row 6 — Comparison chart (full width) */}
         <Grid size={{ xs: 12 }}>
           <LineChartCard
             title="Wartość portfela vs Wpłaty netto"
@@ -292,6 +372,7 @@ const PocketChartsPage: React.FC = () => {
             loading={vectorsLoading}
             error={errorMessage}
             height={350}
+            currency={pocket?.base_currency.code}
           />
         </Grid>
       </Grid>

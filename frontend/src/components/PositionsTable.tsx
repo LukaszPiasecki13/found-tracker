@@ -4,10 +4,11 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
+  getExpandedRowModel,
   flexRender,
   createColumnHelper,
 } from '@tanstack/react-table';
-import type { SortingState } from '@tanstack/table-core';
+import type { ExpandedState, SortingState } from '@tanstack/table-core';
 import {
   Table,
   TableBody,
@@ -20,10 +21,19 @@ import {
   Typography,
   Chip,
   CircularProgress,
+  IconButton,
+  TableFooter,
 } from '@mui/material';
-import { TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon } from '@mui/icons-material';
+import {
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+} from '@mui/icons-material';
 import type { Position } from '../types/api';
 import RateMissingChip from './RateMissingChip';
+import PositionDetails from './PositionDetails';
+import { NO_VALUE, formatMoney, formatPercent } from '../utils/formatMoney';
 
 interface PositionsTableProps {
   positions: Position[];
@@ -33,25 +43,46 @@ interface PositionsTableProps {
 
 const columnHelper = createColumnHelper<Position>();
 
-const NO_VALUE = '—';
+const PercentCell: React.FC<{ value: number | null | undefined; bold?: boolean }> = ({
+  value,
+  bold,
+}) => {
+  if (value == null) return <>{NO_VALUE}</>;
+  return (
+    <Typography
+      variant="body2"
+      color={value >= 0 ? 'success.main' : 'error.main'}
+      fontWeight={bold ? 'bold' : undefined}
+    >
+      {formatPercent(value)}
+    </Typography>
+  );
+};
 
 const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, currencyCode }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pl-PL', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 2,
-    }).format(value);
-  };
-
-  const formatPercent = (value: number) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-  };
+  const [expanded, setExpanded] = React.useState<ExpandedState>({});
 
   const columns = useMemo(
     () => [
+      columnHelper.display({
+        id: 'expand',
+        enableSorting: false,
+        header: '',
+        cell: ({ row }) => (
+          <IconButton
+            size="small"
+            onClick={row.getToggleExpandedHandler()}
+            aria-label="Szczegóły pozycji"
+          >
+            {row.getIsExpanded() ? (
+              <ExpandLessIcon fontSize="small" />
+            ) : (
+              <ExpandMoreIcon fontSize="small" />
+            )}
+          </IconButton>
+        ),
+      }),
       columnHelper.accessor((row) => row.asset.ticker, {
         id: 'ticker',
         header: 'Ticker',
@@ -80,80 +111,66 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
       }),
       columnHelper.accessor('average_buy_price', {
         header: 'Śr. cena zakupu',
-        cell: (info) => {
-          const row = info.row.original;
-          const quantity = Number(row.quantity) || 0;
-          const costBasis = Number(row.cost_basis_in_portfolio_currency) || 0;
-          const avgPrice = quantity > 0 ? costBasis / quantity : Number(row.average_buy_price) || 0;
-          return formatCurrency(avgPrice);
-        },
+        cell: (info) =>
+          formatMoney(info.getValue(), info.row.original.asset.currency.code, 'code'),
       }),
       columnHelper.accessor((row) => row.asset.current_price, {
         id: 'current_price',
         header: 'Cena aktualna',
-        cell: (info) => {
-          const row = info.row.original;
-          const quantity = Number(row.quantity) || 0;
-          if (quantity > 0 && row.market_value != null) {
-            return formatCurrency(Number(row.market_value) / quantity);
-          }
-          return NO_VALUE;
-        },
+        cell: (info) =>
+          formatMoney(info.getValue(), info.row.original.asset.currency.code, 'code'),
+      }),
+      columnHelper.accessor('price_change_pct', {
+        header: 'Zmiana ceny %',
+        cell: (info) => <PercentCell value={info.getValue()} />,
       }),
       columnHelper.accessor('market_value', {
-        header: 'Wartość rynkowa',
+        header: `Wartość (${currencyCode})`,
         cell: (info) => {
           const value = info.getValue();
           if (value == null) {
             return info.row.original.rate_missing ? <RateMissingChip /> : NO_VALUE;
           }
-          return formatCurrency(Number(value));
+          return formatMoney(Number(value), currencyCode);
         },
       }),
       columnHelper.accessor('unrealized_pnl', {
-        header: 'Zysk/Strata',
+        header: `Zysk/Strata (${currencyCode})`,
         cell: (info) => {
-          if (info.getValue() == null) return NO_VALUE;
-          const value = Number(info.getValue());
+          const value = info.getValue();
+          if (value == null) return NO_VALUE;
+          const amount = Number(value);
           return (
-            <Box display="flex" alignItems="center">
-              {value >= 0 ? (
+            <Box
+              display="flex"
+              alignItems="center"
+              title="Bez dywidend i odsetek"
+            >
+              {amount >= 0 ? (
                 <TrendingUpIcon fontSize="small" color="success" />
               ) : (
                 <TrendingDownIcon fontSize="small" color="error" />
               )}
               <Typography
                 variant="body2"
-                color={value >= 0 ? 'success.main' : 'error.main'}
+                color={amount >= 0 ? 'success.main' : 'error.main'}
                 sx={{ ml: 0.5 }}
               >
-                {formatCurrency(value)}
+                {formatMoney(amount, currencyCode)}
               </Typography>
             </Box>
           );
         },
       }),
       columnHelper.accessor('return_pct', {
-        header: 'Stopa zwrotu',
-        cell: (info) => {
-          if (info.getValue() == null) return NO_VALUE;
-          const value = Number(info.getValue());
-          return (
-            <Typography
-              variant="body2"
-              color={value >= 0 ? 'success.main' : 'error.main'}
-              fontWeight="bold"
-            >
-              {formatPercent(value)}
-            </Typography>
-          );
-        },
+        header: `Zwrot % (${currencyCode})`,
+        cell: (info) => <PercentCell value={info.getValue()} bold />,
       }),
       columnHelper.accessor('portfolio_weight_pct', {
         header: 'Udział %',
         cell: (info) => {
-          if (info.getValue() == null) return NO_VALUE;
-          return `${Number(info.getValue()).toFixed(2)}%`;
+          const value = info.getValue();
+          return value == null ? NO_VALUE : `${Number(value).toFixed(2)}%`;
         },
       }),
     ],
@@ -165,12 +182,27 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
     columns,
     state: {
       sorting,
+      expanded,
     },
     onSortingChange: setSorting,
+    onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
   });
+
+  // Totals in the portfolio's currency; no partial sum when a rate is missing,
+  // the same rule as the backend (DEC-2).
+  const totals = useMemo(() => {
+    if (positions.some((p) => p.market_value == null || p.unrealized_pnl == null)) {
+      return undefined;
+    }
+    return {
+      value: positions.reduce((sum, p) => sum + (p.market_value ?? 0), 0),
+      profit: positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0),
+    };
+  }, [positions]);
 
   if (isLoading) {
     return (
@@ -200,7 +232,10 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
                 <TableCell
                   key={header.id}
                   onClick={header.column.getToggleSortingHandler()}
-                  sx={{ cursor: 'pointer', fontWeight: 'bold' }}
+                  sx={{
+                    cursor: header.column.getCanSort() ? 'pointer' : 'default',
+                    fontWeight: 'bold',
+                  }}
                 >
                   {header.isPlaceholder
                     ? null
@@ -216,15 +251,38 @@ const PositionsTable: React.FC<PositionsTableProps> = ({ positions, isLoading, c
         </TableHead>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id} hover>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
+            <React.Fragment key={row.id}>
+              <TableRow hover>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+              {row.getIsExpanded() && (
+                <TableRow>
+                  <TableCell colSpan={columns.length} sx={{ bgcolor: 'action.hover' }}>
+                    <PositionDetails position={row.original} currencyCode={currencyCode} />
+                  </TableCell>
+                </TableRow>
+              )}
+            </React.Fragment>
           ))}
         </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={7} sx={{ fontWeight: 'bold' }}>
+              Suma
+            </TableCell>
+            <TableCell sx={{ fontWeight: 'bold' }}>
+              {formatMoney(totals?.value, currencyCode)}
+            </TableCell>
+            <TableCell sx={{ fontWeight: 'bold' }}>
+              {formatMoney(totals?.profit, currencyCode)}
+            </TableCell>
+            <TableCell colSpan={2} />
+          </TableRow>
+        </TableFooter>
       </Table>
     </TableContainer>
   );

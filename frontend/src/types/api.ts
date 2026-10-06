@@ -71,6 +71,14 @@ export interface Position {
   return_pct?: number | null;
   portfolio_weight_pct?: number | null;
   rate_missing?: boolean;
+  // Asset-currency view: needs no rate, so it is set even when rate_missing (DEC-6).
+  market_value_asset_currency?: number | null;
+  unrealized_pnl_asset_currency?: number | null;
+  price_change_pct?: number | null;
+  // PLN profit split (DEC-4); null when rate_missing.
+  fx_rate_applied?: number | null;
+  price_effect?: number | null;
+  fx_effect?: number | null;
 }
 
 export type OperationType =
@@ -106,6 +114,7 @@ export interface PocketVectorsResponse {
   net_deposits_vector: number[];
   transaction_cost_vector: number[];
   profit_vector: number[];
+  dividend_income_vector?: number[];
   free_cash_vector: number[];
   pocket_value_vector: number[];
   portfolio_value_vector?: number[];

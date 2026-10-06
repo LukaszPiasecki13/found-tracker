@@ -157,6 +157,7 @@ AAA = [0.0, 210.0, 220.0, 220.0, 220.0, 144.0, 150.0]
 BBB = [0.0, 0.0, 52.5, 52.5, 52.5, 52.5, 52.5]
 NET_DEPOSITS = [1000.0] * 6 + [900.0]
 TRANSACTION_COST = [0.0, 202.0, 252.0, 252.0, 252.0, 153.5, 153.5]
+DIVIDEND_INCOME = [0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 3.0]
 
 
 def test_all_vectors_by_default(
@@ -172,6 +173,7 @@ def test_all_vectors_by_default(
     assert body["net_deposits_vector"] == NET_DEPOSITS
     assert body["transaction_cost_vector"] == TRANSACTION_COST
     assert body["profit_vector"] == [0.0, 8.0, 20.5, 20.5, 20.5, 46.0, 52.0]
+    assert body["dividend_income_vector"] == DIVIDEND_INCOME
     assert body["free_cash_vector"] == [
         1000.0,
         798.0,
@@ -191,10 +193,43 @@ def test_all_vectors_by_default(
         "net_deposits_vector",
         "transaction_cost_vector",
         "profit_vector",
+        "dividend_income_vector",
         "free_cash_vector",
         "pocket_value_vector",
         "portfolio_value_vector",
     ]
+
+
+def test_dividend_income_vector_with_fx_rate(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    operations = [
+        _op("deposit", _at(1), amount="1000"),
+        _op("buy", _at(2), ticker="AAA", quantity="10", price="20", fx_rate="4"),
+        _op("dividend", _at(3), ticker="AAA", amount="5", fee="1", fx_rate="4"),
+    ]
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(
+        1, _query('["dividend_income_vector"]', end="2025-01-03")
+    )
+
+    assert body.root["dividend_income_vector"] == [0.0, 0.0, 20.0]
+
+
+def test_negative_transaction_cost_from_profitable_sell(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    operations = [
+        _op("deposit", _at(1), amount="1000"),
+        _op("buy", _at(2), ticker="AAA", quantity="10", price="100", fee="10"),
+        _op("sell", _at(3), ticker="AAA", quantity="10", price="120", fee="5"),
+    ]
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(
+        1, _query('["transaction_cost_vector"]', end="2025-01-03")
+    )
+
+    assert body.root["transaction_cost_vector"] == [0.0, 1010.0, -185.0]
 
 
 def test_each_ticker_history_is_fetched_once_per_request(

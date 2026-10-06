@@ -35,6 +35,8 @@ def rounded_to(places: int) -> Callable[[Decimal], Decimal]:
 RoundedValue = Annotated[DecimalNumber, AfterValidator(rounded_to(3))]
 RoundedPercent = Annotated[DecimalNumber, AfterValidator(rounded_to(4))]
 RoundedFees = Annotated[DecimalNumber, AfterValidator(rounded_to(2))]
+# An exchange rate keeps six places: three would distort it (DEC-12).
+RoundedPositionRate = Annotated[DecimalNumber, AfterValidator(rounded_to(6))]
 
 
 class PositionListQuery(BaseModel):
@@ -76,3 +78,10 @@ class PositionResponse(PositionFields):
     return_pct: RoundedPercent | None
     portfolio_weight_pct: RoundedPercent | None
     rate_missing: bool = False
+    # Asset-currency view (no rate) and the PLN profit split (DEC-4, DEC-6, DEC-12).
+    market_value_asset_currency: RoundedValue | None = None
+    unrealized_pnl_asset_currency: RoundedValue | None = None
+    price_change_pct: RoundedPercent | None = None
+    fx_rate_applied: RoundedPositionRate | None = None
+    price_effect: RoundedValue | None = None
+    fx_effect: RoundedValue | None = None

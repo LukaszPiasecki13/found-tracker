@@ -28,6 +28,7 @@ interface LineChartCardProps {
   height?: number;
   yAxisFormatter?: (value: number) => string;
   showReferenceLine?: boolean; // line at y=0
+  currency?: string; // currency code (e.g., 'PLN')
 }
 
 const LineChartCard: React.FC<LineChartCardProps> = ({
@@ -41,6 +42,7 @@ const LineChartCard: React.FC<LineChartCardProps> = ({
   height = 300,
   yAxisFormatter,
   showReferenceLine = false,
+  currency,
 }) => {
   const formatYAxis = yAxisFormatter || ((v: number) => {
     if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
@@ -49,10 +51,11 @@ const LineChartCard: React.FC<LineChartCardProps> = ({
   });
 
   const tooltipFormatter = (value: number | undefined) => {
-    return new Intl.NumberFormat('pl-PL', {
+    const formatted = new Intl.NumberFormat('pl-PL', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value ?? 0);
+    return currency ? `${formatted} ${currency}` : formatted;
   };
 
   return (
@@ -74,6 +77,7 @@ const LineChartCard: React.FC<LineChartCardProps> = ({
             tick={{ fontSize: 11 }}
             tickFormatter={formatYAxis}
             width={60}
+            label={currency ? { value: `Wartość (${currency})`, angle: -90, position: 'insideLeft' } : undefined}
           />
           <Tooltip
             formatter={tooltipFormatter}

@@ -28,6 +28,7 @@ interface PieChartCardProps {
   loading?: boolean;
   error?: string | null;
   height?: number;
+  currency?: string;
 }
 
 const RADIAN = Math.PI / 180;
@@ -75,14 +76,16 @@ const PieChartCard: React.FC<PieChartCardProps> = ({
   loading = false,
   error = null,
   height = 300,
+  currency,
 }) => {
   const filteredData = data.filter((d) => d.value > 0);
 
   const tooltipFormatter = (value: number | undefined) => {
-    return new Intl.NumberFormat('pl-PL', {
+    const formatted = new Intl.NumberFormat('pl-PL', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value ?? 0);
+    return currency ? `${formatted} ${currency}` : formatted;
   };
 
   return (

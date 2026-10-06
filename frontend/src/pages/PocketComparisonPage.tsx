@@ -16,6 +16,7 @@ import { usePockets } from '../hooks/usePockets';
 import { usePocketVectors } from '../hooks/usePocketVectors';
 import DateRangePicker from '../components/DateRangePicker';
 import LineChartCard from '../components/charts/LineChartCard';
+import { normalizeToFirstPositive } from '../utils/portfolioSeries';
 
 const COLORS = [
   '#1976d2', '#9c27b0', '#2e7d32', '#ed6c02', '#d32f2f',
@@ -60,7 +61,7 @@ const PocketComparisonPage: React.FC = () => {
 
   // Build normalized comparison data (start = 100%)
   const normalizedValueData = useMemo(() => {
-    if (selectedPockets.length === 0) return { data: [], keys: [] };
+    if (selectedPockets.length === 0) return { data: [], keys: [], baseDates: [] };
 
     // Find the longest date vector
     let dates: string[] = [];
@@ -71,23 +72,36 @@ const PocketComparisonPage: React.FC = () => {
       }
     });
 
-    if (dates.length === 0) return { data: [], keys: [] };
+    if (dates.length === 0) return { data: [], keys: [], baseDates: [] };
 
     const keys = selectedPockets.map((name) => name);
+    const baseDates: (string | null)[] = [];
+
+    // Calculate base date for each portfolio (first positive value date)
+    selectedPockets.forEach((_, i) => {
+      const v = allVectors[i]?.data;
+      if (v?.pocket_value_vector) {
+        const firstPositiveIdx = v.pocket_value_vector.findIndex((val) => val > 0);
+        baseDates.push(firstPositiveIdx >= 0 ? dates[firstPositiveIdx] : null);
+      } else {
+        baseDates.push(null);
+      }
+    });
 
     const data = dates.map((date, idx) => {
       const row: Record<string, unknown> = { date };
       selectedPockets.forEach((name, i) => {
         const v = allVectors[i]?.data;
-        if (v?.pocket_value_vector && v.pocket_value_vector.length > idx) {
-          const startVal = v.pocket_value_vector[0] || 1;
-          row[name] = ((v.pocket_value_vector[idx] / startVal) * 100);
+        if (v?.pocket_value_vector) {
+          // Use normalizeToFirstPositive to find the first positive value
+          const normalized = normalizeToFirstPositive(v.pocket_value_vector);
+          row[name] = normalized.series[idx];
         }
       });
       return row;
     });
 
-    return { data, keys };
+    return { data, keys, baseDates };
   }, [selectedPockets, pocket1Vectors.data, pocket2Vectors.data, pocket3Vectors.data, pocket4Vectors.data]);
 
   // Absolute profit comparison
@@ -211,13 +225,28 @@ const PocketComparisonPage: React.FC = () => {
           <Grid size={{ xs: 12 }}>
             <LineChartCard
               title="Zwrot względny (%)"
-              subtitle="Normalizacja do 100% na początku okresu"
+              subtitle={
+                normalizedValueData.baseDates.some((d) => d !== null)
+                  ? normalizedValueData.keys
+                    .map((name, i) => {
+                      const baseDate = normalizedValueData.baseDates[i];
+                      if (baseDate) {
+                        return `${name}: ${dayjs(baseDate).format('DD.MM.YYYY')}`;
+                      }
+                      return `${name}: brak wartości w zakresie`;
+                    })
+                    .join(' | ')
+                  : 'Brak danych do normalizacji'
+              }
               data={normalizedValueData.data}
               dataKeys={normalizedValueData.keys}
               colors={COLORS}
               loading={isAnyLoading}
               height={350}
-              yAxisFormatter={(v) => `${v.toFixed(0)}%`}
+              yAxisFormatter={(v: number | null) => {
+                if (v === null) return '';
+                return `${v.toFixed(0)}%`;
+              }}
               showReferenceLine
             />
           </Grid>
