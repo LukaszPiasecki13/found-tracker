@@ -314,10 +314,48 @@ def test_provider_outage_fails_the_request_instead_of_drawing_zeros(
         _service(operation_repo, operations, prices).portfolio_vectors(1, query)
 
 
-def test_ticker_without_any_price_fails_the_request(
+def test_sold_out_ticker_without_any_price_does_not_fail_the_request(
     operation_repo: MagicMock, prices: FakePrices
 ) -> None:
-    operations = [_op("buy", _at(2), ticker="ZZZ", quantity="1", price="1")]
+    operations = [
+        _op("buy", _at(2, month=12, year=2024), ticker="ZZZ", quantity="1", price="1"),
+        _op("sell", _at(3, month=12, year=2024), ticker="ZZZ", quantity="1", price="1"),
+        _op("buy", _at(2), ticker="AAA", quantity="1", price="1"),
+    ]
+    prices.history = {"AAA": {date(2025, 1, 2): D("20")}}
+    prices.current = {}
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(
+        1, _query('["assets"]', start="2025-01-01", end="2025-01-03")
+    )
+
+    assert body.root["assets"] == {
+        "AAA": [0.0, 20.0, 20.0],
+        "ZZZ": [0.0, 0.0, 0.0],
+    }
+    assert ("history", "ZZZ") not in prices.calls
+
+
+def test_held_ticker_without_market_price_is_valued_at_its_trade_prices(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    operations = [
+        _op("buy", _at(2), ticker="ZZZ", quantity="2", price="10"),
+        _op("sell", _at(4), ticker="ZZZ", quantity="1", price="12"),
+    ]
+
+    body = _service(operation_repo, operations, prices).portfolio_vectors(
+        1, _query('["assets"]', start="2025-01-01", end="2025-01-05")
+    )
+
+    # Held from 01-02 at 10, from 01-04 one unit left, last trade price 12.
+    assert body.root["assets"]["ZZZ"] == [0.0, 20.0, 20.0, 12.0, 12.0]
+
+
+def test_held_ticker_without_any_usable_price_fails_the_request(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    operations = [_op("buy", _at(2), ticker="ZZZ", quantity="1", price="0")]
 
     with pytest.raises(PriceDataMissingError) as exc_info:
         _service(operation_repo, operations, prices).portfolio_vectors(

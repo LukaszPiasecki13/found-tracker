@@ -14,6 +14,7 @@ import dayjs from 'dayjs';
 import { usePocketByName } from '../hooks/usePockets';
 import { usePositions } from '../hooks/usePositions';
 import { usePocketVectors } from '../hooks/usePocketVectors';
+import { getErrorMessage } from '../lib/api';
 import { useOperations } from '../hooks/useOperations';
 import DateRangePicker from '../components/DateRangePicker';
 import LineChartCard from '../components/charts/LineChartCard';
@@ -164,7 +165,7 @@ const PocketChartsPage: React.FC = () => {
   }
 
   const errorMessage = vectorsError
-    ? 'Błąd podczas ładowania danych analitycznych. Sprawdź czy portfel posiada operacje w wybranym zakresie dat.'
+    ? `Błąd podczas ładowania danych analitycznych: ${getErrorMessage(vectorsError)}.`
     : null;
 
   return (

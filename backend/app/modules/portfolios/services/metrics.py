@@ -19,8 +19,10 @@ previous implementation:
   are filled forward and backward; the rate is the daily FX rate from the asset's
   currency to the base currency, built the same way; an asset already in the base
   currency has rate 1 and no FX lookup;
-- a ticker with no price at all, or a currency pair with no rate at all, fails
-  its vector;
+- an asset never held in the range is worth 0 and is not looked up; an asset held
+  in the range with no market price at all (delisted, unknown to the provider) is
+  valued at the prices of its own buys and sells, which is an estimate and is
+  logged; a currency pair with no rate at all fails its vector;
 - a vector that cannot be computed (provider down, no price or rate at all)
   fails the request - zeros would draw a worthless portfolio;
 - the cost and cash vectors follow the ledger: buy/sell/dividend amounts carry
@@ -32,6 +34,7 @@ previous implementation:
 """
 
 import json
+import logging
 from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -56,6 +59,8 @@ from app.modules.portfolios.schemas.metrics import (
     PortfolioVectorsQuery,
     PortfolioVectorsResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 _DAY_SECONDS = 24 * 60 * 60
 _SUPPORTED_INTERVAL = "1d"
@@ -241,18 +246,38 @@ class _VectorCalculator:
                 values[-1] = float(latest)
         return np.array(_filled(values, label), dtype=float)
 
-    def _close_vector(self, ticker: str) -> Vector:
+    def _close_vector(self, ticker: str, ordered: Sequence[Operation]) -> Vector:
         cached = self._closes.get(ticker)
         if cached is not None:
             return cached
         history = self._prices.close_history(
             ticker, self._start.date(), self._end.date()
         )
-        vector = self._daily_series(
-            ticker, history, lambda: self._prices.current_price(ticker)
-        )
+        try:
+            vector = self._daily_series(
+                ticker, history, lambda: self._prices.current_price(ticker)
+            )
+        except PriceDataMissingError:
+            # Delisted or unknown to the provider: value the held days at the
+            # prices of the ledger's own trades (an estimate, logged).
+            logger.warning(
+                "No market price for %s; valuing held days at trade prices", ticker
+            )
+            vector = self._trade_price_vector(ticker, ordered)
         self._closes[ticker] = vector
         return vector
+
+    def _trade_price_vector(self, ticker: str, ordered: Sequence[Operation]) -> Vector:
+        """Daily price of the last trade on or before each day, in the asset's
+        currency; forward-filled. Only buys and sells carry a trade price."""
+        values: list[float | None] = [None] * self.length
+        for operation in ordered:
+            if operation.operation_type not in (OperationType.BUY, OperationType.SELL):
+                continue
+            index = self._day_index(operation)
+            if index < self.length and operation.price:
+                values[index] = float(operation.price)
+        return np.array(_filled(values, ticker), dtype=float)
 
     def _rate_vector(self, currency: str) -> Vector:
         """Units of the base currency per one unit of `currency`, day by day. An
@@ -274,10 +299,15 @@ class _VectorCalculator:
         return vector
 
     def _value_vector(self, ticker: str, operations: Iterable[Operation]) -> Vector:
-        """Quantity x close x rate: the value of one asset in the base currency."""
+        """Quantity x close x rate: the value of one asset in the base currency.
+        An asset never held in the range is worth zero and needs no price or rate,
+        so a sold-out, delisted ticker cannot fail the whole request."""
         ordered = sorted(operations, key=lambda op: _naive_utc(op.operation_date))
+        quantity = self._quantity_vector(ordered)
+        if not quantity.any():
+            return self.zeros()
         rate = self._rate_vector(_asset_currency(ordered[0]))
-        return self._quantity_vector(ordered) * self._close_vector(ticker) * rate
+        return quantity * self._close_vector(ticker, ordered) * rate
 
     def _quantity_vector(self, ordered: Sequence[Operation]) -> Vector:
         """The quantity held each day, in the units of that day: a buy or sell
