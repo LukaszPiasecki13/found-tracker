@@ -11,6 +11,7 @@ import DashboardPage from "./pages/DashboardPage"
 import PocketDetailsPage from "./pages/PocketDetailsPage"
 import PocketHistoryPage from "./pages/PocketHistoryPage"
 import PocketChartsPage from "./pages/PocketChartsPage"
+import AccountChartsPage from "./pages/AccountChartsPage"
 import PocketComparisonPage from "./pages/PocketComparisonPage"
 import OperationsPage from "./pages/OperationsPage"
 
@@ -66,6 +67,17 @@ function App() {
                 <ProtectedRoute>
                   <MainLayout>
                     <PocketChartsPage />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/account/charts"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <AccountChartsPage />
                   </MainLayout>
                 </ProtectedRoute>
               }

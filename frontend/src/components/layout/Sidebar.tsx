@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import {
   AccountBalance as PocketIcon,
+  AccountBalanceWallet as AccountIcon,
   CompareArrows as CompareIcon,
   Dashboard as DashboardIcon,
   ExpandLess,
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: <DashboardIcon /> },
   { label: 'Operacje', path: '/operations', icon: <OperationsIcon /> },
   { label: 'Porównaj portfele', path: '/compare', icon: <CompareIcon /> },
+  { label: 'Wykresy konta', path: '/account/charts', icon: <AccountIcon /> },
 ];
 
 interface SidebarProps {

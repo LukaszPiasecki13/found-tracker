@@ -22,6 +22,7 @@ from app.modules.portfolios.repositories.imports import ImportRepository
 from app.modules.portfolios.repositories.operations import OperationRepository
 from app.modules.portfolios.repositories.portfolios import PortfolioRepository
 from app.modules.portfolios.repositories.positions import PositionRepository
+from app.modules.portfolios.services.account_metrics import AccountMetricsService
 from app.modules.portfolios.services.fx import FxMapBuilder, FxRateService
 from app.modules.portfolios.services.imports import ImportService
 from app.modules.portfolios.services.metrics import MetricsService
@@ -115,6 +116,18 @@ def build_metrics_service(session: Session) -> MetricsService:
     DEC-14)."""
     return MetricsService(
         OperationRepository(session),
+        assets_wiring.build_market_data_service(session),
+        assets_wiring.build_price_service(session),
+        assets_wiring.build_fx_rate_service(session),
+    )
+
+
+def build_account_metrics_service(session: Session) -> AccountMetricsService:
+    """The account's vectors: the portfolios' own calculation, summed in the user's
+    currency (DEC-01, DEC-05); the same stored prices and rates as `MetricsService`."""
+    return AccountMetricsService(
+        OperationRepository(session),
+        assets_wiring.build_currency_service(session),
         assets_wiring.build_market_data_service(session),
         assets_wiring.build_price_service(session),
         assets_wiring.build_fx_rate_service(session),

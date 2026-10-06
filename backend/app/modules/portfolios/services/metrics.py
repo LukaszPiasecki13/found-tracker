@@ -72,13 +72,13 @@ from app.modules.portfolios.schemas.metrics import (
 logger = logging.getLogger(__name__)
 
 _DAY_SECONDS = 24 * 60 * 60
-_SUPPORTED_INTERVAL = "1d"
+SUPPORTED_INTERVAL = "1d"
 _DATE_FORMAT = "%Y-%m-%d"
 _SATURDAY = 5
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 # Longest range of daily points one request may ask for (about ten years).
-_MAX_RANGE_DAYS = 3660
+MAX_RANGE_DAYS = 3660
 
 type Vector = NDArray[np.float64]
 
@@ -175,7 +175,7 @@ def _dividend_income_change(operation: Operation) -> Decimal:
     return (operation.amount or _ZERO) * operation.fx_rate
 
 
-class _VectorCalculator:
+class VectorCalculator:
     """The vectors of one request; each ticker's prices are fetched once."""
 
     def __init__(
@@ -196,7 +196,7 @@ class _VectorCalculator:
         self._base = _base_currency(operations)
         self.length = int((end - start).total_seconds() // _DAY_SECONDS) + 1
         self._closes: dict[str, Vector] = {}
-        self._rates: dict[str, Vector] = {}
+        self._rates: dict[tuple[str, str], Vector] = {}
         self._assets: dict[str, Vector] | None = None
         self._transaction_cost: Vector | None = None
         self._dividend_income: Vector | None = None
@@ -316,44 +316,51 @@ class _VectorCalculator:
             return quote.close
         return self._market_data.current_price(asset.ticker)
 
-    def _rate_vector(self, currency: str) -> Vector:
-        """Units of the base currency per one unit of `currency`, day by day. An
-        asset already in the base currency needs no rate and no lookup."""
-        if currency == self._base:
+    @property
+    def base_currency(self) -> str:
+        return self._base
+
+    def rate_vector(self, currency: str, target: str | None = None) -> Vector:
+        """Units of `target` (the base currency by default) per one unit of
+        `currency`, day by day. A currency already in `target` needs no rate and
+        no lookup."""
+        target = target or self._base
+        if currency == target:
             return np.ones(self.length, dtype=float)
-        cached = self._rates.get(currency)
+        key = (currency, target)
+        cached = self._rates.get(key)
         if cached is not None:
             return cached
         vector = self._daily_series(
-            f"{currency}{self._base}",
-            self._stored_rates(currency),
-            lambda: self._current_rate(currency),
+            f"{currency}{target}",
+            self._stored_rates(currency, target),
+            lambda: self._current_rate(currency, target),
         )
-        self._rates[currency] = vector
+        self._rates[key] = vector
         return vector
 
-    def _stored_rates(self, currency: str) -> dict[date, Decimal]:
+    def _stored_rates(self, currency: str, target: str) -> dict[date, Decimal]:
         """Decision DEC-13: the stored daily rates of the pair, used only when they
         reach the start of the range. The refresh stores today's rate alone, so a
         short history would be stretched over the whole range by the fill; then the
         provider's history is read instead, without storing it (no FX backfill yet)."""
         start, end = self._start.date(), self._end.date()
         last = max(start, end - timedelta(days=1))
-        rows = self._fx.history(currency, self._base, from_date=start, to_date=last)
+        rows = self._fx.history(currency, target, from_date=start, to_date=last)
         history = _daily_rates(rows)
         if history and min(history) <= start:
             return history
-        return self._market_data.fx_history(currency, self._base, start, end)
+        return self._market_data.fx_history(currency, target, start, end)
 
-    def _current_rate(self, currency: str) -> Decimal | None:
+    def _current_rate(self, currency: str, target: str) -> Decimal | None:
         """Decision DEC-14 for rates: the stored rate while fresh, else the provider."""
         try:
-            quote = self._fx.get_rate(currency, self._base, self._end.date())
+            quote = self._fx.get_rate(currency, target, self._end.date())
         except RateMissingError:
             quote = None
         if quote is not None and not quote.stale:
             return quote.rate
-        return self._market_data.current_fx_rate(currency, self._base)
+        return self._market_data.current_fx_rate(currency, target)
 
     def _value_vector(self, ticker: str, operations: Iterable[Operation]) -> Vector:
         """Quantity x close x rate: the value of one asset in the base currency.
@@ -363,7 +370,7 @@ class _VectorCalculator:
         quantity = self._quantity_vector(ordered)
         if not quantity.any():
             return self.zeros()
-        rate = self._rate_vector(_asset_currency(ordered[0]))
+        rate = self.rate_vector(_asset_currency(ordered[0]))
         return quantity * self._close_vector(ticker, ordered) * rate
 
     def _quantity_vector(self, ordered: Sequence[Operation]) -> Vector:
@@ -391,7 +398,7 @@ class _VectorCalculator:
             in (OperationType.BUY, OperationType.SELL, OperationType.SPLIT)
         ]
 
-    def _sum_value(self) -> Vector:
+    def sum_value(self) -> Vector:
         total = self.zeros()
         for vector in self.assets().values():
             total += vector
@@ -449,13 +456,13 @@ class _VectorCalculator:
         return self._dividend_income
 
     def profit(self) -> Vector:
-        return self._sum_value() - self.transaction_cost() + self.dividend_income()
+        return self.sum_value() - self.transaction_cost() + self.dividend_income()
 
     def free_cash(self) -> Vector:
         return self.net_deposits() - self.transaction_cost() + self.dividend_income()
 
     def portfolio_value(self) -> Vector:
-        return self.free_cash() + self._sum_value()
+        return self.free_cash() + self.sum_value()
 
 
 def _filled(closes: list[float | None], ticker: str) -> list[float]:
@@ -473,20 +480,20 @@ def _filled(closes: list[float | None], ticker: str) -> list[float]:
 
 
 # Request key -> vector. `pocket_value_vector` is the frontend's historical name.
-_VECTORS: dict[str, Callable[[_VectorCalculator], Vector | dict[str, Vector]]] = {
-    "assets": _VectorCalculator.assets,
-    "asset_classes": _VectorCalculator.asset_classes,
-    "net_deposits_vector": _VectorCalculator.net_deposits,
-    "transaction_cost_vector": _VectorCalculator.transaction_cost,
-    "profit_vector": _VectorCalculator.profit,
-    "dividend_income_vector": _VectorCalculator.dividend_income,
-    "free_cash_vector": _VectorCalculator.free_cash,
-    "pocket_value_vector": _VectorCalculator.portfolio_value,
-    "portfolio_value_vector": _VectorCalculator.portfolio_value,
+VECTORS: dict[str, Callable[[VectorCalculator], Vector | dict[str, Vector]]] = {
+    "assets": VectorCalculator.assets,
+    "asset_classes": VectorCalculator.asset_classes,
+    "net_deposits_vector": VectorCalculator.net_deposits,
+    "transaction_cost_vector": VectorCalculator.transaction_cost,
+    "profit_vector": VectorCalculator.profit,
+    "dividend_income_vector": VectorCalculator.dividend_income,
+    "free_cash_vector": VectorCalculator.free_cash,
+    "pocket_value_vector": VectorCalculator.portfolio_value,
+    "portfolio_value_vector": VectorCalculator.portfolio_value,
 }
 
 
-def _requested_vectors(raw: str) -> list[Any]:
+def requested_vectors(raw: str) -> list[Any]:
     try:
         requested = json.loads(raw)
     except json.JSONDecodeError as err:
@@ -496,7 +503,7 @@ def _requested_vectors(raw: str) -> list[Any]:
     return requested
 
 
-def _parse_date(value: str | None) -> datetime:
+def parse_date(value: str | None) -> datetime:
     if not value:
         raise InvalidDateError
     try:
@@ -505,7 +512,21 @@ def _parse_date(value: str | None) -> datetime:
         raise InvalidDateError from err
 
 
-def _as_json_value(value: Vector | dict[str, Vector]) -> list[float] | dict[str, Any]:
+def validated_range(
+    start_date: str | None, end_date: str | None, interval: str
+) -> tuple[datetime, datetime]:
+    """Both dates of a request, checked: parsed, ordered, not over
+    `MAX_RANGE_DAYS`, and the interval the only one supported."""
+    start = parse_date(start_date)
+    end = parse_date(end_date)
+    if start > end or (end - start).days >= MAX_RANGE_DAYS:
+        raise InvalidDateRangeError
+    if interval != SUPPORTED_INTERVAL:
+        raise UnsupportedIntervalError
+    return start, end
+
+
+def as_json_value(value: Vector | dict[str, Vector]) -> list[float] | dict[str, Any]:
     if isinstance(value, dict):
         return {name: series.tolist() for name, series in value.items()}
     series_list: list[float] = value.tolist()
@@ -535,7 +556,7 @@ class MetricsService:
         `{}` when there are no operations.
 
         Raises InvalidVectorsError, InvalidDateError, InvalidDateRangeError
-        (also for a range over `_MAX_RANGE_DAYS`), UnsupportedIntervalError,
+        (also for a range over `MAX_RANGE_DAYS`), UnsupportedIntervalError,
         PriceDataMissingError, MarketDataUnavailableError.
         """
         operations = self._operation_repo.list_by_owner(
@@ -544,15 +565,10 @@ class MetricsService:
         if not operations:
             return PortfolioVectorsResponse({})
 
-        requested = _requested_vectors(query.vectors)
-        start = _parse_date(query.start_date)
-        end = _parse_date(query.end_date)
-        if start > end or (end - start).days >= _MAX_RANGE_DAYS:
-            raise InvalidDateRangeError
-        if query.interval != _SUPPORTED_INTERVAL:
-            raise UnsupportedIntervalError
+        requested = requested_vectors(query.vectors)
+        start, end = validated_range(query.start_date, query.end_date, query.interval)
 
-        calculator = _VectorCalculator(
+        calculator = VectorCalculator(
             operations,
             start,
             end,
@@ -561,8 +577,8 @@ class MetricsService:
             self._fx_rates,
         )
         result: dict[str, Any] = {"date": calculator.dates()}
-        for key in requested or list(_VECTORS):
-            if not isinstance(key, str) or key not in _VECTORS:
+        for key in requested or list(VECTORS):
+            if not isinstance(key, str) or key not in VECTORS:
                 continue
-            result[key] = _as_json_value(_VECTORS[key](calculator))
+            result[key] = as_json_value(VECTORS[key](calculator))
         return PortfolioVectorsResponse(result)
