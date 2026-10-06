@@ -1,6 +1,5 @@
 """Positions of a portfolio valued at freshly refreshed market data."""
 
-from app.modules.assets.services.market_data import MarketDataService
 from app.modules.portfolios.domain import PortfolioValuator
 from app.modules.portfolios.models import Portfolio
 from app.modules.portfolios.repositories.positions import PositionRepository
@@ -17,13 +16,11 @@ class PositionService:
         self,
         portfolio_service: PortfolioService,
         position_repo: PositionRepository,
-        market_data: MarketDataService,
         valuator: PortfolioValuator,
         fx_map_builder: FxMapBuilder,
     ) -> None:
         self._portfolios = portfolio_service
         self._repo = position_repo
-        self._market_data = market_data
         self._valuator = valuator
         self._fx = fx_map_builder
 
@@ -34,21 +31,13 @@ class PositionService:
         portfolio = self._portfolios.get_owned_by_name(owner_id, portfolio_name)
         return self._valued(portfolio)
 
-    def refresh_valued(
-        self, owner_id: int, portfolio_name: str
-    ) -> list[PositionResponse]:
-        """Like `list_valued`, after refreshing currency rates and the positions'
-        asset prices from the provider. Raises PortfolioNotFoundError.
-
-        Both refreshes are best-effort per item and commit on their own (inside
-        `MarketDataService`); a provider failure leaves the stored value. The
-        rate map is built after them, so it holds the freshly stored rates.
-        """
+    def held_asset_ids(self, owner_id: int, portfolio_name: str) -> list[int]:
+        """The assets the owner's portfolio `portfolio_name` holds positions in, for
+        the background price refresh (DEC-04). Raises PortfolioNotFoundError."""
         portfolio = self._portfolios.get_owned_by_name(owner_id, portfolio_name)
-        self._market_data.refresh_currency_rates()
-        positions = self._repo.list_by_portfolio(portfolio.id)
-        self._market_data.refresh_asset_prices(position.asset for position in positions)
-        return self._valued(portfolio)
+        return [
+            position.asset_id for position in self._repo.list_by_portfolio(portfolio.id)
+        ]
 
     def _valued(self, portfolio: Portfolio) -> list[PositionResponse]:
         positions = self._repo.list_by_portfolio(portfolio.id)

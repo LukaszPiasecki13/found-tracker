@@ -1,9 +1,11 @@
 """Portfolio vectors: daily series of a portfolio's metrics for charts.
 
 ADR-0005 variant (a): the vector arithmetic stays here, in `services/`, on
-`numpy` - `domain/` is standard library only. Price history comes through the
-`PriceHistoryProvider` port (satisfied by `assets`' `MarketDataService`), never
-from a market-data library inside the computation.
+`numpy` - `domain/` is standard library only. Prices and rates are read from the
+stored history (`assets`' `PriceService`, `FxRateService`, ADR-0015); the provider
+is called only to backfill a missing history (`MarketDataService.backfill_closes`)
+and for a stale current price or rate, never for a value the database holds
+(Decision DEC-01, DEC-13).
 
 Money is `Decimal` until a running total is written into a chart vector; the
 vectors themselves are `float` (ADR-0010). Semantics carried over from the
@@ -39,11 +41,18 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from itertools import groupby
-from typing import Any, Protocol
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from app.modules.assets.constants import SOURCE_MANUAL
+from app.modules.assets.exceptions import RateMissingError
+from app.modules.assets.models.assets import Asset
+from app.modules.assets.models.fx_rates import FxRate
+from app.modules.assets.services.fx_rates import FxRateService
+from app.modules.assets.services.market_data import MarketDataService
+from app.modules.assets.services.prices import PriceService
 from app.modules.portfolios.domain import OperationType
 from app.modules.portfolios.exceptions import (
     InvalidDateError,
@@ -72,28 +81,6 @@ _ONE = Decimal("1")
 _MAX_RANGE_DAYS = 3660
 
 type Vector = NDArray[np.float64]
-
-
-class PriceHistoryProvider(Protocol):
-    """Prices the vectors need - a port; `MarketDataService` satisfies it."""
-
-    def close_history(self, ticker: str, start: date, end: date) -> dict[date, Decimal]:
-        """Daily closes for `start <= day < end`."""
-        ...
-
-    def current_price(self, ticker: str) -> Decimal | None:
-        """The current price, `None` when there is none."""
-        ...
-
-    def fx_history(
-        self, from_code: str, to_code: str, start: date, end: date
-    ) -> dict[date, Decimal]:
-        """Daily rates of `to_code` per `from_code` for `start <= day < end`."""
-        ...
-
-    def current_fx_rate(self, from_code: str, to_code: str) -> Decimal | None:
-        """The current rate of `to_code` per `from_code`, `None` when there is none."""
-        ...
 
 
 def _naive_utc(value: datetime) -> datetime:
@@ -126,6 +113,20 @@ def _base_currency(operations: Sequence[Operation]) -> str:
     if len(codes) != 1:
         raise MixedBaseCurrenciesError(sorted(codes))
     return codes.pop()
+
+
+def _asset_of(operation: Operation) -> Asset:
+    if operation.asset is None:
+        raise ValueError(f"Operation {operation.id} has no asset")
+    return operation.asset
+
+
+def _daily_rates(rows: Iterable[FxRate]) -> dict[date, Decimal]:
+    """One rate per day; a manual observation outranks a provider's (ADR-0015)."""
+    rates: dict[date, Decimal] = {}
+    for row in sorted(rows, key=lambda row: row.source != SOURCE_MANUAL):
+        rates.setdefault(row.rate_date, row.rate)
+    return rates
 
 
 def _quantity_change(operation: Operation) -> Decimal:
@@ -182,12 +183,16 @@ class _VectorCalculator:
         operations: Sequence[Operation],
         start: datetime,
         end: datetime,
-        prices: PriceHistoryProvider,
+        market_data: MarketDataService,
+        prices: PriceService,
+        fx_rates: FxRateService,
     ) -> None:
         self._operations = operations
         self._start = start
         self._end = end
+        self._market_data = market_data
         self._prices = prices
+        self._fx = fx_rates
         self._base = _base_currency(operations)
         self.length = int((end - start).total_seconds() // _DAY_SECONDS) + 1
         self._closes: dict[str, Vector] = {}
@@ -250,12 +255,12 @@ class _VectorCalculator:
         cached = self._closes.get(ticker)
         if cached is not None:
             return cached
-        history = self._prices.close_history(
-            ticker, self._start.date(), self._end.date()
-        )
+
+        asset = _asset_of(ordered[0])
+        history = self._stored_closes(asset, ordered)
         try:
             vector = self._daily_series(
-                ticker, history, lambda: self._prices.current_price(ticker)
+                ticker, history, lambda: self._current_close(asset)
             )
         except PriceDataMissingError:
             # Delisted or unknown to the provider: value the held days at the
@@ -279,6 +284,38 @@ class _VectorCalculator:
                 values[index] = float(operation.price)
         return np.array(_filled(values, ticker), dtype=float)
 
+    def _stored_closes(
+        self, asset: Asset, ordered: Sequence[Operation]
+    ) -> dict[date, Decimal]:
+        """Decision DEC-03: the stored closes of the range. A history that does not
+        reach the first held day is backfilled from the provider first
+        (`MarketDataService.backfill_closes` commits its own transaction, ADR-0015),
+        then read again. A provider failure propagates as MarketDataUnavailableError."""
+        start, end = self._start.date(), self._end.date()
+        history = self._read_closes(asset.id, start, end)
+        first_held = max(start, _naive_utc(ordered[0].operation_date).date())
+        if not history or min(history) > first_held:
+            self._market_data.backfill_closes([asset], start, end)
+            history = self._read_closes(asset.id, start, end)
+        return history
+
+    def _read_closes(
+        self, asset_id: int, start: date, end: date
+    ) -> dict[date, Decimal]:
+        """Stored closes for `start <= day < end`, one per day (the winning source);
+        a single-day range (`start == end`) reads that day."""
+        last = max(start, end - timedelta(days=1))
+        series = self._prices.series(asset_id, from_date=start, to_date=last)
+        return {item.day: item.close for item in series.items}
+
+    def _current_close(self, asset: Asset) -> Decimal | None:
+        """Decision DEC-14: the latest stored close while it is fresh, the provider's
+        current price only when that close is stale or missing."""
+        quote = self._prices.find_close(asset.id, self._end.date())
+        if quote is not None and not quote.stale:
+            return quote.close
+        return self._market_data.current_price(asset.ticker)
+
     def _rate_vector(self, currency: str) -> Vector:
         """Units of the base currency per one unit of `currency`, day by day. An
         asset already in the base currency needs no rate and no lookup."""
@@ -287,16 +324,36 @@ class _VectorCalculator:
         cached = self._rates.get(currency)
         if cached is not None:
             return cached
-        history = self._prices.fx_history(
-            currency, self._base, self._start.date(), self._end.date()
-        )
         vector = self._daily_series(
             f"{currency}{self._base}",
-            history,
-            lambda: self._prices.current_fx_rate(currency, self._base),
+            self._stored_rates(currency),
+            lambda: self._current_rate(currency),
         )
         self._rates[currency] = vector
         return vector
+
+    def _stored_rates(self, currency: str) -> dict[date, Decimal]:
+        """Decision DEC-13: the stored daily rates of the pair, used only when they
+        reach the start of the range. The refresh stores today's rate alone, so a
+        short history would be stretched over the whole range by the fill; then the
+        provider's history is read instead, without storing it (no FX backfill yet)."""
+        start, end = self._start.date(), self._end.date()
+        last = max(start, end - timedelta(days=1))
+        rows = self._fx.history(currency, self._base, from_date=start, to_date=last)
+        history = _daily_rates(rows)
+        if history and min(history) <= start:
+            return history
+        return self._market_data.fx_history(currency, self._base, start, end)
+
+    def _current_rate(self, currency: str) -> Decimal | None:
+        """Decision DEC-14 for rates: the stored rate while fresh, else the provider."""
+        try:
+            quote = self._fx.get_rate(currency, self._base, self._end.date())
+        except RateMissingError:
+            quote = None
+        if quote is not None and not quote.stale:
+            return quote.rate
+        return self._market_data.current_fx_rate(currency, self._base)
 
     def _value_vector(self, ticker: str, operations: Iterable[Operation]) -> Vector:
         """Quantity x close x rate: the value of one asset in the base currency.
@@ -459,10 +516,16 @@ class MetricsService:
     """Read model of portfolio vectors (ADR-0003: a DTO, no entity behind it)."""
 
     def __init__(
-        self, operation_repo: OperationRepository, prices: PriceHistoryProvider
+        self,
+        operation_repo: OperationRepository,
+        market_data: MarketDataService,
+        prices: PriceService,
+        fx_rates: FxRateService,
     ) -> None:
         self._operation_repo = operation_repo
+        self._market_data = market_data
         self._prices = prices
+        self._fx_rates = fx_rates
 
     def portfolio_vectors(
         self, owner_id: int, query: PortfolioVectorsQuery
@@ -489,7 +552,14 @@ class MetricsService:
         if query.interval != _SUPPORTED_INTERVAL:
             raise UnsupportedIntervalError
 
-        calculator = _VectorCalculator(operations, start, end, self._prices)
+        calculator = _VectorCalculator(
+            operations,
+            start,
+            end,
+            self._market_data,
+            self._prices,
+            self._fx_rates,
+        )
         result: dict[str, Any] = {"date": calculator.dates()}
         for key in requested or list(_VECTORS):
             if not isinstance(key, str) or key not in _VECTORS:

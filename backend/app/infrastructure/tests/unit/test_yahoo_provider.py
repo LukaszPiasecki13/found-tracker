@@ -1,6 +1,6 @@
 """`YahooFinanceProvider` with `yfinance.Ticker` replaced - never hits the network."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, ClassVar
 
@@ -20,7 +20,6 @@ class FakeTicker:
     error: ClassVar[Exception | None] = None
     requested: ClassVar[list[str]] = []
     history_kwargs: ClassVar[dict[str, Any]] = {}
-    splits_series: ClassVar[pd.Series | None] = None
 
     def __init__(self, symbol: str) -> None:
         FakeTicker.requested.append(symbol)
@@ -38,12 +37,6 @@ class FakeTicker:
             raise FakeTicker.error
         return FakeTicker.frame
 
-    @property
-    def splits(self) -> pd.Series:
-        if FakeTicker.splits_series is None:
-            return pd.Series(dtype=float)
-        return FakeTicker.splits_series
-
 
 @pytest.fixture(autouse=True)
 def fake_ticker(monkeypatch: pytest.MonkeyPatch) -> type[FakeTicker]:
@@ -52,7 +45,6 @@ def fake_ticker(monkeypatch: pytest.MonkeyPatch) -> type[FakeTicker]:
     FakeTicker.error = None
     FakeTicker.requested = []
     FakeTicker.history_kwargs = {}
-    FakeTicker.splits_series = None
     monkeypatch.setattr(yahoo.yf, "Ticker", FakeTicker)
     return FakeTicker
 
@@ -201,9 +193,10 @@ def test_fetch_close_history_is_end_exclusive_and_drops_gaps(
     }
     assert FakeTicker.history_kwargs == {
         "start": date(2026, 1, 5),
-        "end": date(2026, 1, 8),
+        "end": date.today() + timedelta(days=1),
         "interval": "1d",
         "auto_adjust": False,
+        "actions": True,
     }
 
 
@@ -270,11 +263,16 @@ def test_fetch_fx_close_history_wraps_library_errors(
     assert isinstance(exc_info.value.__cause__, TimeoutError)
 
 
-def _closes_frame(prices: list[float], days: list[str]) -> pd.DataFrame:
+def _closes_frame(
+    prices: list[float], days: list[str], splits: list[float] | None = None
+) -> pd.DataFrame:
     index = pd.DatetimeIndex(
         [f"{day} 00:00:00+02:00" for day in days], tz="Europe/Warsaw"
     )
-    return pd.DataFrame({"Close": prices}, index=index)
+    frame = pd.DataFrame({"Close": prices}, index=index)
+    if splits is not None:
+        frame["Stock Splits"] = splits
+    return frame
 
 
 def test_closes_before_a_split_are_returned_in_the_units_of_their_day(
@@ -283,10 +281,9 @@ def test_closes_before_a_split_are_returned_in_the_units_of_their_day(
     # Yahoo's Close is split-adjusted even with auto_adjust=False: the 10:1 split
     # of 31 July made the earlier ~500 look like ~50. Raw prices are restored.
     FakeTicker.frame = _closes_frame(
-        [50.2, 49.61, 47.51], ["2025-07-30", "2025-07-31", "2025-08-01"]
-    )
-    FakeTicker.splits_series = pd.Series(
-        [10.0], index=pd.DatetimeIndex(["2025-07-31 09:00:00+02:00"])
+        [50.2, 49.61, 47.51],
+        ["2025-07-30", "2025-07-31", "2025-08-01"],
+        splits=[0.0, 10.0, 0.0],
     )
 
     closes = provider.fetch_close_history("DNP.WA", date(2025, 7, 30), date(2025, 8, 2))
@@ -298,13 +295,28 @@ def test_closes_before_a_split_are_returned_in_the_units_of_their_day(
     }
 
 
+def test_a_split_after_end_still_rescales_the_closes_before_it(
+    provider: YahooFinanceProvider,
+) -> None:
+    # The window ends on 31 July, the split is on 31 July: it lies outside the
+    # requested range but the window is fetched up to today, so 30 July is raw.
+    FakeTicker.frame = _closes_frame(
+        [50.0, 49.0], ["2025-07-30", "2025-07-31"], splits=[0.0, 10.0]
+    )
+
+    closes = provider.fetch_close_history(
+        "DNP.WA", date(2025, 7, 30), date(2025, 7, 31)
+    )
+
+    assert closes == {date(2025, 7, 30): Decimal("500.0")}
+
+
 def test_several_later_splits_multiply(provider: YahooFinanceProvider) -> None:
-    FakeTicker.frame = _closes_frame([10.0, 10.0], ["2021-07-19", "2021-07-20"])
-    FakeTicker.splits_series = pd.Series(
-        [4.0, 10.0],
-        index=pd.DatetimeIndex(
-            ["2021-07-20 09:00:00+02:00", "2024-06-10 09:00:00+02:00"]
-        ),
+    # Two splits: one inside the range, one after it (both come from the window).
+    FakeTicker.frame = _closes_frame(
+        [10.0, 10.0, 10.0],
+        ["2021-07-19", "2021-07-20", "2024-06-10"],
+        splits=[0.0, 4.0, 10.0],
     )
 
     closes = provider.fetch_close_history("NVDA", date(2021, 7, 19), date(2021, 7, 21))
@@ -314,17 +326,3 @@ def test_several_later_splits_multiply(provider: YahooFinanceProvider) -> None:
         date(2021, 7, 19): Decimal("400.0"),
         date(2021, 7, 20): Decimal("100.0"),
     }
-
-
-def test_the_splits_column_of_the_window_is_the_fallback(
-    provider: YahooFinanceProvider,
-) -> None:
-    frame = _closes_frame([50.0, 49.0], ["2025-07-30", "2025-07-31"])
-    frame["Stock Splits"] = [0.0, 10.0]
-    FakeTicker.frame = frame
-    FakeTicker.splits_series = None  # the splits endpoint knows nothing
-
-    closes = provider.fetch_close_history("DNP.WA", date(2025, 7, 30), date(2025, 8, 1))
-
-    assert closes[date(2025, 7, 30)] == Decimal("500.0")
-    assert closes[date(2025, 7, 31)] == Decimal("49.0")

@@ -1,7 +1,12 @@
 """Position API endpoints (mounted under `/portfolios/positions`)."""
 
-from fastapi import APIRouter, Depends
+from datetime import date
 
+from fastapi import APIRouter, BackgroundTasks, Depends
+
+from app.modules.assets import entrypoints as assets_entrypoints
+from app.modules.assets.dependencies import get_daily_refresh_service
+from app.modules.assets.services.job_runs import DailyRefreshService
 from app.modules.core_data.models.user import User
 from app.modules.portfolios.dependencies import get_position_service
 from app.modules.portfolios.schemas.positions import (
@@ -20,20 +25,30 @@ router = APIRouter(
 
 @router.get("", response_model=list[PositionResponse])
 def list_positions(
+    background_tasks: BackgroundTasks,
     query: PositionListQuery = Depends(),
     user: User = Depends(get_current_user),
     service: PositionService = Depends(get_position_service),
+    daily_refresh: DailyRefreshService = Depends(get_daily_refresh_service),
 ):
-    """Valued positions at the stored prices (no side effects)."""
+    """Valued positions at the stored prices. The first request of a day also
+    starts the day's market-data refresh in the background (ADR-0017)."""
+    if daily_refresh.claim(date.today()):
+        background_tasks.add_task(assets_entrypoints.daily_refresh)
     return service.list_valued(user.id, query.portfolio_name)
 
 
 @router.post("/refresh", response_model=list[PositionResponse])
 def refresh_positions(
+    background_tasks: BackgroundTasks,
     query: PositionListQuery = Depends(),
     user: User = Depends(get_current_user),
     service: PositionService = Depends(get_position_service),
 ):
-    """Refresh currency rates and asset prices from the market-data provider,
-    then return the valued positions."""
-    return service.refresh_valued(user.id, query.portfolio_name)
+    """Answer at once with the stored positions; the rates and the prices of the
+    portfolio's assets are refreshed from the provider in the background (DEC-04,
+    ADR-0017). The caller polls `GET /portfolios/positions` for the new `price_date`."""
+    asset_ids = service.held_asset_ids(user.id, query.portfolio_name)
+    background_tasks.add_task(assets_entrypoints.refresh_fx_rates)
+    background_tasks.add_task(assets_entrypoints.refresh_prices, asset_ids)
+    return service.list_valued(user.id, query.portfolio_name)

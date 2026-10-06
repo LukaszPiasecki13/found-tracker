@@ -14,11 +14,13 @@ from app.modules.assets.repositories.asset_classes import AssetClassRepository
 from app.modules.assets.repositories.assets import AssetRepository
 from app.modules.assets.repositories.currencies import CurrencyRepository
 from app.modules.assets.repositories.fx_rates import FxRateRepository
+from app.modules.assets.repositories.job_runs import JobRunRepository
 from app.modules.assets.repositories.prices import PriceRepository
 from app.modules.assets.services.asset_classes import AssetClassService
 from app.modules.assets.services.assets import AssetService
 from app.modules.assets.services.currencies import CurrencyService
 from app.modules.assets.services.fx_rates import FxRateService
+from app.modules.assets.services.job_runs import DailyRefreshService
 from app.modules.assets.services.market_data import MarketDataService
 from app.modules.assets.services.prices import PriceService
 
@@ -61,3 +63,7 @@ def build_asset_service(session: Session) -> AssetService:
         build_market_data_service(session),
         build_price_service(session),
     )
+
+
+def build_daily_refresh_service(session: Session) -> DailyRefreshService:
+    return DailyRefreshService(JobRunRepository(session))

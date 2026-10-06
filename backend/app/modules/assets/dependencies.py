@@ -6,6 +6,7 @@ from app.modules.assets.wiring import (
     build_asset_class_service,
     build_asset_service,
     build_currency_service,
+    build_daily_refresh_service,
     build_fx_rate_service,
     build_market_data_service,
     build_price_service,
@@ -17,3 +18,4 @@ get_asset_service = provide(build_asset_service)
 get_market_data_service = provide(build_market_data_service)
 get_price_service = provide(build_price_service)
 get_fx_rate_service = provide(build_fx_rate_service)
+get_daily_refresh_service = provide(build_daily_refresh_service)

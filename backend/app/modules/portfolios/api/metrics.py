@@ -1,7 +1,12 @@
 """Portfolio metrics API endpoints: vectors for charts."""
 
-from fastapi import APIRouter, Depends
+from datetime import date
 
+from fastapi import APIRouter, BackgroundTasks, Depends
+
+from app.modules.assets import entrypoints as assets_entrypoints
+from app.modules.assets.dependencies import get_daily_refresh_service
+from app.modules.assets.services.job_runs import DailyRefreshService
 from app.modules.core_data.models.user import User
 from app.modules.portfolios.dependencies import get_metrics_service
 from app.modules.portfolios.schemas.metrics import (
@@ -20,8 +25,14 @@ router = APIRouter(
 
 @router.get("/portfolio-vectors", response_model=PortfolioVectorsResponse)
 def portfolio_vectors(
+    background_tasks: BackgroundTasks,
     query: PortfolioVectorsQuery = Depends(),
     user: User = Depends(get_current_user),
     service: MetricsService = Depends(get_metrics_service),
+    daily_refresh: DailyRefreshService = Depends(get_daily_refresh_service),
 ):
+    """The first request of a day also starts the day's market-data refresh in the
+    background (ADR-0017); the vectors themselves read the stored history."""
+    if daily_refresh.claim(date.today()):
+        background_tasks.add_task(assets_entrypoints.daily_refresh)
     return service.portfolio_vectors(user.id, query)

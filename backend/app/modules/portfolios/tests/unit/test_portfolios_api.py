@@ -11,6 +11,8 @@ from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.errors import register_error_handlers
+from app.modules.assets import entrypoints as assets_entrypoints
+from app.modules.assets.dependencies import get_daily_refresh_service
 from app.modules.portfolios.api import (
     fx_rates_router,
     metrics_router,
@@ -41,6 +43,24 @@ from app.modules.security.dependencies import get_current_user
 USER = SimpleNamespace(id=7, email="user@example.com", is_active=True)
 NOW = datetime(2026, 1, 2, tzinfo=UTC)
 D = Decimal
+
+
+@pytest.fixture(autouse=True)
+def _no_background_work(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The routers start the daily refresh and the price refresh as background
+    tasks; here they only record that they ran - no database, no provider."""
+    started: list[str] = []
+    monkeypatch.setattr(
+        assets_entrypoints,
+        "refresh_fx_rates",
+        lambda *_, **__: started.append("fx") or None,
+    )
+    monkeypatch.setattr(
+        assets_entrypoints,
+        "refresh_prices",
+        lambda ids=None, *_, **__: started.append(f"prices:{ids}") or None,
+    )
+    return started
 
 
 class Services(SimpleNamespace):
@@ -77,6 +97,9 @@ def build_client(
     app.dependency_overrides[get_operation_service] = lambda: services.operations
     app.dependency_overrides[get_metrics_service] = lambda: services.metrics
     app.dependency_overrides[get_fx_rate_service] = lambda: services.fx_rates
+    not_due = MagicMock()
+    not_due.claim.return_value = False  # the day's refresh is already claimed
+    app.dependency_overrides[get_daily_refresh_service] = lambda: not_due
     if authenticated:
         app.dependency_overrides[get_current_user] = lambda: USER
     return TestClient(app, raise_server_exceptions=False)
@@ -395,19 +418,24 @@ def test_positions_require_a_portfolio_name(services: Services) -> None:
     assert client.get("/portfolios/positions").status_code == 422
     client.get("/portfolios/positions", params={"portfolio_name": "Main"})
     services.positions.list_valued.assert_called_once_with(7, "Main")
-    services.positions.refresh_valued.assert_not_called()
 
 
-def test_refreshing_positions_is_a_post(services: Services) -> None:
+def test_refreshing_positions_is_a_post_answering_with_stored_values(
+    services: Services, _no_background_work: list[str]
+) -> None:
     client = build_client(services)
-    services.positions.refresh_valued.return_value = []
+    services.positions.held_asset_ids.return_value = [11, 12]
+    services.positions.list_valued.return_value = []
 
     response = client.post(
         "/portfolios/positions/refresh", params={"portfolio_name": "Main"}
     )
 
     assert response.status_code == 200
-    services.positions.refresh_valued.assert_called_once_with(7, "Main")
+    services.positions.held_asset_ids.assert_called_once_with(7, "Main")
+    services.positions.list_valued.assert_called_once_with(7, "Main")
+    # The provider work runs after the answer, as background tasks (DEC-04).
+    assert _no_background_work == ["fx", "prices:[11, 12]"]
 
 
 # --- Operations ---

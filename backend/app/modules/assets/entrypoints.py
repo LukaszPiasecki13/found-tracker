@@ -12,9 +12,14 @@ by `POST /assets/refresh-prices`.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from app.core.dependencies import SessionScope, session_scope
-from app.modules.assets.wiring import build_asset_service, build_market_data_service
+from app.modules.assets.wiring import (
+    build_asset_service,
+    build_daily_refresh_service,
+    build_market_data_service,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,3 +58,14 @@ def refresh_fx_rates(scope: SessionScope = session_scope) -> RefreshResult:
         total = len(market_data.list_currency_codes())
         ok = market_data.refresh_currency_rates()
         return RefreshResult(ok=ok, failed=total - ok)
+
+
+def daily_refresh(scope: SessionScope = session_scope) -> None:
+    """The day's job (ADR-0017): today's rates, then the prices of every active
+    asset, then the run is marked finished. A failed run is not marked finished and
+    may be started again after `STALE_RUN_AFTER`; a rerun rewrites the same rows."""
+    day = date.today()
+    refresh_fx_rates(scope)
+    refresh_prices(None, scope)
+    with scope() as session:
+        build_daily_refresh_service(session).finish(day)

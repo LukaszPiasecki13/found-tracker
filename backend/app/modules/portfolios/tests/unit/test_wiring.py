@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 from app.modules.assets.services import (
     AssetService,
     CurrencyService,
+    FxRateService,
     MarketDataService,
     PriceService,
 )
@@ -41,14 +42,15 @@ def test_builders_assemble_every_service_on_one_session() -> None:
     assert isinstance(portfolios._fx, FxMapBuilder)
     assert isinstance(positions._fx, FxMapBuilder)
     assert positions._repo.session is session
-    assert isinstance(positions._market_data, MarketDataService)
     assert operations._portfolio_repo.session is session
     assert operations._position_repo.session is session
     assert operations._operation_repo.session is session
     assert isinstance(operations._assets, AssetService)
     assert operations._assets._repo.session is session
     assert metrics._operation_repo.session is session
-    assert isinstance(metrics._prices, MarketDataService)
+    assert isinstance(metrics._market_data, MarketDataService)
+    assert isinstance(metrics._prices, PriceService)
+    assert isinstance(metrics._fx_rates, FxRateService)
 
 
 def test_domain_components_are_built_and_injected() -> None:

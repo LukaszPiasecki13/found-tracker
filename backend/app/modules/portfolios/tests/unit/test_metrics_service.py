@@ -15,8 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.core.market_data import MarketDataUnavailableError
-from app.modules.assets.services.market_data import MarketDataService
-from app.modules.assets.tests.fakes import FakeMarketDataProvider, make_quote
+from app.modules.assets.exceptions import RateMissingError
 from app.modules.portfolios.exceptions import (
     InvalidDateError,
     InvalidDateRangeError,
@@ -74,6 +73,97 @@ class FakePrices:
         return self.fx_current.get(pair)
 
 
+_ASSET_IDS: dict[str, int] = {}
+
+
+def _asset_id(ticker: str) -> int:
+    return _ASSET_IDS.setdefault(ticker, len(_ASSET_IDS) + 1)
+
+
+@dataclass
+class FakeStore:
+    """The stored history the vectors read - `PriceService` and `FxRateService` -
+    and the `MarketDataService` calls they may make, over `FakePrices` as the
+    provider. A backfill copies the provider's closes into the store; the current
+    price is stored on the day asked for, as the daily refresh would have done
+    (DEC-01, DEC-03, DEC-14)."""
+
+    provider: FakePrices
+    operations: list[SimpleNamespace] = field(default_factory=list)
+    stored: dict[str, dict[date, Decimal]] = field(default_factory=dict)
+    stored_fx: dict[str, dict[date, Decimal]] = field(default_factory=dict)
+
+    def _ticker(self, asset_id: int) -> str:
+        for operation in self.operations:
+            if operation.asset is not None and operation.asset.id == asset_id:
+                return operation.asset.ticker
+        raise KeyError(asset_id)
+
+    # PriceService
+    def series(
+        self, asset_id: int, *, from_date: date, to_date: date
+    ) -> SimpleNamespace:
+        closes = self.stored.get(self._ticker(asset_id), {})
+        items = [
+            SimpleNamespace(day=day, close=close)
+            for day, close in sorted(closes.items())
+            if from_date <= day <= to_date
+        ]
+        return SimpleNamespace(items=items)
+
+    def find_close(self, asset_id: int, as_of: date) -> SimpleNamespace | None:
+        ticker = self._ticker(asset_id)
+        closes = self.stored.setdefault(ticker, {})
+        if ticker in self.provider.current:
+            closes.setdefault(as_of, self.provider.current[ticker])
+        days = [day for day in closes if day <= as_of]
+        if not days:
+            return None
+        day = max(days)
+        return SimpleNamespace(close=closes[day], stale=(as_of - day).days > 7)
+
+    # MarketDataService
+    def backfill_closes(
+        self, assets: list[SimpleNamespace], start: date, end: date
+    ) -> int:
+        for asset in assets:
+            closes = self.provider.close_history(asset.ticker, start, end)
+            self.stored.setdefault(asset.ticker, {}).update(closes)
+        return 0
+
+    def current_price(self, ticker: str) -> Decimal | None:
+        return self.provider.current_price(ticker)
+
+    def fx_history(
+        self, from_code: str, to_code: str, start: date, end: date
+    ) -> dict[date, Decimal]:
+        return self.provider.fx_history(from_code, to_code, start, end)
+
+    def current_fx_rate(self, from_code: str, to_code: str) -> Decimal | None:
+        return self.provider.current_fx_rate(from_code, to_code)
+
+    # FxRateService - the stored FX rows of the pair, as observations
+    def history(
+        self,
+        from_code: str,
+        to_code: str,
+        *,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        source: str | None = None,
+    ) -> list[SimpleNamespace]:
+        rates = self.stored_fx.get(f"{from_code}{to_code}", {})
+        return [
+            SimpleNamespace(rate_date=day, rate=rate, source="yahoo")
+            for day, rate in sorted(rates.items())
+            if (from_date is None or day >= from_date)
+            and (to_date is None or day <= to_date)
+        ]
+
+    def get_rate(self, from_code: str, to_code: str, as_of: date) -> object:
+        raise RateMissingError
+
+
 def _op(
     operation_type: str,
     when: datetime,
@@ -91,6 +181,7 @@ def _op(
 ) -> SimpleNamespace:
     asset = (
         SimpleNamespace(
+            id=_asset_id(ticker),
             ticker=ticker,
             asset_class=SimpleNamespace(name=asset_class),
             currency=SimpleNamespace(code=currency),
@@ -176,7 +267,8 @@ def _service(
     operation_repo: MagicMock, operations: list, prices: FakePrices
 ) -> MetricsService:
     operation_repo.list_by_owner.return_value = operations
-    return MetricsService(operation_repo, prices)
+    store = FakeStore(prices, operations)
+    return MetricsService(operation_repo, store, store, store)
 
 
 AAA = [0.0, 210.0, 220.0, 220.0, 220.0, 144.0, 150.0]
@@ -263,12 +355,9 @@ def test_each_ticker_history_is_fetched_once_per_request(
 ) -> None:
     _service(operation_repo, operations, prices).portfolio_vectors(7, _query())
 
-    assert sorted(prices.calls) == [
-        ("current", "AAA"),
-        ("current", "BBB"),
-        ("history", "AAA"),
-        ("history", "BBB"),
-    ]
+    # The stored history is backfilled once per ticker; the current price is read
+    # from the store (DEC-14), so the provider is not asked for it.
+    assert sorted(prices.calls) == [("history", "AAA"), ("history", "BBB")]
 
 
 def test_only_requested_vectors_unknown_names_skipped(
@@ -583,30 +672,6 @@ def test_portfolios_in_different_base_currencies_cannot_be_charted_together(
     )
 
 
-def test_market_data_service_satisfies_the_price_port(
-    operation_repo: MagicMock,
-) -> None:
-    """The production adapter: `MarketDataService` over the provider port,
-    `end` exclusive and the quote's price as the current price."""
-    provider = FakeMarketDataProvider(
-        history={"AAA": {date(2025, 1, 6): D("24"), date(2025, 1, 7): D("99")}},
-        quotes={
-            "AAA": make_quote("AAA", current_price=None, regular_market_price=D("25"))
-        },
-    )
-    market_data = MarketDataService(
-        MagicMock(), MagicMock(), provider, MagicMock(), MagicMock()
-    )
-    operations = [_op("buy", _at(6), ticker="AAA", quantity="2", price="20")]
-    operation_repo.list_by_owner.return_value = operations
-
-    body = MetricsService(operation_repo, market_data).portfolio_vectors(
-        1, _query('["assets"]', start="2025-01-06", end="2025-01-07")
-    )
-
-    assert body.root["assets"] == {"AAA": [48.0, 50.0]}
-
-
 def test_interest_and_fee_move_cash_and_profit_but_not_the_net_deposits(
     operation_repo: MagicMock, prices: FakePrices
 ) -> None:
@@ -651,3 +716,72 @@ def test_a_split_multiplies_the_quantity_from_its_day_on(
     )
 
     assert body.root["assets"] == {"AAA": [0.0, 200.0, 210.0, 220.0, 220.0]}
+
+
+def test_stored_closes_and_a_fresh_current_price_need_no_provider_call(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    """AC-01: the history is in the store and the current price is stored for
+    the day, so the vector is computed without asking the provider."""
+    operations = [_op("buy", _at(1), ticker="AAA", quantity="1", price="10")]
+    operation_repo.list_by_owner.return_value = operations
+    prices.current = {"AAA": D("25")}
+    store = FakeStore(
+        prices,
+        operations,
+        stored={"AAA": {date(2025, 1, day): D("10") for day in range(1, 7)}},
+    )
+
+    body = MetricsService(operation_repo, store, store, store).portfolio_vectors(
+        1, _query('["assets"]')
+    )
+
+    assert prices.calls == []
+    assert body.root["assets"] == {"AAA": [10.0] * 6 + [25.0]}
+
+
+def test_missing_history_is_backfilled_once_then_read_from_the_store(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    """AC-03: the first request backfills the asset's history; the second one reads
+    it from the store and the provider is not asked again."""
+    operations = [_op("buy", _at(1), ticker="AAA", quantity="1", price="10")]
+    operation_repo.list_by_owner.return_value = operations
+    prices.history = {"AAA": {date(2025, 1, day): D("10") for day in range(1, 7)}}
+    prices.current = {"AAA": D("25")}
+    store = FakeStore(prices, operations)
+    service = MetricsService(operation_repo, store, store, store)
+
+    first = service.portfolio_vectors(1, _query('["assets"]'))
+    assert ("history", "AAA") in prices.calls
+    prices.calls.clear()
+    second = service.portfolio_vectors(1, _query('["assets"]'))
+
+    assert prices.calls == []
+    assert first.root["assets"] == second.root["assets"] == {"AAA": [10.0] * 6 + [25.0]}
+
+
+def test_a_stored_rate_history_that_starts_late_is_not_stretched_over_the_range(
+    operation_repo: MagicMock, prices: FakePrices
+) -> None:
+    """The refresh stores today's rate only; that single row must not become the
+    rate of the whole range. The provider's history is read instead (DEC-13)."""
+    operations = [
+        _op("buy", _at(1), ticker="AAA", currency="USD", quantity="1", price="10")
+    ]
+    operation_repo.list_by_owner.return_value = operations
+    prices.history = {"AAA": {date(2025, 1, day): D("10") for day in range(1, 7)}}
+    prices.fx_rates = {"USDPLN": {date(2025, 1, day): D("4") for day in range(1, 7)}}
+    store = FakeStore(
+        prices,
+        operations,
+        stored_fx={"USDPLN": {date(2025, 1, 7): D("5")}},
+    )
+
+    body = MetricsService(operation_repo, store, store, store).portfolio_vectors(
+        1, _query('["assets"]')
+    )
+
+    # Six days at 10 x 4 from the provider; today at the current 25 x 4.
+    assert body.root["assets"] == {"AAA": [40.0] * 6 + [100.0]}
+    assert ("fx_history", "USDPLN") in prices.calls

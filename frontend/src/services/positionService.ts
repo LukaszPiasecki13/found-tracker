@@ -10,18 +10,11 @@ export const positionService = {
     return response.data;
   },
 
-  // Refreshes prices and rates from the market-data provider first; when that
-  // fails (provider down), the stored values are still shown.
-  async getPositions(pocketName: string): Promise<Position[]> {
-    try {
-      const response = await api.post<Position[]>(
-        '/portfolios/positions/refresh',
-        null,
-        { params: { portfolio_name: pocketName } }
-      );
-      return response.data;
-    } catch {
-      return positionService.getStoredPositions(pocketName);
-    }
+  // Asks the server to refresh rates and prices in the background. The answer is the
+  // stored positions, so the caller reads the new prices from `getStoredPositions`.
+  async requestRefresh(pocketName: string): Promise<void> {
+    await api.post('/portfolios/positions/refresh', null, {
+      params: { portfolio_name: pocketName },
+    });
   },
 };

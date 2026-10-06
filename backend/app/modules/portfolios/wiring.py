@@ -78,7 +78,6 @@ def build_position_service(session: Session) -> PositionService:
     return PositionService(
         build_portfolio_service(session),
         PositionRepository(session),
-        assets_wiring.build_market_data_service(session),
         build_portfolio_valuator(),
         build_fx_map_builder(session),
     )
@@ -111,9 +110,12 @@ def build_import_service(session: Session) -> ImportService:
 
 
 def build_metrics_service(session: Session) -> MetricsService:
-    """Price history through `MarketDataService` (it satisfies the
-    `PriceHistoryProvider` port structurally)."""
+    """Stored prices and rates (DEC-01) through the `assets` services; the provider
+    only through `MarketDataService`, for a backfill or a stale current value (DEC-03,
+    DEC-14)."""
     return MetricsService(
         OperationRepository(session),
         assets_wiring.build_market_data_service(session),
+        assets_wiring.build_price_service(session),
+        assets_wiring.build_fx_rate_service(session),
     )

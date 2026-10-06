@@ -1,6 +1,6 @@
 """Yahoo Finance adapter (`yfinance`) for the `MarketDataProvider` port."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -66,17 +66,28 @@ class YahooFinanceProvider:
         dividends are left alone): after a 10:1 split every earlier close is a tenth
         of what the stock traded at. A ledger holds the quantities of the day, so
         each close is multiplied back by the splits that came after it - the raw
-        price, which also never changes when a later split happens (ADR-0015)."""
+        price, which also never changes when a later split happens (ADR-0015).
+
+        Decision DEC-02: Fetch splits from the `Stock Splits` column in the
+        history response (with `actions=True`), not from `handle.splits`."""
         try:
             handle = yf.Ticker(ticker)
             # `auto_adjust=False`: a dividend-adjusted close would count a payout
             # twice next to the dividend operation.
+            # `actions=True`: the `Stock Splits` column carries the splits. The window
+            # reaches today, not just `end`: a split after `end` still rescales the
+            # closes before it (DEC-02, ADR-0015), and the rows from `end` on are
+            # dropped below.
             frame = handle.history(
-                start=start, end=end, interval="1d", auto_adjust=False
+                start=start,
+                end=max(end, date.today() + timedelta(days=1)),
+                interval="1d",
+                auto_adjust=False,
+                actions=True,
             )
             if frame is None or frame.empty or "Close" not in frame.columns:
                 return {}
-            splits = self._splits(handle, frame)
+            splits = self._splits_from_frame(frame)
         except Exception as exc:
             raise MarketDataUnavailableError(
                 f"Could not fetch price history for {ticker}"
@@ -124,19 +135,13 @@ class YahooFinanceProvider:
         return rates
 
     @staticmethod
-    def _splits(handle: Any, frame: Any) -> list[tuple[date, Decimal]]:
-        """Every split the provider knows as (day, ratio new:old). From the whole
-        splits series - the requested window may end before a later one; the
-        window's own `Stock Splits` column is the fallback when that fails."""
-        try:
-            series = handle.splits
-        except Exception:
-            series = None
-        if series is None or len(series) == 0:
-            if frame is None or "Stock Splits" not in getattr(frame, "columns", ()):
-                return []
-            column = frame["Stock Splits"]
-            series = column[column > 0]
+    def _splits_from_frame(frame: Any) -> list[tuple[date, Decimal]]:
+        """Every split in the window as (day, ratio new:old) from the `Stock
+        Splits` column in the history response (Decision DEC-02)."""
+        if frame is None or "Stock Splits" not in getattr(frame, "columns", ()):
+            return []
+        column = frame["Stock Splits"]
+        series = column[column > 0]
         splits: list[tuple[date, Decimal]] = []
         for stamp, value in series.items():
             ratio = _to_decimal(value)
