@@ -4,8 +4,10 @@ The market-data provider is replaced in `assets/wiring.py` (the one place that
 picks it), so no test reaches the network.
 """
 
+from contextlib import nullcontext
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from functools import partial
 from typing import Any
 
 import pytest
@@ -14,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.conftest import IntegrationData
+from app.modules.assets import entrypoints as assets_entrypoints
 from app.modules.assets import wiring as assets_wiring
 from app.modules.assets.models import Asset, AssetClass, Currency
 from app.modules.assets.tests.fakes import FakeMarketDataProvider, make_quote
@@ -83,7 +86,24 @@ def test_full_portfolio_flow(
     auth_headers: dict[str, str],
     seeded_currency: Currency,
     fake_provider: FakeMarketDataProvider,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The refresh runs as a background task with the default session scope, which
+    # is outside this test's rolled-back transaction. Point it at the test session.
+    # The scope is passed positionally by `daily_refresh`, so wrap rather than bind.
+    test_scope = partial(nullcontext, integration_session)
+    fx_rates, prices = (
+        assets_entrypoints.refresh_fx_rates,
+        assets_entrypoints.refresh_prices,
+    )
+    monkeypatch.setattr(
+        assets_entrypoints, "refresh_fx_rates", lambda scope=None: fx_rates(test_scope)
+    )
+    monkeypatch.setattr(
+        assets_entrypoints,
+        "refresh_prices",
+        lambda asset_ids=None, scope=None: prices(asset_ids, test_scope),
+    )
     api = Api(integration_client, auth_headers)
     name = integration_data.value("flow")
     ticker = integration_data.value("t")[:20].upper()
@@ -209,15 +229,21 @@ def test_full_portfolio_flow(
     assert summary["total_value"] == 858
     assert summary["total_profit_loss"] == -42
 
-    # GET values at the stored prices (no side effects); only POST /refresh
-    # pulls prices from the (fake) provider.
-    fake_provider.quotes[ticker] = make_quote(ticker, current_price=D("120"))
+    # The first GET of the day starts the daily refresh (ADR-0017), which reads the
+    # provider; the quote is set after it so only POST /refresh stores 120.
     stored = api.get("/portfolios/positions", portfolio_name=name)
     assert stored.status_code == 200, stored.text
     assert stored.json()[0]["asset"]["current_price"] == 0
+    fake_provider.quotes[ticker] = make_quote(ticker, current_price=D("120"))
+    # POST answers with the stored prices; the refresh runs after the response,
+    # so the new prices show on the next GET (the caller polls, per the endpoint).
     positions = api.post_query("/portfolios/positions/refresh", portfolio_name=name)
     assert positions.status_code == 200, positions.text
-    [valued] = positions.json()
+    assert positions.json()[0]["asset"]["current_price"] == 0
+
+    stored = api.get("/portfolios/positions", portfolio_name=name)
+    assert stored.status_code == 200, stored.text
+    [valued] = stored.json()
     assert valued["asset"]["current_price"] == 120
     assert valued["market_value"] == 120
     assert valued["unrealized_pnl"] == 19.5
@@ -279,8 +305,9 @@ def test_full_portfolio_flow(
     assert body["date"][0] == "2025-01-01T00:00:00"
     assert len(body["date"]) == 7
     assert body["net_deposits_vector"] == [0, 1000, 1000, 1000, 1000, 1000, 900]
-    # quantity 2 then 1 (sell on the 3rd) x closes 100,100,110,110,110,115,120
-    assert body["assets"] == {ticker: [0, 200, 110, 110, 110, 115, 120]}
+    # quantity 2 then 1 (sell on the 3rd) x closes 100,100,110,110,110,115,115: the
+    # last day takes the stored close (DEC-14, fresh within 7 days), not the quote.
+    assert body["assets"] == {ticker: [0, 200, 110, 110, 110, 115, 115]}
     assert body["pocket_value_vector"] == body["portfolio_value_vector"]
 
     assert api.delete(f"/portfolios/{portfolio_id}").status_code == 204
