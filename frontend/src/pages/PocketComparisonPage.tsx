@@ -9,14 +9,15 @@ import {
   Paper,
   CircularProgress,
   Alert,
+  Button,
 } from '@mui/material';
 import dayjs from 'dayjs';
 
 import { usePockets } from '../hooks/usePockets';
 import { usePocketVectors } from '../hooks/usePocketVectors';
+import { getErrorMessage } from '../lib/api';
 import DateRangePicker from '../components/DateRangePicker';
 import LineChartCard from '../components/charts/LineChartCard';
-import { normalizeToFirstPositive } from '../utils/portfolioSeries';
 
 const COLORS = [
   '#1976d2', '#9c27b0', '#2e7d32', '#ed6c02', '#d32f2f',
@@ -30,23 +31,26 @@ const PocketComparisonPage: React.FC = () => {
   const [endDate, setEndDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [selectedPockets, setSelectedPockets] = useState<string[]>([]);
 
-  const { data: pockets, isLoading: pocketsLoading } = usePockets();
+  const { data: pockets, isLoading: pocketsLoading, error: pocketsError } = usePockets();
 
   // Fetch vectors for each selected pocket
   const pocket1Vectors = usePocketVectors(
-    selectedPockets[0] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector']
+    selectedPockets[0] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector', 'twr_index_vector']
   );
   const pocket2Vectors = usePocketVectors(
-    selectedPockets[1] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector']
+    selectedPockets[1] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector', 'twr_index_vector']
   );
   const pocket3Vectors = usePocketVectors(
-    selectedPockets[2] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector']
+    selectedPockets[2] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector', 'twr_index_vector']
   );
   const pocket4Vectors = usePocketVectors(
-    selectedPockets[3] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector']
+    selectedPockets[3] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector', 'twr_index_vector']
   );
 
-  const allVectors = [pocket1Vectors, pocket2Vectors, pocket3Vectors, pocket4Vectors];
+  const allVectors = useMemo(
+    () => [pocket1Vectors, pocket2Vectors, pocket3Vectors, pocket4Vectors],
+    [pocket1Vectors, pocket2Vectors, pocket3Vectors, pocket4Vectors]
+  );
   const isAnyLoading = selectedPockets.some((_, i) => allVectors[i]?.isLoading);
 
   const handleTogglePocket = (pocketName: string) => {
@@ -59,9 +63,9 @@ const PocketComparisonPage: React.FC = () => {
     });
   };
 
-  // Build normalized comparison data (start = 100%)
-  const normalizedValueData = useMemo(() => {
-    if (selectedPockets.length === 0) return { data: [], keys: [], baseDates: [] };
+  // Build return data from TWR index (time-weighted return)
+  const returnData = useMemo(() => {
+    if (selectedPockets.length === 0) return { data: [], keys: [] };
 
     // Find the longest date vector
     let dates: string[] = [];
@@ -72,37 +76,64 @@ const PocketComparisonPage: React.FC = () => {
       }
     });
 
-    if (dates.length === 0) return { data: [], keys: [], baseDates: [] };
+    if (dates.length === 0) return { data: [], keys: [] };
 
     const keys = selectedPockets.map((name) => name);
-    const baseDates: (string | null)[] = [];
-
-    // Calculate base date for each portfolio (first positive value date)
-    selectedPockets.forEach((_, i) => {
-      const v = allVectors[i]?.data;
-      if (v?.pocket_value_vector) {
-        const firstPositiveIdx = v.pocket_value_vector.findIndex((val) => val > 0);
-        baseDates.push(firstPositiveIdx >= 0 ? dates[firstPositiveIdx] : null);
-      } else {
-        baseDates.push(null);
-      }
-    });
 
     const data = dates.map((date, idx) => {
       const row: Record<string, unknown> = { date };
       selectedPockets.forEach((name, i) => {
         const v = allVectors[i]?.data;
-        if (v?.pocket_value_vector) {
-          // Use normalizeToFirstPositive to find the first positive value
-          const normalized = normalizeToFirstPositive(v.pocket_value_vector);
-          row[name] = normalized.series[idx];
+        if (v?.twr_index_vector != null && v.twr_index_vector.length > idx) {
+          // F3 & F5: DEC-07 - TWR normalized to base 0: (1.0 = 0%, 1.05 = 5%)
+          const twr = v.twr_index_vector[idx];
+          row[name] = twr != null ? (twr - 1) * 100 : undefined;
         }
       });
       return row;
     });
 
-    return { data, keys, baseDates };
-  }, [selectedPockets, pocket1Vectors.data, pocket2Vectors.data, pocket3Vectors.data, pocket4Vectors.data]);
+    return { data, keys };
+  }, [selectedPockets, allVectors]);
+
+  // Calculate base dates (first positive value date) for each portfolio
+  const baseDates = useMemo(() => {
+    const result: (string | null)[] = [];
+
+    if (selectedPockets.length === 0) return result;
+
+    // Find the longest date vector
+    let dates: string[] = [];
+    selectedPockets.forEach((_, i) => {
+      const v = allVectors[i]?.data;
+      if (v?.date && v.date.length > dates.length) {
+        dates = v.date;
+      }
+    });
+
+    selectedPockets.forEach((_, i) => {
+      const v = allVectors[i]?.data;
+      if (v?.pocket_value_vector) {
+        const firstPositiveIdx = v.pocket_value_vector.findIndex((val) => val > 0);
+        result.push(firstPositiveIdx >= 0 ? dates[firstPositiveIdx] : null);
+      } else {
+        result.push(null);
+      }
+    });
+
+    return result;
+  }, [selectedPockets, allVectors]);
+
+  // F2: Compute vectors error message once (find first non-null error)
+  const vectorsErrorMessage = useMemo(() => {
+    const vectorError = [
+      pocket1Vectors.error,
+      pocket2Vectors.error,
+      pocket3Vectors.error,
+      pocket4Vectors.error,
+    ].find((err) => err);
+    return vectorError ? getErrorMessage(vectorError) : null;
+  }, [pocket1Vectors.error, pocket2Vectors.error, pocket3Vectors.error, pocket4Vectors.error]);
 
   // Absolute profit comparison
   const profitData = useMemo(() => {
@@ -132,7 +163,7 @@ const PocketComparisonPage: React.FC = () => {
     });
 
     return { data, keys };
-  }, [selectedPockets, pocket1Vectors.data, pocket2Vectors.data, pocket3Vectors.data, pocket4Vectors.data]);
+  }, [selectedPockets, allVectors]);
 
   // Absolute value comparison
   const valueData = useMemo(() => {
@@ -162,12 +193,26 @@ const PocketComparisonPage: React.FC = () => {
     });
 
     return { data, keys };
-  }, [selectedPockets, pocket1Vectors.data, pocket2Vectors.data, pocket3Vectors.data, pocket4Vectors.data]);
+  }, [selectedPockets, allVectors]);
 
   if (pocketsLoading) {
     return (
       <Box display="flex" justifyContent="center" py={4}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  // F1: Early return for pocketsError (ADR-0007 pattern)
+  if (pocketsError) {
+    return (
+      <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="60vh" gap={2}>
+        <Typography variant="h5" color="error">
+          Błąd podczas ładowania portfeli: {getErrorMessage(pocketsError)}
+        </Typography>
+        <Button variant="contained" onClick={() => window.location.reload()}>
+          Spróbuj ponownie
+        </Button>
       </Box>
     );
   }
@@ -216,7 +261,7 @@ const PocketComparisonPage: React.FC = () => {
 
       {selectedPockets.length === 0 && (
         <Alert severity="info">
-          Wybierz co najmniej 2 portfele do porównania.
+          Wybierz co najmniej 1 portfel, aby zobaczyć wykresy. Wybierz 2 lub więcej, aby porównać.
         </Alert>
       )}
 
@@ -226,28 +271,29 @@ const PocketComparisonPage: React.FC = () => {
             <LineChartCard
               title="Zwrot względny (%)"
               subtitle={
-                normalizedValueData.baseDates.some((d) => d !== null)
-                  ? normalizedValueData.keys
+                baseDates.some((d) => d !== null)
+                  ? returnData.keys
                     .map((name, i) => {
-                      const baseDate = normalizedValueData.baseDates[i];
+                      const baseDate = baseDates[i];
                       if (baseDate) {
                         return `${name}: ${dayjs(baseDate).format('DD.MM.YYYY')}`;
                       }
                       return `${name}: brak wartości w zakresie`;
                     })
                     .join(' | ')
-                  : 'Brak danych do normalizacji'
+                  : 'Brak danych o wartości portfela w zakresie'
               }
-              data={normalizedValueData.data}
-              dataKeys={normalizedValueData.keys}
+              data={returnData.data}
+              dataKeys={returnData.keys}
               colors={COLORS}
               loading={isAnyLoading}
+              error={vectorsErrorMessage}
               height={350}
               yAxisFormatter={(v: number | null) => {
                 if (v === null) return '';
-                return `${v.toFixed(0)}%`;
+                return `${v.toFixed(1)}%`;
               }}
-              showReferenceLine
+              showReferenceLine={false}
             />
           </Grid>
 
@@ -259,6 +305,7 @@ const PocketComparisonPage: React.FC = () => {
               dataKeys={valueData.keys}
               colors={COLORS}
               loading={isAnyLoading}
+              error={vectorsErrorMessage}
             />
           </Grid>
 
@@ -270,6 +317,7 @@ const PocketComparisonPage: React.FC = () => {
               dataKeys={profitData.keys}
               colors={COLORS}
               loading={isAnyLoading}
+              error={vectorsErrorMessage}
               showReferenceLine
             />
           </Grid>

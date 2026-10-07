@@ -4,37 +4,6 @@
  */
 
 /**
- * Normalize a series to start from the first positive value = 100.
- * Used in portfolio comparison charts to align growth from first non-zero point.
- *
- * @param values - Array of numbers, possibly starting with zeros
- * @returns Object with normalized series (null for points before first positive),
- *          and base value (the first positive value found)
- */
-export function normalizeToFirstPositive(
-  values: number[]
-): { base: number; series: (number | null)[] } {
-  const firstPositiveIndex = values.findIndex((v) => v > 0);
-
-  if (firstPositiveIndex === -1) {
-    // No positive value found - return all nulls and base 1 to avoid division by zero
-    return {
-      base: 1,
-      series: values.map(() => null),
-    };
-  }
-
-  const baseValue = values[firstPositiveIndex];
-  const series: (number | null)[] = values.map((v, idx) => {
-    if (idx < firstPositiveIndex) return null;
-    if (baseValue === 0) return null; // Guard against division by zero
-    return (v / baseValue) * 100;
-  });
-
-  return { base: baseValue, series };
-}
-
-/**
  * Filter a series of stacks (assets, asset_classes) to keep only those
  * with a maximum value > 0 across the entire range.
  * Removes stacks that are zero throughout.
