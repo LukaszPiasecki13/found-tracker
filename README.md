@@ -9,7 +9,9 @@ Personal investment tracker: record operations, get positions, cash, and perform
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
 ![mypy](https://img.shields.io/badge/mypy-strict-2A6DB2)
 
-![Portfolio composition](images/pocket_composition.JPG)
+![Dashboard](images/dashboard.png)
+
+> Screenshots show a demo dataset (three fictional portfolios on real market prices). The UI is in Polish.
 
 ## Features
 
@@ -22,9 +24,15 @@ Personal investment tracker: record operations, get positions, cash, and perform
 - **Market data.** Yahoo Finance prices and FX with stored source; split-unadjusted history.
 - **`Decimal` everywhere** for money; `float`/NumPy only for chart vectors and XIRR.
 
-| Operations | Charts |
+## Screenshots
+
+| Portfolio — positions, P/L, share | Portfolio charts — value, P/L, net deposits |
 |---|---|
-| ![Buy](images/buy.JPG) | ![Charts](images/charts1.JPG) |
+| ![Portfolio details](images/portfolio.png) | ![Portfolio charts](images/charts.png) |
+
+| Compare portfolios and benchmarks (TWR) | Whole-account charts |
+|---|---|
+| ![Compare portfolios](images/compare.png) | ![Account charts](images/account.png) |
 
 ## Engineering
 
@@ -53,7 +61,7 @@ cd backend
 pip install -r requirements-dev.txt
 # create backend/.env: DATABASE_URL, SECRET_KEY (optional: CORS_ORIGINS, ADMIN_EMAILS, REGISTRATION_ENABLED)
 alembic upgrade head
-python -m seed.seed
+python -m seed.seed                # demo login: admin@foundtracker.com / admin
 uvicorn app.main:app --reload      # API docs: http://localhost:8000/docs
 
 # frontend
