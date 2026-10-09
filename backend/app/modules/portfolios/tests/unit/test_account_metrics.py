@@ -115,6 +115,7 @@ def test_one_portfolio_matches_its_own_vectors(
             end_date="2025-01-07",
             interval="1d",
             vectors="[]",
+            benchmarks=None,
         ),
     )
     account, _ = _account(operations, provider=prices, currencies={2: "PLN"})

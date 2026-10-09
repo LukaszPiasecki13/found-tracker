@@ -1,7 +1,7 @@
 """`assets.entrypoints`: the non-HTTP refresh jobs run in the given session scope
 (ADR-0002), delegate to the services and report `ok`/`failed`; no commit here."""
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -308,6 +308,52 @@ def test_sync_bond_terms_counts_unknown_series_as_failed(
 
     assert result == RefreshResult(ok=0, failed=1)
     bond_data.register_series.assert_not_called()
+
+
+# --- seed_benchmark_assets (benchmark comparison) ---
+
+
+def test_seed_benchmark_assets_creates_and_commits_three_index_assets(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-02: seeding writes under one transaction (the function's own session
+    scope never commits by itself) and tags every benchmark `asset_type="index"`."""
+    asset_service, currency_service, asset_repo = MagicMock(), MagicMock(), MagicMock()
+    asset_repo.transaction.return_value = nullcontext()
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: asset_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_currency_service", lambda session: currency_service
+    )
+    monkeypatch.setattr(entrypoints, "AssetRepository", lambda session: asset_repo)
+    currency_service.get_or_create_by_code.side_effect = lambda code: SimpleNamespace(
+        id={"USD": 1, "PLN": 2}[code]
+    )
+    created = {
+        "^GSPC": SimpleNamespace(id=10, asset_type="stock"),
+        "^NDX": SimpleNamespace(id=11, asset_type="stock"),
+        # Already correctly tagged from a prior run - must stay idempotent.
+        "ETFBW20TR.WA": SimpleNamespace(id=12, asset_type="index"),
+    }
+    asset_service.get_or_create_by_ticker.side_effect = lambda ticker, **kwargs: (
+        created[ticker]
+    )
+
+    result = entrypoints.seed_benchmark_assets(scope)
+
+    asset_repo.transaction.assert_called_once()
+    assert result.asset_ids == [10, 11, 12]
+    assert created["^GSPC"].asset_type == "index"
+    assert created["^NDX"].asset_type == "index"
+    # Only the two that needed fixing go through `update`.
+    assert asset_repo.update.call_count == 2
+    asset_service.get_or_create_by_ticker.assert_any_call(
+        "^GSPC", asset_class_name="Index", fallback_currency_id=1
+    )
+    asset_service.get_or_create_by_ticker.assert_any_call(
+        "ETFBW20TR.WA", asset_class_name="Index", fallback_currency_id=2
+    )
 
 
 def test_sync_bond_terms_counts_provider_outage_as_failed(

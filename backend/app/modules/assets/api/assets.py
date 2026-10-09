@@ -6,11 +6,17 @@ manual refresh and data status.
 whatever the router include order.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
 from app.core.errors import BondTermsNotFoundError
 from app.core.market_data import BondDataProvider
+from app.core.rate_limit import limiter
 from app.modules.assets import entrypoints
+from app.modules.assets.constants import (
+    ASSET_WRITE_RATE_LIMIT,
+    PROVIDER_SEARCH_RATE_LIMIT,
+    REFRESH_RATE_LIMIT,
+)
 from app.modules.assets.dependencies import (
     get_asset_service,
     get_bond_data_provider,
@@ -67,7 +73,9 @@ def list_assets(
 
 
 @router.post("/", response_model=AssetResponse, status_code=201)
+@limiter.limit(ASSET_WRITE_RATE_LIMIT)
 def create_asset(
+    request: Request,
     data: AssetCreateRequest,
     service: AssetService = Depends(get_asset_service),
 ):
@@ -75,7 +83,9 @@ def create_asset(
 
 
 @router.get("/search-yahoo", response_model=AssetSearchResponse)
+@limiter.limit(PROVIDER_SEARCH_RATE_LIMIT)
 def search_yahoo(
+    request: Request,
     query: AssetSearchQuery = Depends(),
     service: AssetService = Depends(get_asset_service),
 ):
@@ -84,7 +94,9 @@ def search_yahoo(
 
 
 @router.post("/create-from-yahoo", response_model=AssetDetailResponse, status_code=201)
+@limiter.limit(ASSET_WRITE_RATE_LIMIT)
 def create_from_yahoo(
+    request: Request,
     data: AssetFromProviderRequest,
     service: AssetService = Depends(get_asset_service),
 ):
@@ -92,7 +104,9 @@ def create_from_yahoo(
 
 
 @router.get("/bond-series/{series_code}", response_model=BondSeriesSearchResponse)
+@limiter.limit(PROVIDER_SEARCH_RATE_LIMIT)
 def search_bond_series(
+    request: Request,
     series_code: str,
     provider: BondDataProvider = Depends(get_bond_data_provider),
 ):
@@ -152,7 +166,9 @@ def data_status(
 
 
 @router.post("/refresh-prices", response_model=RefreshPricesResponse, status_code=202)
+@limiter.limit(REFRESH_RATE_LIMIT)
 def refresh_prices(
+    request: Request,
     data: RefreshPricesRequest,
     background_tasks: BackgroundTasks,
     service: AssetService = Depends(get_asset_service),

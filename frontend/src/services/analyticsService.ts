@@ -7,6 +7,7 @@ interface PocketVectorsParams {
   endDate?: string;
   interval?: string;
   vectors?: string;
+  benchmarks?: string;
 }
 
 interface AccountVectorsParams {
@@ -25,6 +26,7 @@ export const analyticsService = {
         endDate: params.endDate,
         interval: params.interval,
         vectors: params.vectors,
+        benchmarks: params.benchmarks,
       },
     });
     return response.data;

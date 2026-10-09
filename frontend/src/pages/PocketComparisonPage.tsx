@@ -24,18 +24,41 @@ const COLORS = [
   '#0288d1', '#7b1fa2', '#388e3c', '#f57c00', '#c62828',
 ];
 
+// Benchmark colors: slightly muted/dashed to differentiate from portfolio colors
+const BENCHMARK_COLORS: Record<string, string> = {
+  sp500: '#616161',
+  nasdaq: '#757575',
+  wig20: '#9e9e9e',
+};
+
+const BENCHMARK_NAMES: Record<string, string> = {
+  sp500: 'S&P500',
+  nasdaq: 'Nasdaq-100',
+  wig20: 'WIG20',
+};
+
 const PocketComparisonPage: React.FC = () => {
   const [startDate, setStartDate] = useState(
     dayjs().subtract(1, 'year').format('YYYY-MM-DD')
   );
   const [endDate, setEndDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [selectedPockets, setSelectedPockets] = useState<string[]>([]);
+  const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
 
   const { data: pockets, isLoading: pocketsLoading, error: pocketsError } = usePockets();
 
-  // Fetch vectors for each selected pocket
+  // Fetch vectors for each selected pocket (benchmarks fetched with first pocket)
+  const benchmarkVectors = useMemo(() => {
+    if (selectedBenchmarks.length === 0) return [];
+    return ['benchmarks'];
+  }, [selectedBenchmarks.length]);
+
   const pocket1Vectors = usePocketVectors(
-    selectedPockets[0] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector', 'twr_index_vector']
+    selectedPockets[0] || '',
+    startDate,
+    endDate,
+    ['pocket_value_vector', 'profit_vector', 'twr_index_vector', ...benchmarkVectors],
+    selectedBenchmarks.length > 0 ? JSON.stringify(selectedBenchmarks) : undefined
   );
   const pocket2Vectors = usePocketVectors(
     selectedPockets[1] || '', startDate, endDate, ['pocket_value_vector', 'profit_vector', 'twr_index_vector']
@@ -63,9 +86,19 @@ const PocketComparisonPage: React.FC = () => {
     });
   };
 
+  const handleToggleBenchmark = (benchmarkKey: string) => {
+    setSelectedBenchmarks((prev) => {
+      if (prev.includes(benchmarkKey)) {
+        return prev.filter((b) => b !== benchmarkKey);
+      }
+      if (prev.length >= 3) return prev; // max 3 benchmarks
+      return [...prev, benchmarkKey];
+    });
+  };
+
   // Build return data from TWR index (time-weighted return)
   const returnData = useMemo(() => {
-    if (selectedPockets.length === 0) return { data: [], keys: [] };
+    if (selectedPockets.length === 0) return { data: [], keys: [], benchmarks: [] };
 
     // Find the longest date vector
     let dates: string[] = [];
@@ -76,9 +109,10 @@ const PocketComparisonPage: React.FC = () => {
       }
     });
 
-    if (dates.length === 0) return { data: [], keys: [] };
+    if (dates.length === 0) return { data: [], keys: [], benchmarks: [] };
 
     const keys = selectedPockets.map((name) => name);
+    const benchmarks: string[] = [];
 
     const data = dates.map((date, idx) => {
       const row: Record<string, unknown> = { date };
@@ -90,11 +124,26 @@ const PocketComparisonPage: React.FC = () => {
           row[name] = twr != null ? (twr - 1) * 100 : undefined;
         }
       });
+      // Add benchmarks from pocket1 (benchmarks are common for all pockets)
+      if (pocket1Vectors.data?.benchmarks) {
+        Object.entries(pocket1Vectors.data.benchmarks).forEach(
+          ([benchKey, benchValues]) => {
+            if (Array.isArray(benchValues) && benchValues.length > idx) {
+              const benchValue = benchValues[idx];
+              // Benchmark vectors are already normalized to 1.0 at start, convert to %
+              row[benchKey] = benchValue != null ? (benchValue - 1) * 100 : undefined;
+              if (!benchmarks.includes(benchKey)) {
+                benchmarks.push(benchKey);
+              }
+            }
+          }
+        );
+      }
       return row;
     });
 
-    return { data, keys };
-  }, [selectedPockets, allVectors]);
+    return { data, keys, benchmarks };
+  }, [selectedPockets, allVectors, pocket1Vectors.data?.benchmarks]);
 
   // Calculate base dates (first positive value date) for each portfolio
   const baseDates = useMemo(() => {
@@ -259,6 +308,30 @@ const PocketComparisonPage: React.FC = () => {
         </FormGroup>
       </Paper>
 
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="subtitle2" gutterBottom>
+          Wybierz benchmarki (max 3):
+        </Typography>
+        <FormGroup row>
+          {Object.entries(BENCHMARK_NAMES).map(([key, name]) => (
+            <FormControlLabel
+              key={key}
+              control={
+                <Checkbox
+                  checked={selectedBenchmarks.includes(key)}
+                  onChange={() => handleToggleBenchmark(key)}
+                  disabled={
+                    !selectedBenchmarks.includes(key) &&
+                    selectedBenchmarks.length >= 3
+                  }
+                />
+              }
+              label={name}
+            />
+          ))}
+        </FormGroup>
+      </Paper>
+
       {selectedPockets.length === 0 && (
         <Alert severity="info">
           Wybierz co najmniej 1 portfel, aby zobaczyć wykresy. Wybierz 2 lub więcej, aby porównać.
@@ -284,8 +357,14 @@ const PocketComparisonPage: React.FC = () => {
                   : 'Brak danych o wartości portfela w zakresie'
               }
               data={returnData.data}
-              dataKeys={returnData.keys}
-              colors={COLORS}
+              dataKeys={[
+                ...returnData.keys,
+                ...returnData.benchmarks,
+              ]}
+              colors={[
+                ...COLORS,
+                ...returnData.benchmarks.map((b) => BENCHMARK_COLORS[b] || '#999'),
+              ]}
               loading={isAnyLoading}
               error={vectorsErrorMessage}
               height={350}

@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # data every user shares: assets, asset classes and currencies.
     admin_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
+    # Open sign-up. Switch off once the accounts you need exist: with it on, anyone
+    # can create an account and call the endpoints that reach external providers.
+    registration_enabled: bool = True
+
     # Rate limiter: trust `X-Forwarded-For` from a reverse proxy. `None` means
     # "not set explicitly": on in production, off elsewhere; an explicit value wins.
     trust_proxy_headers: bool | None = None

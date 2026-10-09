@@ -18,6 +18,7 @@ class PortfolioVectorsQuery(BaseModel):
     end_date: str | None = Field(default=None, alias="endDate")
     interval: str = "1d"
     vectors: str = "[]"
+    benchmarks: str | None = Field(default=None, alias="benchmarks")
 
 
 # One entry: the `date` list, a single vector, or a vector per ticker/class name

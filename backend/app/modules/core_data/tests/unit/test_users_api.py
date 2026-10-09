@@ -102,3 +102,20 @@ def test_me_endpoint_returns_current_user() -> None:
 
     assert response.status_code == 200
     assert response.json()["email"] == "user@example.com"
+
+
+def test_register_endpoint_is_closed_when_registration_disabled(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "registration_enabled", False)
+    user_service = MagicMock()
+    client = build_client(user_service)
+
+    response = client.post(
+        "/auth/register",
+        json={"email": "user@example.com", "password": "StrongPass123"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "REGISTRATION_DISABLED"
+    user_service.register.assert_not_called()

@@ -168,6 +168,7 @@ export interface PocketVectorsResponse {
   twr_index_vector?: number[];
   drawdown_vector?: number[];
   xirr_vector?: (number | null)[];
+  benchmarks?: Record<string, number[]>;
 }
 
 export interface CurrencySplitItem {

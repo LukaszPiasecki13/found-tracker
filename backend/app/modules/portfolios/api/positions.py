@@ -2,9 +2,11 @@
 
 from datetime import date
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
+from app.core.rate_limit import limiter
 from app.modules.assets import entrypoints as assets_entrypoints
+from app.modules.assets.constants import REFRESH_RATE_LIMIT
 from app.modules.assets.dependencies import get_daily_refresh_service
 from app.modules.assets.services.job_runs import DailyRefreshService
 from app.modules.core_data.models.user import User
@@ -39,7 +41,9 @@ def list_positions(
 
 
 @router.post("/refresh", response_model=list[PositionResponse])
+@limiter.limit(REFRESH_RATE_LIMIT)
 def refresh_positions(
+    request: Request,
     background_tasks: BackgroundTasks,
     query: PositionListQuery = Depends(),
     user: User = Depends(get_current_user),

@@ -555,7 +555,9 @@ def test_search_combines_local_assets_with_unknown_provider_hits(
 
     known = service.search_local_and_provider("msft")
 
-    asset_repo.list_all.assert_called_once_with(search="msft", limit=10)
+    asset_repo.list_all.assert_called_once_with(
+        search="msft", limit=10, exclude_asset_type="index"
+    )
     assert [a.ticker for a in known.local] == ["MSFT"]
     assert known.yahoo == []
 
@@ -579,7 +581,9 @@ def test_search_with_picker_format_looks_up_the_ticker_part_locally(
 
     found = service.search_local_and_provider("MSFT - Microsoft Corp")
 
-    asset_repo.list_all.assert_called_once_with(search="MSFT", limit=10)
+    asset_repo.list_all.assert_called_once_with(
+        search="MSFT", limit=10, exclude_asset_type="index"
+    )
     assert [a.ticker for a in found.local] == ["MSFT"]
     # Already stored locally, even if the capped local list had missed it.
     assert found.yahoo == []

@@ -21,10 +21,12 @@ class AssetRepository(SQLRepository):
         asset_class_id: int | None = None,
         country: str | None = None,
         include_archived: bool = False,
+        exclude_asset_type: str | None = None,
     ) -> list[Asset]:
         """Assets ordered by ticker; `search` matches ticker, name or ISIN
         (case-insensitive substring). Archived assets are left out unless
-        `include_archived`."""
+        `include_archived`. Use `exclude_asset_type` to filter out assets
+        of a specific type (e.g., "index")."""
         stmt = select(Asset).order_by(Asset.ticker)
         if search:
             pattern = f"%{search}%"
@@ -37,6 +39,8 @@ class AssetRepository(SQLRepository):
             )
         if asset_type is not None:
             stmt = stmt.where(Asset.asset_type == asset_type)
+        if exclude_asset_type is not None:
+            stmt = stmt.where(Asset.asset_type != exclude_asset_type)
         if asset_class_id is not None:
             stmt = stmt.where(Asset.asset_class_id == asset_class_id)
         if country is not None:

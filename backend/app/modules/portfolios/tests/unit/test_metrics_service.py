@@ -25,7 +25,7 @@ from app.modules.portfolios.exceptions import (
     UnsupportedIntervalError,
 )
 from app.modules.portfolios.schemas.metrics import PortfolioVectorsQuery
-from app.modules.portfolios.services.metrics import MetricsService
+from app.modules.portfolios.services.metrics import MetricsService, VectorCalculator
 
 D = Decimal
 _ids = count(1)
@@ -304,6 +304,8 @@ def test_all_vectors_by_default(
     portfolio_value = [1000.0, 1008.0, 1020.5, 1020.5, 1020.5, 1046.0, 952.0]
     assert body["portfolio_value_vector"] == portfolio_value
     assert body["pocket_value_vector"] == portfolio_value
+    # No `asset_service` wired in this test's service, so benchmarks() short-circuits.
+    assert body["benchmarks"] == {}
     assert list(body) == [
         "date",
         "assets",
@@ -318,6 +320,7 @@ def test_all_vectors_by_default(
         "twr_index_vector",
         "drawdown_vector",
         "xirr_vector",
+        "benchmarks",
     ]
 
 
@@ -788,3 +791,99 @@ def test_a_stored_rate_history_that_starts_late_is_not_stretched_over_the_range(
     # Six days at 10 x 4 from the provider; today at the current 25 x 4.
     assert body.root["assets"] == {"AAA": [40.0] * 6 + [100.0]}
     assert ("fx_history", "USDPLN") in prices.calls
+
+
+# --- benchmarks (DEC-05, AC-03, AC-04: comparison benchmarks on portfolio_vectors) ---
+
+
+def test_benchmarks_empty_when_none_requested() -> None:
+    """AC-03: no `benchmarks` query param means no benchmark series at all,
+    even with an asset service wired in."""
+    operations = [_op("deposit", _at(1), amount="1000")]
+    calculator = VectorCalculator(
+        operations,
+        _at(1),
+        _at(3),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        asset_service=MagicMock(),
+    )
+
+    assert calculator.benchmarks() == {}
+
+
+def test_benchmarks_empty_when_no_asset_service_wired() -> None:
+    """AC-03: a `benchmarks` param with no asset service (e.g. the account-
+    vectors path, which does not wire one in) degrades to no series, not a
+    crash."""
+    operations = [_op("deposit", _at(1), amount="1000")]
+    calculator = VectorCalculator(
+        operations,
+        _at(1),
+        _at(3),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        benchmarks_json='["sp500"]',
+    )
+
+    assert calculator.benchmarks() == {}
+
+
+def test_benchmarks_normalizes_to_one_at_range_start_and_forward_fills() -> None:
+    """AC-03/AC-04: a requested benchmark is normalized to 1.0 at the range
+    start, forward-filled for a day with no close, and keyed by its short name
+    (not its ticker)."""
+    operations = [_op("deposit", _at(1), amount="1000")]
+    asset_service = MagicMock()
+    asset_service.find_by_ticker.return_value = SimpleNamespace(
+        id=99, asset_type="index", currency=SimpleNamespace(code="PLN")
+    )
+    prices = MagicMock()
+    prices.series.return_value = SimpleNamespace(
+        items=[
+            SimpleNamespace(day=date(2025, 1, 1), close=D("100")),
+            # 2025-01-02 has no close: forward-filled from 01-01's 100.
+            SimpleNamespace(day=date(2025, 1, 3), close=D("110")),
+        ]
+    )
+
+    calculator = VectorCalculator(
+        operations,
+        _at(1),
+        _at(3),
+        MagicMock(),
+        prices,
+        MagicMock(),
+        asset_service=asset_service,
+        benchmarks_json='["sp500"]',
+    )
+
+    result = calculator.benchmarks()
+
+    asset_service.find_by_ticker.assert_called_once_with("^GSPC")
+    assert list(result) == ["sp500"]
+    assert result["sp500"].tolist() == pytest.approx([1.0, 1.0, 1.1])
+
+
+def test_benchmarks_skips_a_ticker_the_service_does_not_know(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """AC-03: an unresolved index asset (not seeded yet) is skipped, not an
+    error - the other requested benchmarks still come back."""
+    operations = [_op("deposit", _at(1), amount="1000")]
+    asset_service = MagicMock()
+    asset_service.find_by_ticker.return_value = None
+    calculator = VectorCalculator(
+        operations,
+        _at(1),
+        _at(3),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        asset_service=asset_service,
+        benchmarks_json='["sp500"]',
+    )
+
+    assert calculator.benchmarks() == {}

@@ -114,12 +114,14 @@ def build_import_service(session: Session) -> ImportService:
 def build_metrics_service(session: Session) -> MetricsService:
     """Stored prices and rates (DEC-01) through the `assets` services; the provider
     only through `MarketDataService`, for a backfill or a stale current value (DEC-03,
-    DEC-14)."""
+    DEC-14). Resolves benchmark assets through `AssetService`, never its repository
+    directly (ADR-0006)."""
     return MetricsService(
         OperationRepository(session),
         assets_wiring.build_market_data_service(session),
         assets_wiring.build_price_service(session),
         assets_wiring.build_fx_rate_service(session),
+        asset_service=assets_wiring.build_asset_service(session),
     )
 
 

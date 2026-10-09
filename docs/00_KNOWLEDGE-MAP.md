@@ -41,7 +41,7 @@ Wiedza dzieli się na **warstwy według roli**. Przy sprzeczności wygrywa warst
 | Dokument | Co zawiera |
 |---|---|
 | [`business/CONTEXT.md`](./business/CONTEXT.md) | Słownik domeny: Portfel, Pozycja, Operacja, Walor, Klasa waloru, Waluta, Metryki. **Obowiązujące nazewnictwo** w kodzie, dokumentach i rozmowie |
-| [`business/adr/`](./business/adr/) | ADR-y biznesowe (wszystkie `Accepted`, decyzje właściciela, zbiorczo w [analizie końcowej](./research/00_analiza_koncowa.md)): [0001 Portfel = rachunek](./business/adr/0001-portfel-jest-rachunkiem.md), [0002 koszt nabycia, partie FIFO](./business/adr/0002-koszt-nabycia-partie-fifo.md), [0003 gotówka wielowalutowa](./business/adr/0003-gotowka-wielowalutowa.md), [0004 metodologia stóp zwrotu](./business/adr/0004-metodologia-stop-zwrotu.md), [0005 daty operacji: dzień i kolejność](./business/adr/0005-daty-operacji-dzien-i-kolejnosc.md), [0007 dane referencyjne i usuwanie](./business/adr/0007-dane-referencyjne-i-usuwanie.md) |
+| [`business/adr/`](./business/adr/) | ADR-y biznesowe (0001–0005 i 0007 `Accepted`, decyzje właściciela, zbiorczo w [analizie końcowej](./research/00_analiza_koncowa.md); 0008 `Proposed`): [0001 Portfel = rachunek](./business/adr/0001-portfel-jest-rachunkiem.md), [0002 koszt nabycia, partie FIFO](./business/adr/0002-koszt-nabycia-partie-fifo.md), [0003 gotówka wielowalutowa](./business/adr/0003-gotowka-wielowalutowa.md), [0004 metodologia stóp zwrotu](./business/adr/0004-metodologia-stop-zwrotu.md), [0005 daty operacji: dzień i kolejność](./business/adr/0005-daty-operacji-dzien-i-kolejnosc.md), [0007 dane referencyjne i usuwanie](./business/adr/0007-dane-referencyjne-i-usuwanie.md), [0008 benchmarki wielokrotne](./business/adr/0008-benchmarki-wielokrotne.md) |
 
 ## ADR-y techniczne
 
@@ -71,6 +71,7 @@ Numeracja w `docs/technical/adr/`, niezależna od biznesowych. Status ADR-a żyj
 | [`0020`](./technical/adr/0020-plaski-model-operacji.md) | Operacja jako płaska tabela; `status`, `sequence` (propozycja) |
 | [`0021`](./technical/adr/0021-tolerancja-ujemnego-salda-przy-zakupie.md) | Zakup może zejść najwyżej 0,50 poniżej zera salda; reszta operacji nie (propozycja) |
 | [`0022`](./technical/adr/0022-tickery-i-wycena-bez-notowan.md) | Tickery zostają jak przychodzą z importu; walor bez notowań wyceniany po cenach transakcji; odstępstwo od 0015 czasowe (propozycja) |
+| [`0023`](./technical/adr/0023-benchmark-jako-asset-index.md) | Benchmark jako Asset z `asset_type="index"`, pełne reużycie pipeline'u cen, brak migracji (propozycja) |
 
 ## L2 — Kontrakty
 

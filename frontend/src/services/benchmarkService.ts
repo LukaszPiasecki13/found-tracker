@@ -1,38 +1,21 @@
 /**
- * Benchmark service fetches S&P 500 data from the backend analytics endpoint.
- * We use a special "benchmark" pocket name convention or direct yfinance proxy.
- * 
- * Since backend PocketMetrics uses yfinance, we can create a lightweight
- * endpoint or fetch directly. For now, we provide a static normalization utility.
+ * Benchmark service — deprecated.
+ *
+ * Benchmark data is now fetched as part of the `analyticsService.getPocketVectors()`
+ * response, using the `benchmarks` query parameter. The backend returns benchmark
+ * indices (sp500, nasdaq, wig20) as normalized vectors (base 1.0 at start, converted
+ * to portfolio currency).
+ *
+ * This file is kept for reference only; it is no longer used (DEC-08, ADR-0008).
  */
 
-interface BenchmarkDataPoint {
-  date: string;
-  value: number;
-}
-
 /**
- * Normalize a value array to percentage change relative to start (start = 100)
- */
-export const normalizeToPercent = (values: number[]): number[] => {
-  if (values.length === 0) return [];
-  const start = values[0] || 1;
-  return values.map((v) => (v / start) * 100);
-};
-
-/**
- * Placeholder for future S&P 500 API integration.
- * Could use Alpha Vantage, Yahoo Finance proxy, or backend endpoint.
- * 
- * For now, returns null so the UI can handle the absence gracefully.
+ * @deprecated Use analyticsService.getPocketVectors({ benchmarks: JSON.stringify([...]) })
+ * instead. Benchmark data is returned in the response under the "benchmarks" key.
  */
 export const benchmarkService = {
-  async getSP500Data(): Promise<BenchmarkDataPoint[] | null> {
-    // TODO: Integrate with external API for S&P 500 data
-    // Options:
-    // 1. Backend endpoint that uses yfinance to fetch ^GSPC
-    // 2. Alpha Vantage free API
-    // 3. Financial Modeling Prep API
+  async getSP500Data(): Promise<null> {
+    // Replaced by analyticsService portfolio vectors
     return null;
   },
 };

@@ -25,6 +25,7 @@ last_reviewed: 2026-10-03
 3. **Annualizacja**: `(1 + R)^(365/dni) − 1` tylko gdy okres ≥ 365 dni; inaczej `annualized = null`, `reason = "PERIOD_SHORTER_THAN_ONE_YEAR"`. XIRR < 1 roku: zwrot okresu `(1 + IRR)^(dni/365) − 1`.
 4. **Modified Dietz** tylko jako fallback dla podokresów bez cen, z `approximation = true`.
 5. **Benchmark**: jeden indeks porównawczy zestawiany z TWR Portfela w tym samym okresie i walucie; statystyki benchmarku na `float` (numpy). Dni bez sesji pomijane.
+   > **Rozszerzony przez ADR-0008** — pkt 5 wskazywał jeden indeks; [ADR-0008](0008-benchmarki-wielokrotne.md) rozszerza to do wielokrotnych benchmarków (do 3 na ekranie v1: S&P500, Nasdaq-100, WIG20) bez zmiany metodologii — każdy benchmark zawsze normalizowany do bazy 1.0 na starcie zakresu, statystyki na float.
 6. **Klasyfikacja przepływów**: zewnętrzny = przekracza granicę zakresu (tabela).
 7. **API**: `method` `{twr: "daily_pp_v1", irr: "xirr_365_v1"}` **[propozycja nazw]**; zmiana metody = nowa wartość `method` i nowy ADR.
 8. **Waluta** [propozycja]: TWR w Walucie bazowej zakresu; efekt FX: najpierw cena po starym kursie, potem kurs na nowej cenie.

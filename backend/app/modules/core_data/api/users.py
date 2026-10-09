@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
+from app.core.config import get_settings
+from app.core.errors import ForbiddenError
 from app.core.rate_limit import limiter
 from app.modules.core_data.dependencies import get_user_service
 from app.modules.core_data.models.user import User
@@ -12,12 +14,19 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 REGISTER_RATE_LIMIT = "5/minute"
 
 
+def require_registration_enabled() -> None:
+    """Sign-up is closed when `REGISTRATION_ENABLED=false`."""
+    if not get_settings().registration_enabled:
+        raise ForbiddenError("Registration is disabled", code="REGISTRATION_DISABLED")
+
+
 @router.post("/register", response_model=UserResponse, status_code=201)
 @router.post("/register/", response_model=UserResponse, status_code=201)
 @limiter.limit(REGISTER_RATE_LIMIT)
 def register(
     request: Request,
     data: UserCreateRequest,
+    _: None = Depends(require_registration_enabled),
     service: UserService = Depends(get_user_service),
 ):
     return service.register(data)

@@ -17,7 +17,7 @@ DEFAULT_ASSET_CLASS_NAME = "Stock"
 
 # The closed set of asset types (the instrument kind; the user-editable asset
 # class is a separate axis). The module covers stocks, ETFs, and bonds.
-ASSET_TYPES: tuple[str, ...] = ("stock", "etf", "bond")
+ASSET_TYPES: tuple[str, ...] = ("stock", "etf", "bond", "index")
 DEFAULT_ASSET_TYPE = "stock"
 
 # Provider `quoteType` -> asset type for assets created from the provider; any
@@ -42,3 +42,9 @@ LOCAL_SEARCH_LIMIT = 10
 
 # `POST /assets/refresh-prices` accepts 1..this many asset ids.
 MAX_REFRESH_ASSETS = 50
+
+# Per client IP (see `core/rate_limit.py`): endpoints that reach the market-data
+# providers or grow the shared catalogue, open to every signed-up user.
+PROVIDER_SEARCH_RATE_LIMIT = "30/minute"
+ASSET_WRITE_RATE_LIMIT = "10/minute"
+REFRESH_RATE_LIMIT = "6/minute"

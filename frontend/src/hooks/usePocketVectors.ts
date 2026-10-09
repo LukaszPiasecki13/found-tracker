@@ -5,10 +5,11 @@ export const usePocketVectors = (
   pocketName: string,
   startDate: string,
   endDate: string,
-  vectors?: string[]
+  vectors?: string[],
+  benchmarks?: string
 ) => {
   return useQuery({
-    queryKey: ['pocket-vectors', pocketName, startDate, endDate, vectors],
+    queryKey: ['pocket-vectors', pocketName, startDate, endDate, vectors, benchmarks],
     queryFn: () =>
       analyticsService.getPocketVectors({
         pocketName,
@@ -16,6 +17,7 @@ export const usePocketVectors = (
         endDate,
         interval: '1d',
         vectors: vectors ? JSON.stringify(vectors) : undefined,
+        benchmarks,
       }),
     enabled: !!pocketName && !!startDate && !!endDate,
     staleTime: 1000 * 60 * 10, // 10 minutes - analytics data doesn't change often

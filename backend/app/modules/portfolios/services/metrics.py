@@ -51,6 +51,7 @@ from app.modules.assets.constants import SOURCE_MANUAL
 from app.modules.assets.exceptions import RateMissingError
 from app.modules.assets.models.assets import Asset
 from app.modules.assets.models.fx_rates import FxRate
+from app.modules.assets.services.assets import AssetService
 from app.modules.assets.services.fx_rates import FxRateService
 from app.modules.assets.services.market_data import MarketDataService
 from app.modules.assets.services.prices import PriceService
@@ -188,6 +189,8 @@ class VectorCalculator:
         market_data: MarketDataService,
         prices: PriceService,
         fx_rates: FxRateService,
+        asset_service: AssetService | None = None,
+        benchmarks_json: str | None = None,
     ) -> None:
         self._operations = operations
         self._start = start
@@ -195,7 +198,9 @@ class VectorCalculator:
         self._market_data = market_data
         self._prices = prices
         self._fx = fx_rates
+        self._asset_service = asset_service
         self._base = _base_currency(operations)
+        self._benchmarks_json = benchmarks_json
         self.length = int((end - start).total_seconds() // _DAY_SECONDS) + 1
         self._closes: dict[str, Vector] = {}
         self._rates: dict[tuple[str, str], Vector] = {}
@@ -203,6 +208,7 @@ class VectorCalculator:
         self._transaction_cost: Vector | None = None
         self._dividend_income: Vector | None = None
         self._net_deposits: Vector | None = None
+        self._benchmarks: dict[str, Vector] | None = None
 
     # --- Building blocks ---
 
@@ -475,6 +481,112 @@ class VectorCalculator:
     def xirr(self) -> Vector:
         return xirr(self.portfolio_value(), self.net_deposits())
 
+    def benchmarks(self) -> dict[str, Vector]:
+        """Benchmark indices normalized to base 1.0 at the range start and
+        converted to the portfolio's base currency. Returns a dict of
+        ticker_key -> vector (e.g., {"sp500": [...], "nasdaq": [...], ...}).
+        Empty dict if no benchmarks are requested or asset repository is
+        unavailable."""
+        if self._benchmarks is not None:
+            return self._benchmarks
+
+        self._benchmarks = {}
+
+        # Return early if no benchmarks requested or the asset service isn't wired
+        if not self._benchmarks_json or self._asset_service is None:
+            return self._benchmarks
+
+        # Ticker -> benchmark key mapping
+        ticker_to_key = {
+            "^GSPC": "sp500",
+            "^NDX": "nasdaq",
+            "ETFBW20TR.WA": "wig20",
+        }
+
+        try:
+            requested = json.loads(self._benchmarks_json)
+        except json.JSONDecodeError:
+            requested = []
+
+        if not isinstance(requested, list):
+            requested = []
+
+        for key in requested:
+            if not isinstance(key, str):
+                continue
+            # Find matching ticker for this benchmark key
+            matching_ticker = None
+            for ticker, stored_key in ticker_to_key.items():
+                if stored_key == key:
+                    matching_ticker = ticker
+                    break
+            if matching_ticker is None:
+                continue
+
+            try:
+                # Find the index asset by ticker (through the assets service,
+                # never its repository directly - ADR-0006).
+                asset = self._asset_service.find_by_ticker(matching_ticker)
+                if asset is None or asset.asset_type != "index":
+                    continue
+
+                # Get price history
+                start_date = self._start.date()
+                end_date = self._end.date()
+                history = self._prices.series(
+                    asset.id, from_date=start_date, to_date=end_date
+                )
+
+                if not history.items:
+                    logger.warning(
+                        "Benchmark %s has no price history for %s..%s; skipping",
+                        matching_ticker,
+                        start_date,
+                        end_date,
+                    )
+                    continue
+
+                # Build vector of closes with forward-fill
+                values: list[float | None] = []
+                history_dict = {item.day: item.close for item in history.items}
+                for offset in range(self.length):
+                    value = history_dict.get(start_date + timedelta(days=offset))
+                    values.append(float(value) if value is not None else None)
+
+                # Fill gaps forward, then leading gaps backward
+                filled = _filled(values, matching_ticker)
+
+                # Normalize to base 1.0 at range start
+                first_value = filled[0]
+                if first_value == 0:
+                    logger.warning(
+                        "Benchmark %s has a zero price at range start; skipping",
+                        matching_ticker,
+                    )
+                    continue
+                normalized = np.array([v / first_value for v in filled], dtype=float)
+
+                # Convert to base currency using daily FX rates
+                if asset.currency is None:
+                    logger.warning(
+                        "Benchmark %s has no currency on record; skipping",
+                        matching_ticker,
+                    )
+                    continue
+                rate_vector = self.rate_vector(asset.currency.code, self._base)
+                result_vector = normalized * rate_vector
+
+                self._benchmarks[key] = result_vector
+            except PriceDataMissingError, RateMissingError:
+                logger.warning(
+                    "Benchmark %s data unavailable for this range; skipping",
+                    matching_ticker,
+                    exc_info=True,
+                )
+                continue
+
+        return self._benchmarks
+
 
 def _filled(closes: list[float | None], ticker: str) -> list[float]:
     """Gaps filled forward, then the leading ones backward."""
@@ -504,6 +616,7 @@ VECTORS: dict[str, Callable[[VectorCalculator], Vector | dict[str, Vector]]] = {
     "twr_index_vector": VectorCalculator.twr_index,
     "drawdown_vector": VectorCalculator.drawdown,
     "xirr_vector": VectorCalculator.xirr,
+    "benchmarks": VectorCalculator.benchmarks,
 }
 
 
@@ -562,11 +675,13 @@ class MetricsService:
         market_data: MarketDataService,
         prices: PriceService,
         fx_rates: FxRateService,
+        asset_service: AssetService | None = None,
     ) -> None:
         self._operation_repo = operation_repo
         self._market_data = market_data
         self._prices = prices
         self._fx_rates = fx_rates
+        self._asset_service = asset_service
 
     def portfolio_vectors(
         self, owner_id: int, query: PortfolioVectorsQuery
@@ -595,6 +710,8 @@ class MetricsService:
             self._market_data,
             self._prices,
             self._fx_rates,
+            asset_service=self._asset_service,
+            benchmarks_json=query.benchmarks,
         )
         result: dict[str, Any] = {"date": calculator.dates()}
         for key in requested or list(VECTORS):

@@ -157,10 +157,15 @@ class AssetService:
 
     def search_local_and_provider(self, query: str) -> AssetSearchResponse:
         """Up to `LOCAL_SEARCH_LIMIT` local matches plus provider hits whose
-        symbol is not a local ticker yet (read model, ADR-0003)."""
+        symbol is not a local ticker yet (read model, ADR-0003). Excludes index
+        assets from local results (DEC-04)."""
         # A picker sends "TICKER - Name"; look the ticker part up locally too.
         local_query = query.strip().split(" - ")[0].strip()
-        local = self._repo.list_all(search=local_query, limit=LOCAL_SEARCH_LIMIT)
+        local = self._repo.list_all(
+            search=local_query,
+            limit=LOCAL_SEARCH_LIMIT,
+            exclude_asset_type="index",
+        )
         quotes_by_asset = self._prices.latest_quotes(local)
         quotes = [
             q

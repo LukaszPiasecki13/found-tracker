@@ -20,10 +20,12 @@ from app.core.dependencies import SessionScope, session_scope
 from app.core.errors import BondDataUnavailableError
 from app.modules.assets import wiring as assets_wiring
 from app.modules.assets.constants import SOURCE_BONDS
+from app.modules.assets.repositories.assets import AssetRepository
 from app.modules.assets.wiring import (
     build_asset_service,
     build_bond_data_service,
     build_bond_pricing_service,
+    build_currency_service,
     build_daily_refresh_service,
     build_market_data_service,
 )
@@ -171,3 +173,47 @@ def daily_refresh(scope: SessionScope = session_scope) -> None:
     refresh_bond_prices(None, scope)
     with scope() as session:
         build_daily_refresh_service(session).finish(day)
+
+
+@dataclass(frozen=True, slots=True)
+class SeedBenchmarkAssetsResult:
+    """Result of seeding benchmark assets."""
+
+    asset_ids: list[int]
+
+
+def seed_benchmark_assets(
+    scope: SessionScope = session_scope,
+) -> SeedBenchmarkAssetsResult:
+    """Create three benchmark assets (S&P500, Nasdaq-100, WIG20) if they don't
+    exist. Each is created with asset_type="index" and the currency from the
+    market-data provider; only when the provider has no quote does it fall back
+    to the currency named per ticker below. Idempotent: existing assets are
+    left unchanged."""
+    # Ticker, asset class name, fallback currency code (used only if the
+    # provider has no quote for the ticker at seed time).
+    benchmark_specs = [
+        ("^GSPC", "Index", "USD"),  # S&P500
+        ("^NDX", "Index", "USD"),  # Nasdaq-100
+        ("ETFBW20TR.WA", "Index", "PLN"),  # WIG20 proxy, listed on the GPW
+    ]
+    asset_ids = []
+    with scope() as session:
+        asset_service = build_asset_service(session)
+        asset_repo = AssetRepository(session)
+        currency_service = build_currency_service(session)
+        with asset_repo.transaction():
+            for ticker, asset_class_name, fallback_currency_code in benchmark_specs:
+                fallback_currency_id = currency_service.get_or_create_by_code(
+                    fallback_currency_code
+                ).id
+                asset = asset_service.get_or_create_by_ticker(
+                    ticker,
+                    asset_class_name=asset_class_name,
+                    fallback_currency_id=fallback_currency_id,
+                )
+                if asset.asset_type != "index":
+                    asset.asset_type = "index"
+                    asset_repo.update(asset)
+                asset_ids.append(asset.id)
+    return SeedBenchmarkAssetsResult(asset_ids=asset_ids)
