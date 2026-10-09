@@ -11,12 +11,19 @@ by `POST /assets/refresh-prices`.
 """
 
 from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
+from decimal import Decimal
 
 from app.core.dependencies import SessionScope, session_scope
+from app.core.errors import BondDataUnavailableError
+from app.modules.assets import wiring as assets_wiring
+from app.modules.assets.constants import SOURCE_BONDS
 from app.modules.assets.wiring import (
     build_asset_service,
+    build_bond_data_service,
+    build_bond_pricing_service,
     build_daily_refresh_service,
     build_market_data_service,
 )
@@ -60,12 +67,107 @@ def refresh_fx_rates(scope: SessionScope = session_scope) -> RefreshResult:
         return RefreshResult(ok=ok, failed=total - ok)
 
 
+def sync_bond_terms(
+    asset_ids: Sequence[int] | None = None, scope: SessionScope = session_scope
+) -> RefreshResult:
+    """Fetch bond series terms from the provider for bond assets that have no
+    manually-entered terms (`source="manual"` always wins and is never
+    overwritten automatically). A series the provider does not know about is
+    skipped, not an error; a provider outage counts every selected bond as
+    failed rather than stopping the run."""
+    with scope() as session:
+        assets = build_asset_service(session)
+        bond_data = build_bond_data_service(session)
+        provider = assets_wiring.build_bond_data_provider()
+        selected = (
+            assets.list_assets()
+            if asset_ids is None
+            else assets.list_by_ids(list(asset_ids))
+        )
+        active_bonds = [
+            a for a in selected if a.archived_at is None and a.asset_type == "bond"
+        ]
+        ok = 0
+        for bond_asset in active_bonds:
+            existing = bond_data.find_terms(bond_asset.id)
+            if existing is not None and existing.source == "manual":
+                ok += 1  # already has authoritative terms, nothing to do
+                continue
+            try:
+                terms = provider.fetch_series(bond_asset.ticker)
+            except BondDataUnavailableError:
+                continue
+            if terms is None:
+                continue
+            bond_data.register_series(
+                asset_id=bond_asset.id,
+                bond_symbol=terms.bond_symbol,
+                series_code=terms.series_code,
+                nominal_value=terms.nominal_value,
+                issue_date=terms.issue_date,
+                maturity_date=terms.maturity_date,
+                capitalization=terms.capitalization,
+                first_period_rate=terms.first_period_rate,
+                reference_type=terms.reference_type,
+                margin=terms.margin,
+                redemption_fee=terms.redemption_fee,
+                source=SOURCE_BONDS,
+                fetched_at=datetime.now(UTC),
+            )
+            ok += 1
+        return RefreshResult(ok=ok, failed=len(active_bonds) - ok)
+
+
+def refresh_bond_prices(
+    asset_ids: Sequence[int] | None = None, scope: SessionScope = session_scope
+) -> RefreshResult:
+    """Calculate and store today's synthetic prices for registered bonds.
+
+    For each non-archived bond asset:
+    1. Load BondTerms (skip if missing)
+    2. Calculate accrual coefficient (skip on error). Each capitalization
+       year looks up its own CPI reading from the provider's full history
+       (falls back to the margin alone for a year with no reading, per
+       `accrue_interest`). The NBP reference rate is not fetched here:
+       ROR/DOR (the only types that key off it) pay their coupon out in
+       cash rather than capitalizing it into price, so `accrue_interest`
+       never consumes it for pricing.
+    3. Store synthetic price = nominal * coefficient to assets_price
+    4. Update Asset.current_price cache
+
+    Each bond contributes to the count only if all steps succeed.
+    """
+    with scope() as session:
+        assets = build_asset_service(session)
+        bond_pricing = build_bond_pricing_service(session)
+        provider = assets_wiring.build_bond_data_provider()
+        selected = (
+            assets.list_assets()
+            if asset_ids is None
+            else assets.list_by_ids(list(asset_ids))
+        )
+        # Filter for active bonds (not archived, asset_type="bond")
+        active_bonds = [
+            a for a in selected if a.archived_at is None and a.asset_type == "bond"
+        ]
+        cpi_history: dict[date, Decimal] | None = None
+        with suppress(BondDataUnavailableError):
+            cpi_history = provider.fetch_cpi_history()  # None on outage
+        ok = bond_pricing.refresh_bond_prices(
+            active_bonds, date.today(), cpi_history=cpi_history
+        )
+        return RefreshResult(ok=ok, failed=len(active_bonds) - ok)
+
+
 def daily_refresh(scope: SessionScope = session_scope) -> None:
-    """The day's job (ADR-0017): today's rates, then the prices of every active
-    asset, then the run is marked finished. A failed run is not marked finished and
-    may be started again after `STALE_RUN_AFTER`; a rerun rewrites the same rows."""
+    """The day's job (ADR-0017): today's FX rates, stock/ETF prices, bond
+    series terms, and bond prices, then the run is marked finished. A failed
+    run is not marked finished and may be started again after
+    `STALE_RUN_AFTER`; a rerun rewrites the same rows."""
     day = date.today()
     refresh_fx_rates(scope)
     refresh_prices(None, scope)
+    sync_bond_terms(None, scope)
+    refresh_bond_prices(None, scope)
     with scope() as session:
         build_daily_refresh_service(session).finish(day)

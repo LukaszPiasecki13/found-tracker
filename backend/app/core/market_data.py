@@ -88,3 +88,52 @@ class MarketDataUnavailableError(APIError):
             status.HTTP_502_BAD_GATEWAY,
             code="MARKET_DATA_UNAVAILABLE",
         )
+
+
+@dataclass(frozen=True, slots=True)
+class BondTerms:
+    """Bond series terms (port, not ORM). Parameters needed to calculate accrual.
+
+    Used by BondDataProvider implementations to return bond series metadata.
+    """
+
+    bond_symbol: str  # OTS, ROR, DOR, TOS, COI, EDO, ROS, ROD
+    series_code: str  # e.g., "EDO1036"
+    nominal_value: Decimal  # Par value, e.g., 100.00
+    issue_date: date
+    maturity_date: date
+    capitalization: str  # "none" / "monthly" / "annual"
+    first_period_rate: Decimal | None  # Fixed rate for first period, nullable
+    reference_type: str | None  # "fixed" / "nbp_reference" / "cpi", nullable
+    margin: Decimal | None  # Margin over reference rate/CPI, nullable
+    redemption_fee: Decimal  # Early redemption fee in PLN per bond
+
+
+class BondDataProvider(Protocol):
+    """Read contract of a bond-data source.
+
+    Returns bond series parameters or None; provider failures are raised as
+    BondDataUnavailableError (network, format error, etc).
+    """
+
+    def fetch_series(self, symbol: str) -> BondTerms | None:
+        """Bond terms for `symbol`, or `None` when series is unknown."""
+        ...
+
+    def fetch_reference_rate(self) -> Decimal:
+        """Current NBP reference rate (percent per year). ROR/DOR key their
+        coupon off it, but pay that coupon out in cash rather than
+        capitalizing it into price, so `accrue_interest` does not consume
+        this value; reserved for a future coupon-amount calculator."""
+        ...
+
+    def fetch_cpi(self) -> Decimal | None:
+        """Most recently published monthly CPI y/y (percent), used by
+        COI/EDO/ROS/ROD. `None` if none is published yet."""
+        ...
+
+    def fetch_cpi_history(self) -> dict[date, Decimal]:
+        """Every published monthly CPI y/y (percent), keyed by that month's
+        first day - a multi-year EDO/ROS/ROD must look up each
+        capitalization year's own reading, not one "current" value."""
+        ...

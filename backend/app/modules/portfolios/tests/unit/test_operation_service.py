@@ -686,6 +686,7 @@ def test_operation_types_are_the_catalog_the_api_documents() -> None:
         "withdrawal",
         "dividend",
         "interest",
+        "bond_interest",
         "fee",
         "split",
     }

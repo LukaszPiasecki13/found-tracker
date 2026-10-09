@@ -9,6 +9,7 @@ from app.infrastructure.sql.base import Base
 
 if TYPE_CHECKING:
     from app.modules.assets.models.asset_classes import AssetClass
+    from app.modules.assets.models.bond_terms import BondTerms
     from app.modules.assets.models.currencies import Currency
 
 
@@ -56,3 +57,4 @@ class Asset(Base):
 
     asset_class: Mapped[AssetClass] = relationship(back_populates="assets")
     currency: Mapped[Currency] = relationship(back_populates="assets")
+    bond_terms: Mapped[BondTerms | None] = relationship(back_populates="asset")

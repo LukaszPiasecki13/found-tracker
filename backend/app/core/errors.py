@@ -80,6 +80,27 @@ class GoneError(APIError):
         super().__init__(message, status.HTTP_410_GONE, code)
 
 
+class BondTermsNotFoundError(NotFoundError):
+    """Bond series parameters not found."""
+
+    def __init__(self, message: str = "Bond series not found"):
+        super().__init__(message, code="BOND_TERMS_NOT_FOUND")
+
+
+class BondDataUnavailableError(APIError):
+    """Bond data provider is unavailable (network error, format error, etc)."""
+
+    def __init__(self, message: str = "Bond data provider is unavailable"):
+        super().__init__(message, status.HTTP_502_BAD_GATEWAY, "BOND_DATA_UNAVAILABLE")
+
+
+class BondAccrualFailedError(BadRequestError):
+    """Bond accrual calculation failed (e.g., date before issue or after maturity)."""
+
+    def __init__(self, message: str = "Bond accrual calculation failed"):
+        super().__init__(message, code="BOND_ACCRUAL_FAILED")
+
+
 # Fallback `code` by status for errors raised without one (error-handling
 # patterns: every error carries a stable code).
 _GENERIC_CODES = {
@@ -90,6 +111,7 @@ _GENERIC_CODES = {
     status.HTTP_409_CONFLICT: "CONFLICT",
     status.HTTP_410_GONE: "GONE",
     status.HTTP_422_UNPROCESSABLE_CONTENT: "VALIDATION_ERROR",
+    status.HTTP_502_BAD_GATEWAY: "BAD_GATEWAY",
 }
 
 

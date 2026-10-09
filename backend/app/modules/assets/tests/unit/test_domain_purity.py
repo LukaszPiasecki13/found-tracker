@@ -7,6 +7,7 @@ from pathlib import Path
 ALLOWED_MODULES = {
     "collections",
     "collections.abc",
+    "dataclasses",
     "datetime",
     "decimal",
     "re",

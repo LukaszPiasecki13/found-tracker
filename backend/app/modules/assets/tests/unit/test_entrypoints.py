@@ -2,13 +2,14 @@
 (ADR-0002), delegate to the services and report `ok`/`failed`; no commit here."""
 
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.modules.assets import entrypoints
+from app.modules.assets import wiring as assets_wiring
 from app.modules.assets.entrypoints import RefreshResult
 
 
@@ -105,3 +106,230 @@ def test_refresh_fx_rates_counts_currencies_without_a_rate_as_failed(
     market_data.refresh_currency_rates.assert_called_once_with()
     scope.session.commit.assert_not_called()
     assert scope.opened == 1
+
+
+def _bond_asset(
+    asset_id: int = 1, asset_type: str = "bond", archived: bool = False
+) -> SimpleNamespace:
+    """Helper to create a bond asset mock."""
+    return SimpleNamespace(
+        id=asset_id,
+        ticker=f"BOND{asset_id}",
+        asset_type=asset_type,
+        archived_at=datetime(2026, 1, 1, tzinfo=UTC) if archived else None,
+    )
+
+
+@pytest.fixture
+def bond_provider(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Mocked `BondDataProvider` - without this, the entrypoint would build
+    the real `BondDataProviderImpl` and hit the live network."""
+    provider = MagicMock()
+    provider.fetch_cpi_history.return_value = {}
+    monkeypatch.setattr(assets_wiring, "build_bond_data_provider", lambda: provider)
+    return provider
+
+
+def test_refresh_bond_prices_filters_for_bonds_only(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch, bond_provider: MagicMock
+) -> None:
+    """Bond price refresh processes only non-archived bonds (asset_type='bond')."""
+    assets_service = MagicMock()
+    bond_pricing = MagicMock()
+
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: assets_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_bond_pricing_service", lambda session: bond_pricing
+    )
+
+    # Mix of stock, bond, and archived assets
+    assets = [
+        _bond_asset(asset_type="bond"),  # Active bond
+        _bond_asset(asset_type="stock"),  # Stock (not a bond)
+        _bond_asset(asset_type="bond", archived=True),  # Archived bond
+    ]
+    assets_service.list_assets.return_value = assets
+    bond_pricing.refresh_bond_prices.return_value = 1
+
+    result = entrypoints.refresh_bond_prices(None, scope)
+
+    # Only the first asset (active bond) should be processed
+    assert result == RefreshResult(ok=1, failed=0)
+    bond_pricing.refresh_bond_prices.assert_called_once()
+    called_bonds = bond_pricing.refresh_bond_prices.call_args[0][0]
+    assert len(called_bonds) == 1
+    assert called_bonds[0].asset_type == "bond"
+    assert called_bonds[0].archived_at is None
+
+
+def test_refresh_bond_prices_with_specific_ids(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch, bond_provider: MagicMock
+) -> None:
+    """Bond price refresh can target specific asset IDs."""
+    assets_service = MagicMock()
+    bond_pricing = MagicMock()
+
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: assets_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_bond_pricing_service", lambda session: bond_pricing
+    )
+
+    loaded = [_bond_asset(asset_type="bond"), _bond_asset(asset_type="bond")]
+    assets_service.list_by_ids.return_value = loaded
+    bond_pricing.refresh_bond_prices.return_value = 2
+
+    result = entrypoints.refresh_bond_prices([42, 43], scope)
+
+    assert result == RefreshResult(ok=2, failed=0)
+    assets_service.list_by_ids.assert_called_once_with([42, 43])
+    # Verify bond_pricing.refresh_bond_prices was called with loaded bonds and a date
+    assert bond_pricing.refresh_bond_prices.call_count == 1
+    call_args = bond_pricing.refresh_bond_prices.call_args[0]
+    assert call_args[0] == loaded  # First arg: bonds list
+    assert isinstance(call_args[1], date)  # Second arg: as_of date
+
+
+def test_refresh_bond_prices_counts_failures(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch, bond_provider: MagicMock
+) -> None:
+    """Bond price refresh reports how many bonds failed (missing terms, calc error)."""
+    assets_service = MagicMock()
+    bond_pricing = MagicMock()
+
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: assets_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_bond_pricing_service", lambda session: bond_pricing
+    )
+
+    bonds = [_bond_asset(asset_type="bond") for _ in range(5)]
+    assets_service.list_assets.return_value = bonds
+    bond_pricing.refresh_bond_prices.return_value = 3  # 3 succeeded, 2 failed
+
+    result = entrypoints.refresh_bond_prices(None, scope)
+
+    assert result == RefreshResult(ok=3, failed=2)
+    # Verify bond_pricing.refresh_bond_prices was called with bonds and a date
+    assert bond_pricing.refresh_bond_prices.call_count == 1
+    call_args = bond_pricing.refresh_bond_prices.call_args[0]
+    assert call_args[0] == bonds  # First arg: bonds list
+
+
+def _fetched_terms(**overrides: object) -> SimpleNamespace:
+    base = {
+        "bond_symbol": "EDO",
+        "series_code": "BOND1",
+        "nominal_value": 100,
+        "issue_date": date(2026, 10, 1),
+        "maturity_date": date(2036, 10, 1),
+        "capitalization": "annual",
+        "first_period_rate": 5.35,
+        "reference_type": "cpi",
+        "margin": 2.0,
+        "redemption_fee": 3.0,
+    }
+    return SimpleNamespace(**(base | overrides))
+
+
+def test_sync_bond_terms_registers_from_provider_when_none_exist(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assets_service, bond_data, provider = MagicMock(), MagicMock(), MagicMock()
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: assets_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_bond_data_service", lambda session: bond_data
+    )
+    monkeypatch.setattr(assets_wiring, "build_bond_data_provider", lambda: provider)
+
+    bond = _bond_asset(asset_id=1)
+    assets_service.list_assets.return_value = [bond]
+    bond_data.find_terms.return_value = None
+    provider.fetch_series.return_value = _fetched_terms()
+
+    result = entrypoints.sync_bond_terms(None, scope)
+
+    assert result == RefreshResult(ok=1, failed=0)
+    provider.fetch_series.assert_called_once_with("BOND1")
+    bond_data.register_series.assert_called_once()
+    _, kwargs = bond_data.register_series.call_args
+    assert kwargs["asset_id"] == 1
+    assert kwargs["source"] == "bonds"
+    assert kwargs["fetched_at"] is not None
+
+
+def test_sync_bond_terms_never_overwrites_a_manual_override(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assets_service, bond_data, provider = MagicMock(), MagicMock(), MagicMock()
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: assets_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_bond_data_service", lambda session: bond_data
+    )
+    monkeypatch.setattr(assets_wiring, "build_bond_data_provider", lambda: provider)
+
+    bond = _bond_asset(asset_id=1)
+    assets_service.list_assets.return_value = [bond]
+    bond_data.find_terms.return_value = SimpleNamespace(source="manual")
+
+    result = entrypoints.sync_bond_terms(None, scope)
+
+    assert result == RefreshResult(ok=1, failed=0)
+    provider.fetch_series.assert_not_called()
+    bond_data.register_series.assert_not_called()
+
+
+def test_sync_bond_terms_counts_unknown_series_as_failed(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assets_service, bond_data, provider = MagicMock(), MagicMock(), MagicMock()
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: assets_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_bond_data_service", lambda session: bond_data
+    )
+    monkeypatch.setattr(assets_wiring, "build_bond_data_provider", lambda: provider)
+
+    bond = _bond_asset(asset_id=1)
+    assets_service.list_assets.return_value = [bond]
+    bond_data.find_terms.return_value = None
+    provider.fetch_series.return_value = None  # feed has no such series
+
+    result = entrypoints.sync_bond_terms(None, scope)
+
+    assert result == RefreshResult(ok=0, failed=1)
+    bond_data.register_series.assert_not_called()
+
+
+def test_sync_bond_terms_counts_provider_outage_as_failed(
+    scope: Scope, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.errors import BondDataUnavailableError
+
+    assets_service, bond_data, provider = MagicMock(), MagicMock(), MagicMock()
+    monkeypatch.setattr(
+        entrypoints, "build_asset_service", lambda session: assets_service
+    )
+    monkeypatch.setattr(
+        entrypoints, "build_bond_data_service", lambda session: bond_data
+    )
+    monkeypatch.setattr(assets_wiring, "build_bond_data_provider", lambda: provider)
+
+    bond = _bond_asset(asset_id=1)
+    assets_service.list_assets.return_value = [bond]
+    bond_data.find_terms.return_value = None
+    provider.fetch_series.side_effect = BondDataUnavailableError("down")
+
+    result = entrypoints.sync_bond_terms(None, scope)
+
+    assert result == RefreshResult(ok=0, failed=1)
+    bond_data.register_series.assert_not_called()

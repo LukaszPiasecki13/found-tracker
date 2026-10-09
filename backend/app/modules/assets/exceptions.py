@@ -98,6 +98,23 @@ class InvalidIdentifierError(BadRequestError):
         super().__init__(f"Invalid {field}", code="INVALID_IDENTIFIER")
 
 
+class InvalidBondTermsError(BadRequestError):
+    """Bond series terms are internally inconsistent (e.g. maturity before
+    issue, a negative rate or margin)."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, code="INVALID_BOND_TERMS")
+
+
+class AssetNotABondError(BadRequestError):
+    """Bond terms were addressed at an asset whose `asset_type` isn't "bond"."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Asset is not a bond (asset_type != 'bond')", code="ASSET_NOT_A_BOND"
+        )
+
+
 # --- Conflict (409): uniqueness ---
 
 

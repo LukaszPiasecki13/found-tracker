@@ -15,6 +15,7 @@ class OperationType(StrEnum):
     INTEREST = "interest"
     FEE = "fee"
     SPLIT = "split"
+    BOND_INTEREST = "bond_interest"
 
 
 class ImportStatus(StrEnum):
@@ -45,6 +46,7 @@ ASSET_OPERATIONS: frozenset[OperationType] = frozenset(
         OperationType.SELL,
         OperationType.DIVIDEND,
         OperationType.SPLIT,
+        OperationType.BOND_INTEREST,
     }
 )
 # Operations that move cash in or out of the portfolio (never with an asset).

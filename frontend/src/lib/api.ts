@@ -126,6 +126,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   IMPORT_ALREADY_UPLOADED: 'Ten plik został już wgrany',
   IMPORT_COMMIT_REJECTED: 'Import nie mógł być zatwierdzony',
   IMPORT_BATCH_NOT_FOUND: 'Nie znaleziono paczki importu',
+  ASSET_ALREADY_EXISTS: 'Walor z tym tickerem już istnieje',
+  BOND_TERMS_NOT_FOUND: 'Nie znaleziono tej serii obligacji w źródle danych',
+  BOND_DATA_UNAVAILABLE: 'Źródło danych o obligacjach jest chwilowo niedostępne',
+  BOND_ACCRUAL_FAILED: 'Nie udało się przeliczyć narostu odsetek dla tej obligacji',
+  INVALID_BOND_TERMS: 'Nieprawidłowe warunki obligacji (sprawdź daty i stopy)',
+  ASSET_NOT_A_BOND: 'Ten walor nie jest obligacją',
 };
 
 // Helper function to extract a user-facing error message

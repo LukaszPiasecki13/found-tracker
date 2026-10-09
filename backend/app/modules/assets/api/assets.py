@@ -8,8 +8,16 @@ whatever the router include order.
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
+from app.core.errors import BondTermsNotFoundError
+from app.core.market_data import BondDataProvider
 from app.modules.assets import entrypoints
-from app.modules.assets.dependencies import get_asset_service, get_market_data_service
+from app.modules.assets.dependencies import (
+    get_asset_service,
+    get_bond_data_provider,
+    get_bond_data_service,
+    get_market_data_service,
+)
+from app.modules.assets.exceptions import AssetNotABondError
 from app.modules.assets.schemas.assets import (
     AssetCreateRequest,
     AssetDetailResponse,
@@ -20,6 +28,11 @@ from app.modules.assets.schemas.assets import (
     AssetSearchResponse,
     AssetUpdateRequest,
 )
+from app.modules.assets.schemas.bonds import (
+    BondSeriesSearchResponse,
+    BondTermsCreateRequest,
+    BondTermsResponse,
+)
 from app.modules.assets.schemas.prices import (
     DataStatusQuery,
     DataStatusResponse,
@@ -28,6 +41,7 @@ from app.modules.assets.schemas.prices import (
     RefreshPricesResponse,
 )
 from app.modules.assets.services.assets import AssetService
+from app.modules.assets.services.bond_data import BondDataService
 from app.modules.assets.services.market_data import MarketDataService
 from app.modules.security.dependencies import get_current_admin, get_current_user
 
@@ -75,6 +89,53 @@ def create_from_yahoo(
     service: AssetService = Depends(get_asset_service),
 ):
     return service.to_detail(service.create_from_provider(data))
+
+
+@router.get("/bond-series/{series_code}", response_model=BondSeriesSearchResponse)
+def search_bond_series(
+    series_code: str,
+    provider: BondDataProvider = Depends(get_bond_data_provider),
+):
+    """Look up a bond series' terms from the data provider, to prefill the
+    registration form. 404 if the provider doesn't know this series; 502
+    (`BOND_DATA_UNAVAILABLE`) if the provider itself can't be reached."""
+    terms = provider.fetch_series(series_code)
+    if terms is None:
+        raise BondTermsNotFoundError(f"Bond series {series_code} not found")
+    return BondSeriesSearchResponse.from_port(terms)
+
+
+@router.post(
+    "/{asset_id:int}/bond-terms", response_model=BondTermsResponse, status_code=201
+)
+def register_bond_terms(
+    asset_id: int,
+    data: BondTermsCreateRequest,
+    assets: AssetService = Depends(get_asset_service),
+    bonds: BondDataService = Depends(get_bond_data_service),
+):
+    """Register (or replace) the bond series terms backing `asset_id`. Always
+    stored as `source="manual"`, so the daily sync job never overwrites it.
+    404 if the asset doesn't exist; 400 (`ASSET_NOT_A_BOND`) if it isn't
+    `asset_type="bond"`."""
+    asset = assets.get_by_id(asset_id)
+    if asset.asset_type != "bond":
+        raise AssetNotABondError
+    terms = bonds.register_series(
+        asset_id=asset_id,
+        bond_symbol=data.bond_symbol,
+        series_code=data.series_code,
+        nominal_value=data.nominal_value,
+        issue_date=data.issue_date,
+        maturity_date=data.maturity_date,
+        capitalization=data.capitalization,
+        first_period_rate=data.first_period_rate,
+        reference_type=data.reference_type,
+        margin=data.margin,
+        redemption_fee=data.redemption_fee,
+        source="manual",
+    )
+    return BondTermsResponse.model_validate(terms)
 
 
 @router.get("/data-status", response_model=DataStatusResponse)

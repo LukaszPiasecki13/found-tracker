@@ -5,7 +5,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from app.core.market_data import MarketDataUnavailableError, Quote
+from app.core.errors import BondDataUnavailableError
+from app.core.market_data import BondTerms, MarketDataUnavailableError, Quote
 
 
 def make_quote(symbol: str = "AAPL", **overrides: Any) -> Quote:
@@ -71,3 +72,58 @@ class FakeMarketDataProvider:
             for day, rate in self.fx_history.get((from_code, to_code), {}).items()
             if start <= day < end
         }
+
+
+def make_bond_terms(series_code: str = "EDO1036", **overrides: Any) -> BondTerms:
+    values: dict[str, Any] = {
+        "bond_symbol": "EDO",
+        "series_code": series_code,
+        "nominal_value": Decimal("100.00"),
+        "issue_date": date(2026, 10, 1),
+        "maturity_date": date(2036, 10, 1),
+        "capitalization": "annual",
+        "first_period_rate": Decimal("5.35"),
+        "reference_type": "cpi",
+        "margin": Decimal("2.00"),
+        "redemption_fee": Decimal("3.00"),
+    }
+    values.update(overrides)
+    return BondTerms(**values)
+
+
+@dataclass
+class FakeBondDataProvider:
+    """In-memory `BondDataProvider`. A series code listed in `failing` raises
+    `BondDataUnavailableError`, like a network failure."""
+
+    series: dict[str, BondTerms] = field(default_factory=dict)
+    reference_rate: Decimal = Decimal("3.75")
+    cpi_history: dict[date, Decimal] = field(default_factory=dict)
+    failing: set[str] = field(default_factory=set)
+    calls: list[tuple[str, ...]] = field(default_factory=list)
+
+    def fetch_series(self, symbol: str) -> BondTerms | None:
+        self.calls.append(("series", symbol))
+        if symbol in self.failing:
+            raise BondDataUnavailableError(f"fake outage for {symbol}")
+        return self.series.get(symbol)
+
+    def fetch_reference_rate(self) -> Decimal:
+        self.calls.append(("reference_rate",))
+        if "reference_rate" in self.failing:
+            raise BondDataUnavailableError("fake outage for reference rate")
+        return self.reference_rate
+
+    def fetch_cpi(self) -> Decimal | None:
+        self.calls.append(("cpi",))
+        if "cpi" in self.failing:
+            raise BondDataUnavailableError("fake outage for cpi")
+        if not self.cpi_history:
+            return None
+        return self.cpi_history[max(self.cpi_history)]
+
+    def fetch_cpi_history(self) -> dict[date, Decimal]:
+        self.calls.append(("cpi_history",))
+        if "cpi" in self.failing:
+            raise BondDataUnavailableError("fake outage for cpi")
+        return dict(self.cpi_history)

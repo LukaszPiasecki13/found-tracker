@@ -23,6 +23,52 @@ export interface Asset {
   updated_at: string;
 }
 
+// The eight current Polish retail treasury bond series.
+export type BondSymbol = 'OTS' | 'ROR' | 'DOR' | 'TOS' | 'COI' | 'EDO' | 'ROS' | 'ROD';
+export type BondCapitalization = 'none' | 'monthly' | 'annual';
+export type BondReferenceType = 'fixed' | 'nbp_reference' | 'cpi';
+
+// What `GET /assets/bond-series/{series_code}` returns: prefill data from the
+// provider, not yet registered against any asset.
+export interface BondSeriesSearchResult {
+  bond_symbol: BondSymbol;
+  series_code: string;
+  nominal_value: number;
+  issue_date: string;
+  maturity_date: string;
+  capitalization: BondCapitalization;
+  first_period_rate: number | null;
+  reference_type: BondReferenceType | null;
+  margin: number | null;
+  redemption_fee: number;
+}
+
+export interface CreateBondTermsRequest {
+  bond_symbol: BondSymbol;
+  series_code: string;
+  nominal_value: number;
+  issue_date: string;
+  maturity_date: string;
+  capitalization: BondCapitalization;
+  first_period_rate: number | null;
+  reference_type: BondReferenceType | null;
+  margin: number | null;
+  redemption_fee: number;
+}
+
+export interface BondTerms extends CreateBondTermsRequest {
+  asset_id: number;
+  source: string;
+}
+
+export interface CreateAssetRequest {
+  ticker: string;
+  name: string;
+  asset_class_id: number;
+  currency_id: number;
+  asset_type: 'stock' | 'etf' | 'bond';
+}
+
 export interface UserProfile {
   id: number;
   email: string;

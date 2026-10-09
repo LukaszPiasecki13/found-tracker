@@ -8,16 +8,20 @@ Tests replace `build_market_data_provider` to stay off the network.
 
 from sqlalchemy.orm import Session
 
-from app.core.market_data import MarketDataProvider
+from app.core.market_data import BondDataProvider, MarketDataProvider
 from app.infrastructure.market_data import YahooFinanceProvider
+from app.infrastructure.market_data.bonds import BondDataProviderImpl
 from app.modules.assets.repositories.asset_classes import AssetClassRepository
 from app.modules.assets.repositories.assets import AssetRepository
+from app.modules.assets.repositories.bond_terms import BondTermsRepository
 from app.modules.assets.repositories.currencies import CurrencyRepository
 from app.modules.assets.repositories.fx_rates import FxRateRepository
 from app.modules.assets.repositories.job_runs import JobRunRepository
 from app.modules.assets.repositories.prices import PriceRepository
 from app.modules.assets.services.asset_classes import AssetClassService
 from app.modules.assets.services.assets import AssetService
+from app.modules.assets.services.bond_data import BondDataService
+from app.modules.assets.services.bond_pricing import BondPricingService
 from app.modules.assets.services.currencies import CurrencyService
 from app.modules.assets.services.fx_rates import FxRateService
 from app.modules.assets.services.job_runs import DailyRefreshService
@@ -67,3 +71,22 @@ def build_asset_service(session: Session) -> AssetService:
 
 def build_daily_refresh_service(session: Session) -> DailyRefreshService:
     return DailyRefreshService(JobRunRepository(session))
+
+
+def build_bond_data_provider() -> BondDataProvider:
+    """Build bond data provider (currently placeholder implementation)."""
+    return BondDataProviderImpl()
+
+
+def build_bond_data_service(session: Session) -> BondDataService:
+    """Build service for managing bond series parameters."""
+    return BondDataService(BondTermsRepository(session))
+
+
+def build_bond_pricing_service(session: Session) -> BondPricingService:
+    """Build service for calculating and storing synthetic bond prices."""
+    return BondPricingService(
+        build_bond_data_service(session),
+        PriceRepository(session),
+        AssetRepository(session),
+    )

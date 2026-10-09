@@ -45,3 +45,8 @@ def price_repo(session: MagicMock) -> MagicMock:
 @pytest.fixture
 def fx_repo(session: MagicMock) -> MagicMock:
     return _transactional_repo(session)
+
+
+@pytest.fixture
+def bond_terms_repo(session: MagicMock) -> MagicMock:
+    return _transactional_repo(session)

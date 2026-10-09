@@ -289,6 +289,21 @@ def _dividend(state: LedgerState, operation: OperationInput) -> LedgerState:
     )
 
 
+def _bond_interest(state: LedgerState, operation: OperationInput) -> LedgerState:
+    """Bond coupon/interest: increases cash and reuses total_dividends field."""
+    asset_id = _asset_id(operation)
+    amount = _amount(operation)
+    held = state.position(asset_id)
+    if held is None:
+        raise PositionNotFoundError(operation.operation_type, asset_id)
+    position = replace(held, total_dividends=held.total_dividends + amount)
+    return replace(
+        state,
+        cash_balance=state.cash_balance + (amount - operation.fee) * operation.fx_rate,
+        positions=state.with_position(position),
+    )
+
+
 def _split(state: LedgerState, operation: OperationInput) -> LedgerState:
     """A split: the held quantity grows `ratio` times and the unit price shrinks
     as much, so the position's total cost stays and no cash moves."""
@@ -341,7 +356,7 @@ class PortfolioLedger:
             ):
                 _require_positive("amount", operation.amount)
                 _require_non_negative("fee", operation.fee)
-            case OperationType.DIVIDEND:
+            case OperationType.DIVIDEND | OperationType.BOND_INTEREST:
                 _require_positive("amount", operation.amount)
                 _require_non_negative("fee", operation.fee)
                 _require_positive("fx_rate", operation.fx_rate)
@@ -364,6 +379,8 @@ class PortfolioLedger:
                 return _withdraw(state, operation)
             case OperationType.DIVIDEND:
                 return _dividend(state, operation)
+            case OperationType.BOND_INTEREST:
+                return _bond_interest(state, operation)
             case OperationType.INTEREST:
                 return _interest(state, operation)
             case OperationType.FEE:
