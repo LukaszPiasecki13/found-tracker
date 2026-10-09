@@ -1,129 +1,66 @@
 # FundTracker
 
-FundTracker is application written using Django and React.js that helps track my financial investments. Program allows to keep track of various financial investments, such as stocks, mutual funds, and bonds.
+Personal investment tracker: record operations, get positions, cash, and performance (TWR, XIRR, drawdown, benchmark comparison) derived from the ledger. FastAPI backend built as a layered modular monolith, React frontend.
 
-App provides access to all data and functionalities via a RESTful API, enabling seamless integration with fronted. This API allows users to retrieve and manage information about their investments, with all analytical operations, such as calculating financial indicators and metrics, handled efficiently on the backend
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
+![mypy](https://img.shields.io/badge/mypy-strict-2A6DB2)
 
-Features:
+![Portfolio composition](images/pocket_composition.JPG)
 
-- **Important operations:** You can buy, sell investments, make withdraw and add funds.
+## Features
 
-  ![alt text](images/menu.JPG)
+- **Event ledger.** Buy, sell, deposit, withdrawal, dividend, interest, fee, split, bond interest. Positions and cash are rebuilt from history on every edit or delete; a change that breaks a rule is rejected.
+- **Performance metrics.** TWR, XIRR, drawdown, net deposits, costs, dividends, free cash as daily vectors.
+- **Benchmarks.** S&P 500, Nasdaq-100, WIG20 TR, modelled as assets of type `index` ([ADR-0023](docs/technical/adr/0023-benchmark-jako-asset-index.md)).
+- **Polish treasury bonds.** Series terms from a public feed (manual override), bond interest operation.
+- **Broker import.** XTB (`.xlsx`) and DM BOŚ (`.csv`): preview, reconciliation report, deduplication, revert per batch.
+- **Multi-currency valuation.** Cross rates, explicit `rate_missing`, profit split into price and currency effect.
+- **Market data.** Yahoo Finance prices and FX with stored source; split-unadjusted history.
+- **`Decimal` everywhere** for money; `float`/NumPy only for chart vectors and XIRR.
 
-  ![alt text](images/buy.JPG)
+| Operations | Charts |
+|---|---|
+| ![Buy](images/buy.JPG) | ![Charts](images/charts1.JPG) |
 
-- **Automaticly updates investment values:** Program automaticly calculate the most important indicators of your investments to be able to checking the results in real time. All tables are interactive, which allows you to adapt them to your needs.
-  ![alt text](images/pocket_composition.JPG)![alt text](images/pocket_composition_table_menu.JPG)
+## Engineering
 
-- **Charts:** - allows see values and indicators in the time. You can see the specifics of your investments in graphical form.
-  ![alt text](images/charts1.JPG)![alt text](images/charts2.JPG)
-- **Generate reports:** FundTracker can generate reports that provide insights into your portfolio performance, including overall returns, individual investment performance, and asset allocation. - ToDo
+- **Layers:** `api → services → repositories → infrastructure`, plus a pure `domain/` (ledger, valuation, snapshots; stdlib only).
+- **Boundaries enforced** by an AST architecture test; cross-module calls only through services.
+- **Transactions:** session per request, services own the commit (`repo.transaction()`); objects assembled only in `wiring.py`.
+- **Ports & adapters:** `MarketDataProvider`, `BondDataProvider`, `ImportParser`; tests use fakes, no network.
+- **Errors:** single `APIError` hierarchy, responses `{"detail", "code"}`.
+- **CI:** ruff, `mypy --strict`, `alembic check`, pytest on PostgreSQL 16, frontend lint + build, Gitleaks, pip-audit, npm audit.
+- **Tests:** ~900, including parity tests carried over from the earlier Django version.
+- **Security:** JWT, bcrypt, rate limiting, switchable registration, CORS allow-list, admin-only shared data ([ADR-0012](docs/technical/adr/0012-jwt-odstepstwa-od-checklisty.md)).
+- **Docs:** 22 technical + 7 business ADRs, glossary, module contracts — [knowledge map](docs/00_KNOWLEDGE-MAP.md) (in Polish).
 
-- **Scoring app:** This feature allows you find and select, based on calculated ratings, the best companies to you portfolio - ToDo
+## Stack
 
-## Table of Contents
+Python 3.14, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, PostgreSQL, NumPy/pandas, yfinance, openpyxl · React 19, TypeScript, Vite, MUI, TanStack Query/Table, Recharts.
 
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API](#api)
-- [License](#license)
+## Getting started
 
-## Tech Stack
+Requires Python 3.14, Node.js 22, PostgreSQL.
 
-- **Backend:** Django, Django REST Framework, djangorestframework-simplejwt
-- **Frontend:** React.js, Vite, Material-UI, Recharts, Axios
-- **Database:** (Configured in Django, e.g., SQLite/PostgreSQL)
-- **Other:** dayjs, d3, chart.js
+```bash
+# backend
+python -m venv .venv && source .venv/Scripts/activate
+cd backend
+pip install -r requirements-dev.txt
+# create backend/.env: DATABASE_URL, SECRET_KEY (optional: CORS_ORIGINS, ADMIN_EMAILS, REGISTRATION_ENABLED)
+alembic upgrade head
+python -m seed.seed
+uvicorn app.main:app --reload      # API docs: http://localhost:8000/docs
 
-## Project Structure
-
-This project follows a domain-driven design with clear separation of concerns:
-
-```
-Django_React_FoundTracker/
-├── backend/                    # Django REST API
-│   ├── assets/                # Market data & reference data domain
-│   │   ├── models.py         # Currency, AssetClass, Asset
-│   │   ├── services/         # MarketDataService (Yahoo Finance)
-│   │   └── ...
-│   ├── portfolios/           # Portfolio management domain
-│   │   ├── models.py         # Pocket, Position, Operation
-│   │   ├── services/         # TransactionService, PortfolioService
-│   │   ├── analytics/        # PocketMetrics, AssetCalculator
-│   │   └── ...
-│   ├── authentication/       # User management
-│   └── core/                 # Django settings
-│
-├── frontend/                  # React.js UI
-│   ├── src/
-│   │   ├── components/       # Reusable UI components
-│   │   ├── pages/            # Page components
-│   │   └── ...
-│   └── ...
-└── images/                    # Screenshots
+# frontend
+cd frontend
+npm install
+echo "VITE_API_URL=http://localhost:8000" > .env
+npm run dev                        # http://localhost:5173
 ```
 
-**Key Architecture Decisions:**
-- **Modular Apps**: `assets` (market data) and `portfolios` (business logic) apps
-- **Service Layer**: Business logic extracted into focused services
-- **Analytics Package**: Time-series calculations separated from core logic
-
-## Installation
-
-### Backend
-
-1. Navigate to the backend directory:
-   ```
-   cd backend
-   ```
-2. Install Python dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-3. Set up environment variables (e.g., `.env` for Django secrets, database settings).
-
-4. Run migrations:
-
-   ```
-   python manage.py migrate
-   ```
-
-5. Start the backend server:
-   ```
-   python manage.py runserver
-   ```
-
-### Frontend
-
-1. Navigate to the frontend directory:
-   ```
-   cd frontend
-   ```
-2. Install Node.js dependencies:
-   ```
-   npm install
-   ```
-3. Set up environment variables in `.env` (e.g., `VITE_API_URL=http://localhost:8000/`).
-
-4. Start the frontend development server:
-   ```
-   npm run dev
-   ```
-
-## Usage
-
-- Access the frontend at `http://localhost:5173/` (default Vite port).
-- Register or log in to your account.
-- Add, buy, sell, or manage investments and view analytics.
-
-## API
-
-- The backend exposes a RESTful API under `/api/`.
-- Authentication uses JWT tokens (see login/register endpoints).
-- Example usage: see [frontend/src/api.js](frontend/src/api.js).
-
-## License
-
-FundTracker is licensed under the [MIT License](LICENSE).
+Checks: `ruff check . && ruff format --check . && mypy app && pytest` (backend, `pytest -m "not integration"` needs no database), `npm run lint && npm run build` (frontend).
